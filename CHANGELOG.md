@@ -4,6 +4,13 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## v2.0.0
+
+- **Breaking:** the `database` nodeSelector default and the unconditional `arch` toleration are gone; `scheduling.databasePool` defaults to empty and `scheduling.tolerations` to `[]`. Estates that relied on them set the values shown in `docs/adoption.md`.
+- Both charts gain `values.schema.json`; negative Go tests cover rejected values.
+- `appVersion` aligned to `1.30.0` for both charts.
+- Repository brought onto the component template: `renovate.json` extends the shared preset, `.envrc`, `.editorconfig`, template recipe names (`charts`, `package`) with the old names kept as aliases, `docs/adoption.md` and `docs/reference.md`, README in the contract's heading order.
+
 ## v1.2.1
 
 - No chart change. Routine CI dependency maintenance (ci-workflows pin
