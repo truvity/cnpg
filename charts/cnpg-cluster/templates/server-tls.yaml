@@ -36,6 +36,12 @@ spec:
   {{- end }}
   issuerRef:
     {{- toYaml $tls.issuerRef | nindent 4 }}
+  # CloudNativePG reloads a user-provided server Secret only when it carries
+  # this label; without it a cert-manager renewal is not served until the
+  # instance restarts.
+  secretTemplate:
+    labels:
+      cnpg.io/reload: "true"
 ---
 # The roots the server chain is verified against. CNPG reads ca.crt only;
 # with serverTLSSecret set it needs no ca.key.
@@ -44,10 +50,11 @@ kind: Secret
 metadata:
   name: {{ .Values.clusterName }}-server-ca
   namespace: {{ .Values.namespace }}
-  {{- with .Values.labels }}
   labels:
+    cnpg.io/reload: "true"
+    {{- with .Values.labels }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- end }}
 type: Opaque
 data:
   ca.crt: {{ printf "%s\n" (trim $tls.caCertificates) | b64enc }}

@@ -50,6 +50,10 @@ The chart renders a `Certificate` for `<cluster>-{rw,ro,r}.<namespace>.svc.clust
 and a `<cluster>-server-ca` Secret holding `caCertificates`, and points
 `spec.certificates.serverTLSSecret` / `serverCASecret` at them.
 
+Both carry `cnpg.io/reload: "true"` (the `Certificate` through
+`secretTemplate`): CloudNativePG reloads a user-provided server Secret only
+with it, so a cert-manager renewal is served without an instance restart.
+
 Server side only: the client CA stays `<cluster>-ca`, so replication, role client
 certificates and `pg_hba` do not change. Clients that do not verify the server
 (`sslmode=require`) notice nothing. Clients that do (`verify-ca`, `verify-full`)
