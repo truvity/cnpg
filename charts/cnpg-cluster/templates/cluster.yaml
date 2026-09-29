@@ -114,33 +114,31 @@ spec:
   resources:
     {{- .Values.resources | default $defaultResources | toYaml | nindent 4 }}
 
-  {{- /* Profile-aware pool default (v1.1.0): an EXPLICIT
-       scheduling.databasePool pins BOTH profiles; when unset (~), prod
-       defaults to "database" and devel rides the default pools —
-       exactly the pre-1.1.0 behavior. Empty string opts out anywhere. */}}
-  {{- $pool := .Values.scheduling.databasePool }}
-  {{- if eq $pool nil }}{{ $pool = $prod | ternary "database" "" }}{{ end }}
+  {{- /* Plain inputs (C13: estate facts are inputs, never defaults). A
+       pool name and an arch taint are one platform's shape, not a
+       property of this chart, so neither has a profile-aware or any
+       other default. Setting scheduling.databasePool selects the
+       nodeSelector and adds a matching toleration automatically;
+       scheduling.tolerations adds any further tolerations the
+       platform's nodes carry (e.g. an arch taint). Both empty/absent
+       renders no nodeSelector and no tolerations at all. */}}
+  {{- $pool := .Values.scheduling.databasePool | default "" }}
+  {{- $tolerations := .Values.scheduling.tolerations | default list }}
+  {{- if $pool }}
+  {{- $tolerations = append $tolerations (dict "key" $pool "operator" "Equal" "value" "true" "effect" "NoSchedule") }}
+  {{- end }}
   affinity:
     {{- if $prod }}
     podAntiAffinityType: required
     {{- end }}
     {{- if $pool }}
-    # Tainted pool (the platform's node-pool definitions): the
-    # non-interruptible home for pg instances; on the prod profile one
-    # replica of EVERY pg cluster per node/AZ. Capacity type is the
-    # pool's decision, not the chart's.
     nodeSelector:
       karpenter.sh/nodepool: {{ $pool }}
     {{- end }}
+    {{- if $tolerations }}
     tolerations:
-      - key: arch
-        operator: Exists
-      {{- if $pool }}
-      - key: {{ $pool }}
-        operator: Equal
-        value: "true"
-        effect: NoSchedule
-      {{- end }}
+      {{- toYaml $tolerations | nindent 6 }}
+    {{- end }}
   {{- if $prod }}
   probes:
     liveness:

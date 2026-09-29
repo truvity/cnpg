@@ -218,11 +218,19 @@ serverTLS:
   # that is not self-signed.
   caCertificates: ""
 
-# The tainted Karpenter pool CNPG instances land on (nodeSelector +
-# matching toleration). An EXPLICIT value pins BOTH profiles; unset
-# (~), the prod profile defaults to "database" and devel rides the
-# default pools — the pre-1.1.0 behavior. Empty string opts out
-# anywhere — the escape hatch for installs on clusters without a
-# dedicated pool.
+# Node placement. ESTATE FACTS (C13): a pool name and a node taint are
+# one platform's shape, not a property of this chart, so neither has a
+# default. Set them to reproduce a specific platform (see README
+# "Scheduling: estate-shaped examples"); leave them empty/absent to
+# render with no nodeSelector and no tolerations at all.
 scheduling:
-  databasePool: ~
+  # Karpenter (or any) node pool name. Selects nodeSelector
+  # "karpenter.sh/nodepool" and adds a matching Equal/NoSchedule
+  # toleration for it automatically. Pins BOTH profiles equally — there
+  # is no profile-aware default.
+  databasePool: ""
+  # Extra raw Kubernetes tolerations, appended after the pool's own (if
+  # databasePool is set). e.g. an arch taint the platform's nodes carry.
+  tolerations: []
+  #  - key: arch
+  #    operator: Exists

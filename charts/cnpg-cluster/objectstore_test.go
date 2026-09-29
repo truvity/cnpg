@@ -97,16 +97,24 @@ func TestObjectStore_DefaultIsAWS(t *testing.T) {
 // header is withheld by leaving the field out). Both stores, since a
 // recovery may read from a different store than it archives to.
 func TestObjectStore_S3Compatible(t *testing.T) {
+	// bootstrap.recovery.source has no encryption field (the archive
+	// being recovered from was already written with whatever encryption
+	// it was written with; this chart does not re-request one) — the
+	// two shapes share endpoint/endpointCA/existingSecret only.
 	store := func(secret string) map[string]any {
 		return map[string]any{
 			"endpoint":       "https://s3.example.test",
 			"endpointCA":     map[string]any{"name": "store-ca", "key": "ca.crt"},
 			"existingSecret": secret,
-			"encryption":     "",
 		}
 	}
+	backupStore := func(secret string) map[string]any {
+		m := store(secret)
+		m["encryption"] = ""
+		return m
+	}
 
-	docs, err := renderDocs(t, storeValues(store("backup-keys"), store("archive-keys")))
+	docs, err := renderDocs(t, storeValues(backupStore("backup-keys"), store("archive-keys")))
 	require.NoError(t, err)
 
 	backup, source := objectStores(t, docs)
