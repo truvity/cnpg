@@ -37,8 +37,9 @@ func TestSchema_RejectsWrongType(t *testing.T) {
 }
 
 // TestSchema_RejectsUnknownKey: an unknown top-level key must fail the
-// render, not be silently ignored (component-contract.md: "the schema
-// is part of the lint").
+// render, not be silently ignored (policy's docs/contracts/component.md,
+// C2: the schema is strict, so a typo fails at render instead of
+// installing with a default nobody chose).
 func TestSchema_RejectsUnknownKey(t *testing.T) {
 	_, err := renderDocs(t, map[string]any{
 		"clusterName": "app-pg",
