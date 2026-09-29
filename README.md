@@ -45,7 +45,7 @@ inside a cluster it does not own.
 ## Install and a worked example
 
 ```sh
-helm install pg oci://ghcr.io/truvity/charts/cnpg-cluster --version 1.2.1 -f values.yaml
+helm install pg oci://ghcr.io/truvity/charts/cnpg-cluster --version 2.0.0 -f values.yaml
 ```
 
 A minimal `values.yaml` that renders as written:
