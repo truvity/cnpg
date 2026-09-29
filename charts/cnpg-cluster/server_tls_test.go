@@ -122,10 +122,13 @@ func TestServerTLS_FromAnIssuer(t *testing.T) {
 	assert.Equal(t, "240h", field(cert, "spec", "renewBefore"))
 	assert.Equal(t, map[string]any{"algorithm": "ECDSA", "size": float64(384)}, field(cert, "spec", "privateKey"))
 	assert.Equal(t, issuer, field(cert, "spec", "issuerRef"))
+	assert.Equal(t, map[string]any{"cnpg.io/reload": "true"}, field(cert, "spec", "secretTemplate", "labels"),
+		"without the label CloudNativePG does not serve a renewed certificate until the instance restarts")
 
 	require.Len(t, docs["Secret"], 1)
 	secret := docs["Secret"][0]
 	assert.Equal(t, "app-pg-server-ca", field(secret, "metadata", "name"))
+	assert.Equal(t, map[string]any{"cnpg.io/reload": "true"}, field(secret, "metadata", "labels"))
 
 	encoded, _ := field(secret, "data", "ca.crt").(string)
 	decoded, err := base64.StdEncoding.DecodeString(encoded)
@@ -142,4 +145,28 @@ func TestServerTLS_RequiresTheRoots(t *testing.T) {
 	}))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "serverTLS.caCertificates is required")
+}
+
+// TestServerTLS_ReloadLabelMergesWithChartLabels: the chart-wide labels
+// and the reload label coexist on the CA Secret and the Certificate keeps
+// its own labels.
+func TestServerTLS_ReloadLabelMergesWithChartLabels(t *testing.T) {
+	v := tlsValues(map[string]any{
+		"issuerRef":      map[string]any{"name": "example-issuer", "kind": "ClusterIssuer"},
+		"caCertificates": testRoots,
+	})
+	v["labels"] = map[string]any{"app.kubernetes.io/part-of": "app"}
+
+	docs, err := renderDocs(t, v)
+	require.NoError(t, err)
+
+	require.Len(t, docs["Secret"], 1)
+	assert.Equal(t, map[string]any{
+		"app.kubernetes.io/part-of": "app",
+		"cnpg.io/reload":            "true",
+	}, field(docs["Secret"][0], "metadata", "labels"))
+
+	require.Len(t, docs["Certificate"], 1)
+	assert.Equal(t, map[string]any{"app.kubernetes.io/part-of": "app"}, field(docs["Certificate"][0], "metadata", "labels"))
+	assert.Equal(t, map[string]any{"cnpg.io/reload": "true"}, field(docs["Certificate"][0], "spec", "secretTemplate", "labels"))
 }
