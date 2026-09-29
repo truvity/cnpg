@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "cnpg-cluster",
+  "description": "A CNPG Cluster whose posture is chosen by a platform-injected profile. See docs/reference.md for the full value-by-value reference.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "clusterName": {
+      "type": "string",
+      "description": "Name of the CNPG Cluster and the prefix for every resource this chart renders."
+    },
+    "namespace": {
+      "type": "string",
+      "description": "Namespace the Cluster and its companion resources are rendered into."
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["", "devel", "prod"],
+      "description": "Platform-injected posture: 'devel' (1 instance, no PDB) or 'prod' (3 instances, PDB, quorum failover, WAL volume). Required — an empty/unset value fails the render rather than silently choosing a posture."
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Labels stamped on the Cluster CR and, via inheritedMetadata, fanned out to its Pods/PVCs/Services by the operator's INHERITED_LABELS setting."
+    },
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Backup coordinates: the bucket and identity that may write to it are the platform's to mint and hand in here.",
+      "properties": {
+        "enabled": { "type": "boolean", "description": "Turns on continuous WAL archiving and renders the backup ObjectStore. Empty bucketName keeps archiving off even when true." },
+        "bucketName": { "type": "string", "description": "S3 (or S3-compatible) bucket backups are written to. Empty = archiving off." },
+        "s3Prefix": { "type": "string", "description": "Prefix under the bucket. Defaults to '{namespace}/{clusterName}/' when empty." },
+        "serverName": { "type": "string", "description": "Barman server directory under the prefix. Defaults to clusterName. Bump on a recreated (fresh initdb) cluster so it does not reuse its predecessor's archive directory." },
+        "schedule": { "type": "string", "description": "Cron schedule for the ScheduledBackup, e.g. '0 0 2 * * *'." },
+        "retentionDays": { "type": "integer", "minimum": 0, "description": "Functional PITR window, enforced by the barman-cloud plugin's pruning." },
+        "walCompression": { "type": "string", "description": "WAL segment compression algorithm passed to the barman-cloud plugin." },
+        "dataCompression": { "type": "string", "description": "Base backup compression algorithm passed to the barman-cloud plugin (a narrower enum than WAL's)." },
+        "encryption": { "type": "string", "description": "Server-side encryption header requested on every upload (e.g. AES256). Empty sends no x-amz-server-side-encryption header, which is required by stores that reject it (Cloudflare R2 among them)." },
+        "endpoint": { "type": "string", "description": "S3-compatible endpoint URL (Cloudflare R2, MinIO, Ceph RGW, ...). Empty keeps the AWS endpoint." },
+        "endpointCA": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Secret holding the PEM bundle that verifies a private endpoint's certificate. Both keys are required together.",
+          "properties": {
+            "name": { "type": "string", "description": "Name of the Secret." },
+            "key": { "type": "string", "description": "Key inside the Secret holding the PEM bundle." }
+          }
+        },
+        "existingSecret": { "type": "string", "description": "Name of an existing Secret with static AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY. Empty keeps the pod's ambient identity (inheritFromIAMRole)." },
+        "existingSecretKeys": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Key names read from existingSecret. sessionToken and region are only referenced when named.",
+          "properties": {
+            "accessKeyId": { "type": "string" },
+            "secretAccessKey": { "type": "string" },
+            "sessionToken": { "type": "string" },
+            "region": { "type": "string" }
+          }
+        }
+      }
+    },
+    "bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How the cluster's first database comes to exist: a fresh initdb, or recovery from an archive.",
+      "properties": {
+        "mode": { "type": "string", "enum": ["initdb", "recovery"], "description": "'initdb' creates a fresh database; 'recovery' bootstraps from bootstrap.recovery.source." },
+        "initdb": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "database": { "type": "string", "description": "Bootstrap database name. Empty renders no initdb bootstrap block." },
+            "owner": { "type": "string", "description": "Technical owner role for the bootstrap database (used by migration jobs, not interactively). Also the implicit owner for entries in databases[]/customers[] that don't set their own." },
+            "schemas": { "type": "array", "items": { "type": "string" }, "description": "Declarative schemas on the bootstrap database." }
+          }
+        },
+        "recovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "The archive to recover from; may be a different store than the one this cluster archives to going forward.",
+              "properties": {
+                "bucketName": { "type": "string" },
+                "s3Prefix": { "type": "string" },
+                "serverName": { "type": "string", "description": "Defaults to clusterName when empty." },
+                "endpoint": { "type": "string" },
+                "endpointCA": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": { "type": "string" },
+                    "key": { "type": "string" }
+                  }
+                },
+                "existingSecret": { "type": "string" },
+                "existingSecretKeys": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "accessKeyId": { "type": "string" },
+                    "secretAccessKey": { "type": "string" },
+                    "sessionToken": { "type": "string" },
+                    "region": { "type": "string" }
+                  }
+                }
+              }
+            },
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "targetTime": { "type": "string", "description": "PITR target timestamp. Empty recovers to the latest available point." },
+                "exclusive": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "databases": {
+      "type": "array",
+      "description": "Additional databases in this cluster (absorbs the retired cnpg-database chart).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "owner": { "type": "string", "description": "Defaults to bootstrap.initdb.owner when empty." },
+          "schemas": { "type": "array", "items": { "type": "string" } },
+          "ensure": { "type": "string", "enum": ["present", "absent"] }
+        }
+      }
+    },
+    "customers": {
+      "type": "array",
+      "description": "Shared-cluster, database-per-customer shape: each entry renders a Database owned by the bootstrap owner plus a '{name}-access' NOLOGIN role.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "ensure": { "type": "string", "enum": ["present", "absent"] }
+        }
+      }
+    },
+    "roles": {
+      "type": "array",
+      "description": "Application/technical roles rendered as DatabaseRole CRs.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "auth": { "type": "string", "enum": ["cert", "password"], "description": "cert = operator-issued mTLS client certificate; password = the compatibility path, which requires passwordSecret." },
+          "inRoles": { "type": "array", "items": { "type": "string" } },
+          "passwordSecret": { "type": "string", "description": "Existing kubernetes.io/basic-auth Secret. Required when auth=password on a non-owner role; the chart never generates passwords." }
+        }
+      }
+    },
+    "instances": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Instance count. Null = profile default (devel 1, prod 3). prod requires >= 3."
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "size": { "type": "string", "description": "Empty = profile default (devel 2Gi, prod 10Gi)." },
+        "storageClass": { "type": "string", "description": "Empty = profile default (devel cnpg-gp3-delete, prod cnpg-gp3)." }
+      }
+    },
+    "walStorage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "size": { "type": "string", "description": "WAL volume size. prod only; devel skips the WAL volume entirely." }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "description": "Raw Kubernetes ResourceRequirements. Empty = profile default (devel 100m/256Mi req + 512Mi limit; prod 250m/512Mi req + 1Gi limit). A set value replaces the default wholesale."
+    },
+    "postgresql": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "parameters": { "type": "object", "description": "Extra postgresql.conf parameters, merged over the profile's own (synchronous_commit, shared_buffers, max_slot_wal_keep_size)." },
+        "extra_pg_hba": { "type": "array", "items": { "type": "string" }, "description": "Extra pg_hba.conf lines, appended AFTER the profile's own posture lines." }
+      }
+    },
+    "enableSuperuserAccess": { "type": "boolean" },
+    "serverTLS": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional: take the SERVER certificate from a cert-manager issuer instead of the operator's own self-signed CA. Client CA, replication and pg_hba are unaffected.",
+      "properties": {
+        "issuerRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string", "description": "Empty name = the operator's own CA (default)." },
+            "kind": { "type": "string" },
+            "group": { "type": "string" }
+          }
+        },
+        "duration": { "type": "string" },
+        "renewBefore": { "type": "string" },
+        "privateKey": { "type": "object", "description": "Passed through to the Certificate's spec.privateKey, e.g. {algorithm: ECDSA, size: 384}." },
+        "caCertificates": { "type": "string", "description": "PEM roots that verify the issued chain. Required when issuerRef.name is set." }
+      }
+    },
+    "scheduling": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Node placement. Both keys are estate facts (a pool name, a taint) and have no default — set them to reproduce a specific platform's shape.",
+      "properties": {
+        "databasePool": {
+          "type": "string",
+          "description": "Karpenter (or any) node pool name. Selects nodeSelector 'karpenter.sh/nodepool' and adds a matching Equal/NoSchedule toleration automatically. Empty/absent = no pool, no nodeSelector, no pool toleration."
+        },
+        "tolerations": {
+          "type": "array",
+          "description": "Extra raw Kubernetes tolerations (passthrough — left open, like resources above), appended after the pool's own (if any). Empty/absent = none.",
+          "items": { "type": "object" }
+        }
+      }
+    }
+  }
+}
