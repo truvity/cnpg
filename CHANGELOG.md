@@ -6,8 +6,11 @@ upgrade is expected to clear.
 
 ## v2.1.0
 
-- **Fix:** with `serverTLS.issuerRef` set, the server `Certificate` now carries `secretTemplate.labels: {cnpg.io/reload: "true"}` and the `-server-ca` Secret carries the same label. CloudNativePG reloads a user-provided server Secret only when it has that label; without it a cert-manager renewal was not served until the instance restarted, so a client using `sslmode=verify-full` would fail once the old certificate expired. Render diff: the label on those two objects, nothing else. Charts that never set `serverTLS.issuerRef` are unchanged.
 - **Feature:** `monitoring.podMonitor.enabled` (default `false`) renders a `monitoring.coreos.com/v1` `PodMonitor` for the cluster's instance pods (port `metrics`, `/metrics`), with optional `interval`, `metricRelabelings` and `labels`. The operator's own `spec.monitoring.enablePodMonitor` is deprecated upstream, so the chart renders the object itself. With the value at its default the render is byte-identical to v2.0.0; nothing to do on upgrade.
+
+## v2.0.1
+
+- **Fix:** with `serverTLS.issuerRef` set, the server `Certificate` now carries `secretTemplate.labels: {cnpg.io/reload: "true"}` and the `-server-ca` Secret carries the same label. CloudNativePG reloads a user-provided server Secret only when it has that label; without it a cert-manager renewal was not served until the instance restarted, so a client using `sslmode=verify-full` would fail once the old certificate expired. Render diff: the label on those two objects, nothing else. Charts that never set `serverTLS.issuerRef` are unchanged.
 
 ## v2.0.0
 
