@@ -218,6 +218,23 @@
         "caCertificates": { "type": "string", "description": "PEM roots that verify the issued chain. Required when issuerRef.name is set." }
       }
     },
+    "monitoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional metrics scraping of the instance pods.",
+      "properties": {
+        "podMonitor": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "description": "Render a monitoring.coreos.com/v1 PodMonitor for the instance pods (port metrics, /metrics). Default false." },
+            "interval": { "type": "string", "description": "Scrape interval, e.g. 30s. Empty = the scraper's default." },
+            "metricRelabelings": { "type": "array", "items": { "type": "object" }, "description": "Passed through to the endpoint; write action explicitly on every rule." },
+            "labels": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Extra labels on the PodMonitor object." }
+          }
+        }
+      }
+    },
     "scheduling": {
       "type": "object",
       "additionalProperties": false,

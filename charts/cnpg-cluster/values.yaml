@@ -238,3 +238,32 @@ scheduling:
   tolerations: []
   #  - key: arch
   #    operator: Exists
+
+# ── Monitoring (optional) ────────────────────────────────────────────
+# Every instance pod serves the PostgreSQL exporter on port 9187 (port
+# name `metrics`, path /metrics). Nothing scrapes it unless a scraper is
+# told to. With podMonitor.enabled the chart renders a
+# monitoring.coreos.com/v1 PodMonitor for this cluster's instance pods.
+# Needs the PodMonitor CRD (prometheus-operator, or the VictoriaMetrics
+# operator's converter); default off, so a default render is unchanged.
+#
+# Why here and not in the operator: Cluster.spec.monitoring.enablePodMonitor
+# is DEPRECATED upstream ("will be removed in a future version of the
+# operator"; CloudNativePG 1.30 docs, monitoring, "Deprecation of Automatic
+# PodMonitor Creation") -- create the PodMonitor yourself, as this does.
+# The chart never sets the deprecated field.
+monitoring:
+  podMonitor:
+    enabled: false
+    # e.g. "30s". Empty = the scraper's own default.
+    interval: ""
+    # Passed through to the endpoint. Write `action` explicitly on every
+    # rule: only the prometheus-operator CRD defaults it, and the
+    # VictoriaMetrics operator converts these objects.
+    metricRelabelings: []
+    #  - action: drop
+    #    sourceLabels: [__name__]
+    #    regex: cnpg_pg_settings_setting
+    # Extra labels on the PodMonitor object itself (e.g. a scraper's
+    # podMonitorSelector). The chart's top-level `labels` are added too.
+    labels: {}

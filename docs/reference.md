@@ -100,6 +100,28 @@ the `{clusterName}-server-ca` Secret carries the same label. CloudNativePG
 reloads a user-provided server Secret only when it has that label; without
 it a renewed certificate is not served until the instance restarts.
 
+### `monitoring.podMonitor` (optional)
+
+Every instance pod serves the PostgreSQL exporter on port 9187 (port name
+`metrics`). Enabling this renders a `monitoring.coreos.com/v1` `PodMonitor`
+for the cluster's instance pods (`cnpg.io/cluster: {clusterName}`,
+`cnpg.io/podRole: instance`). It is a chart value rather than the operator's
+`Cluster.spec.monitoring.enablePodMonitor` because that field is deprecated
+upstream: the CloudNativePG 1.30 monitoring documentation ("Deprecation of
+Automatic `PodMonitor` Creation") says it will be removed and tells users to
+create the `PodMonitor` manually. The chart never sets it.
+
+| Key | Type | Default | What it does |
+|---|---|---|---|
+| `monitoring.podMonitor.enabled` | bool | `false` | Render the `PodMonitor`. Off, the render is byte-identical to earlier releases. Needs the `PodMonitor` CRD. |
+| `monitoring.podMonitor.interval` | string | `""` | Scrape interval (e.g. `30s`). Empty = the scraper's default. |
+| `monitoring.podMonitor.metricRelabelings` | []object | `[]` | Passthrough to the endpoint. Write `action` on every rule: only the prometheus-operator CRD defaults it, and the VictoriaMetrics operator converts these objects. |
+| `monitoring.podMonitor.labels` | map | `{}` | Extra labels on the `PodMonitor` object (merged with top-level `labels`). |
+
+The exporter is served over plain HTTP; the chart does not enable
+`spec.monitoring.tls`. A default-deny ingress policy must admit the scraper to
+port 9187 on the instance pods.
+
 ### `scheduling` (estate facts — no default)
 
 | Key | Type | Default | What it does |
