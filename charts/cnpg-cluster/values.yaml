@@ -200,6 +200,10 @@ enableSuperuserAccess: false
 # roots, not {clusterName}-ca -- and, under verify-full, the host it may
 # dial: only the fully-qualified names above are in the certificate.
 # Move such clients before setting this.
+#
+# Both rendered objects carry cnpg.io/reload: "true" (the Certificate via
+# secretTemplate): the operator reloads a user-provided server Secret only
+# with it, so a renewal is served without an instance restart.
 serverTLS:
   # {name, kind, group} of the cert-manager issuer. Empty name = the
   # operator's own CA (default).

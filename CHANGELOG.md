@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Fix:** with `serverTLS.issuerRef` set, the server `Certificate` now carries `secretTemplate.labels: {cnpg.io/reload: "true"}` and the `-server-ca` Secret carries the same label. CloudNativePG reloads a user-provided server Secret only when it has that label; without it a cert-manager renewal was not served until the instance restarted, so a client using `sslmode=verify-full` would fail once the old certificate expired. Render diff: the label on those two objects, nothing else. Charts that never set `serverTLS.issuerRef` are unchanged.
+
 ## v2.0.0
 
 - **Breaking:** the `database` nodeSelector default and the unconditional `arch` toleration are gone; `scheduling.databasePool` defaults to empty and `scheduling.tolerations` to `[]`. Estates that relied on them set the values shown in `docs/adoption.md`.

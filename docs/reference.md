@@ -95,6 +95,11 @@ The rendered `Certificate` covers every Service of the cluster fully
 qualified: `{clusterName}-{rw,ro,r}.{namespace}.svc.cluster.local`. A client
 under `sslmode=verify-full` must dial one of those names.
 
+The `Certificate` sets `secretTemplate.labels: {cnpg.io/reload: "true"}` and
+the `{clusterName}-server-ca` Secret carries the same label. CloudNativePG
+reloads a user-provided server Secret only when it has that label; without
+it a renewed certificate is not served until the instance restarts.
+
 ### `scheduling` (estate facts — no default)
 
 | Key | Type | Default | What it does |
