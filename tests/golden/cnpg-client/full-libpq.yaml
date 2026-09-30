@@ -1,0 +1,84 @@
+---
+# Source: cnpg-client-consumer/templates/app.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cnpg-client-cnpg-pg
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: app
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: "pg"
+      ports:
+        - protocol: TCP
+          port: 5433
+
+---
+# Source: cnpg-client-consumer/templates/app.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+spec:
+  selector:
+    matchLabels:
+      app: app
+  template:
+    metadata:
+      labels:
+        app: app
+    spec:
+      securityContext:
+        fsGroup: 1000
+      volumes:
+        - name: pg-tls
+          projected:
+            sources:
+              - secret:
+                  name: pg-role-app
+                  items:
+                    - key: tls.crt
+                      path: tls.crt
+                      mode: 0444
+                    - key: tls.key
+                      path: tls.key
+                      mode: 0440
+              - secret:
+                  name: pg-server-ca
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+                      mode: 0444
+      containers:
+        - name: app
+          image: example.invalid/app:1
+          env:
+            - name: PGHOST
+              value: "pg-ro.default.svc"
+            - name: PGPORT
+              value: "5433"
+            - name: PGDATABASE
+              value: "appdb"
+            - name: PGUSER
+              value: "app"
+            - name: PGSSLMODE
+              value: verify-full
+            - name: PGSSLROOTCERT
+              value: "/etc/pg/ca.crt"
+            - name: PGSSLCERT
+              value: "/etc/pg/tls.crt"
+            - name: PGSSLKEY
+              value: "/etc/pg/tls.key"
+            - name: DATABASE_URL
+              value: "postgresql://app@pg-ro.default.svc:5433/appdb?sslmode=verify-full&sslrootcert=/etc/pg/ca.crt&sslcert=/etc/pg/tls.crt&sslkey=/etc/pg/tls.key"
+          volumeMounts:
+            - name: pg-tls
+              mountPath: "/etc/pg"
+              readOnly: true

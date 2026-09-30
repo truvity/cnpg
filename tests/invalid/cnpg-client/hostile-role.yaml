@@ -1,0 +1,4 @@
+client:
+  cluster: pg
+  role: "a;b"
+  podSelector: {app: app}

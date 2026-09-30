@@ -1,0 +1,4 @@
+client:
+  cluster: pg
+  role: pg_monitor
+  podSelector: {app: app}

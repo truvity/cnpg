@@ -73,6 +73,16 @@ charts:
       fi
     done
     helm template x charts/cnpg-platform -f examples/operator/cnpg-platform.values.yaml >/dev/null
+    # cnpg-client (library chart): lints alone, renders through the test
+    # consumer, and every negative fixture must be refused there.
+    helm lint charts/cnpg-client
+    helm lint tests/consumer --set client.cluster=pg --set client.role=app --set client.podSelector.app=app
+    for values in tests/invalid/cnpg-client/*.yaml; do
+      if helm template invalid tests/consumer -f "$values" >/dev/null 2>&1; then
+        echo "RENDERED BUT SHOULD HAVE FAILED: $values" >&2
+        exit 1
+      fi
+    done
     echo "charts: schema-validated lint and render OK"
 
 # DEPRECATED: alias for `charts`, kept for anyone with the old name
@@ -113,6 +123,7 @@ package:
     helm package charts/cnpg-cluster --destination dist/
     helm package charts/cnpg-database --destination dist/
     helm package charts/cnpg-platform --destination dist/
+    helm package charts/cnpg-client --destination dist/
 
 # DEPRECATED: alias for `package`. Remove after the next tagged release.
 helm-package: package

@@ -1,0 +1,5 @@
+client:
+  cluster: pg
+  role: app
+  sslmode: disable
+  podSelector: {app: app}

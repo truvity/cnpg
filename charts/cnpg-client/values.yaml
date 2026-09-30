@@ -1,0 +1,2 @@
+# A library chart takes no values: every input is the dict an application
+# chart passes to a named template. See docs/reference.md.

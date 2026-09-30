@@ -21,9 +21,14 @@ for values in "$root"/tests/cases/*/*/values.yaml; do
   # A case may pin its release name (tests/cases/<chart>/<case>/release) as
   # well as its namespace: object names and selectors that carry the release
   # are exactly what a second install in one namespace depends on.
+  # cnpg-client is a library chart: it renders only through the test
+  # consumer, which includes every helper.
+  chart_dir="$root/charts/$chart"
+  [ "$chart" = cnpg-client ] && chart_dir="$root/tests/consumer"
+
   release="$(cat "$case_dir/release" 2>/dev/null || echo "$chart")"
 
-  rendered="$(helm template "$release" "$root/charts/$chart" \
+  rendered="$(helm template "$release" "$chart_dir" \
       --namespace "$(cat "$case_dir/namespace" 2>/dev/null || echo default)" \
       -f "$values")"
 

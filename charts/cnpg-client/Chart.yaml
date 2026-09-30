@@ -1,0 +1,23 @@
+apiVersion: v2
+name: cnpg-client
+description: >-
+  The client half of a CloudNativePG connection: named templates an
+  application chart includes to mount a role's client certificate and the
+  server CA, set the libpq (or JDBC) connection environment for
+  sslmode=verify-full, and allow the egress to the cluster. A library
+  chart; it renders nothing by itself.
+type: library
+# Placeholder: the git tag is the version authority; ocictl helmctl stamps
+# both fields at packaging.
+version: 0.0.0
+appVersion: 0.0.0
+home: https://github.com/truvity/cnpg
+sources:
+  - https://github.com/truvity/cnpg
+keywords:
+  - cloudnative-pg
+  - postgresql
+  - library
+maintainers:
+  - name: Truvity
+    url: https://github.com/truvity

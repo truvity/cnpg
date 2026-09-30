@@ -249,3 +249,58 @@ A role name starting with `pg_`, and membership in a `pg_*` role through
 | `clientCertificate.algorithm` | string | `ECDSA` | `ECDSA` (P-256) or `RSA`. |
 | `clientCertificate.size` / `duration` / `renewBefore` / `additionalOutputFormats` | | unset | Defaults for every role's certificate. |
 | `clientCertificateIssuerRef` | object | `{}` | Empty name = the platform's naming contract, `ClusterIssuer` `cnpg-{namespace}-{clusterName}`. |
+
+## charts/cnpg-client
+
+A **library chart** (`type: library`): it renders nothing on its own. An
+application chart lists it as a dependency and includes its named templates
+to connect to a CNPG cluster with a client certificate and
+`sslmode=verify-full`. Every template takes one dict,
+`(dict "context" $ "client" .Values.postgres)`; `context` is the calling
+chart's root context and `client` holds the inputs below.
+
+```yaml
+# Chart.yaml of the application
+dependencies:
+  - name: cnpg-client
+    version: <release>
+    repository: oci://ghcr.io/truvity/charts
+```
+
+Naming contract, shared with `cnpg-cluster`: the role's client certificate is
+the Secret `<cluster>-role-<role>` (`tls.crt`, `tls.key`, optionally
+`key.der`); the server CA is the Secret `<cluster>-server-ca` (`ca.crt`).
+
+| Template | Render under | Output |
+|---|---|---|
+| `cnpg-client.volumes` | pod `volumes:` | one projected volume with both Secrets |
+| `cnpg-client.volumeMounts` | container `volumeMounts:` | the volume, read-only |
+| `cnpg-client.env` | container `env:` | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGSSLMODE=verify-full`, `PGSSLROOTCERT`, `PGSSLCERT`, `PGSSLKEY`, plus the optional URL variables |
+| `cnpg-client.networkPolicy` | a manifest of its own | egress from `podSelector` to `cnpg.io/cluster: <cluster>` on the port |
+
+| Input | Type | Default | What it does |
+|---|---|---|---|
+| `cluster` | string | required | The CNPG `Cluster` name (a DNS label). |
+| `role` | string | required | The role the certificate names; becomes `PGUSER`. Lower-case letters, digits, `-` and `_`; never a `pg_` role. `PGUSER` and the certificate name keep the role as written; the Secret name slugs `_` to `-` (`app_rw` reads `<cluster>-role-app-rw`). |
+| `database` | string | `""` | `PGDATABASE`; left out when empty. |
+| `namespace` | string | release namespace | The cluster's namespace, for the host name. |
+| `service` | `rw`\|`ro`\|`r` | `rw` | Which cluster Service to connect to. |
+| `clusterDomain` | string | `""` | Empty renders the short `<cluster>-<service>.<namespace>.svc` host; set it to append a cluster domain. |
+| `port` | int | `5432` | `PGPORT` and the policy port. |
+| `sslmode` | string | `verify-full` | Only `verify-full` is accepted; anything else fails the render. |
+| `mountPath` | string | `/var/run/cnpg-client` | Directory of the projected files. |
+| `volumeName` | string | `cnpg-client` | Name of the volume. |
+| `keyDer` | bool | `false` | Also project `key.der` (DER PKCS#8), which pgjdbc reads. |
+| `certMode`, `keyMode` | string | `0444`, `0440` | File modes. libpq accepts a root-owned key up to `0640`; a non-root pod reads `0440` through `securityContext.fsGroup`, which the pod must set. |
+| `dsnEnv` | string | `""` | Name of an extra env var carrying a `postgresql://` URL (all TLS parameters included). |
+| `jdbcEnv` | string | `""` | Name of an extra env var carrying a `jdbc:postgresql://` URL; needs `keyDer: true`. |
+| `sslfactory` | string | `org.postgresql.ssl.jdbc4.LibPQFactory` | The JDBC `sslfactory`. |
+| `podSelector` | map | required for the policy | `matchLabels` of the application's pods. |
+| `clusterNamespaceSelector` | bool | `false` | Add a namespace selector for `namespace`, for a cluster outside the release's namespace. |
+| `name` | string | `<release>-cnpg-<cluster>` | NetworkPolicy name. |
+
+An input that is not listed fails the render (a library template has no
+`values.schema.json`). The policy selects the application's pods for Egress,
+which denies their other egress, DNS included; NetworkPolicies add up, so the
+application's own chart grants what else it needs. See
+[connecting.md](connecting.md) for driver notes.
