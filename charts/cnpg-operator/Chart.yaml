@@ -1,0 +1,22 @@
+apiVersion: v2
+name: cnpg-operator
+description: >-
+  The platform's half of a CloudNativePG install, beside the upstream
+  operator charts: storage classes, a metrics network policy, baseline
+  alert rules and an admission guard against privileged database roles.
+  The operator and barman-cloud plugin presets ship as values under
+  examples/operator.
+type: application
+# Placeholder: the git tag is the sole version authority. The release
+# workflow stamps both fields from the tag.
+version: 0.0.0
+appVersion: 0.0.0
+home: https://github.com/truvity/cnpg
+sources:
+  - https://github.com/truvity/cnpg
+keywords:
+  - cloudnative-pg
+  - postgresql
+maintainers:
+  - name: Truvity
+    url: https://github.com/truvity

@@ -1,0 +1,48 @@
+{{- /* StorageClasses for database volumes. Names and provisioner are the
+caller's: nothing here knows which cloud it runs on. */}}
+{{- if .Values.storageClasses.enabled }}
+{{- if not .Values.storageClasses.classes }}
+{{- fail "storageClasses.enabled is true but storageClasses.classes is empty: there is nothing to render" }}
+{{- end }}
+{{- $seen := dict }}
+{{- $defaults := 0 }}
+{{- range .Values.storageClasses.classes }}
+{{- if hasKey $seen .name }}
+{{- fail (printf "storageClasses.classes: %q appears twice" .name) }}
+{{- end }}
+{{- $_ := set $seen .name true }}
+{{- if .isDefault }}{{- $defaults = add $defaults 1 }}{{- end }}
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- include "cnpg-operator.labels" $ | nindent 4 }}
+    {{- with .labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- $ann := merge (dict) (.annotations | default dict) }}
+  {{- if .isDefault }}
+  {{- $_ := set $ann "storageclass.kubernetes.io/is-default-class" "true" }}
+  {{- end }}
+  {{- with (include "cnpg-operator.annotations" (dict "root" $ "own" $ann)) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+provisioner: {{ .provisioner }}
+{{- with .parameters }}
+parameters:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+reclaimPolicy: {{ .reclaimPolicy | default "Retain" }}
+volumeBindingMode: {{ .volumeBindingMode | default "WaitForFirstConsumer" }}
+allowVolumeExpansion: {{ if hasKey . "allowVolumeExpansion" }}{{ .allowVolumeExpansion }}{{ else }}true{{ end }}
+{{- with .mountOptions }}
+mountOptions:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}
+{{- if gt $defaults 1 }}
+{{- fail "storageClasses.classes: at most one class may set isDefault" }}
+{{- end }}
+{{- end }}

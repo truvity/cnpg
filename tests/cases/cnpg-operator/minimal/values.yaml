@@ -1,0 +1,5 @@
+storageClasses:
+  enabled: true
+  classes:
+    - name: pg-retain
+      provisioner: example.csi/driver

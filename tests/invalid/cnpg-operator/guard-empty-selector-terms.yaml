@@ -1,0 +1,4 @@
+admission:
+  databaseRoleGuard:
+    enabled: true
+    namespaceSelector: {foo: bar}

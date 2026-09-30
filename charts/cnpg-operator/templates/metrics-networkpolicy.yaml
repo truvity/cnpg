@@ -1,0 +1,41 @@
+{{- /* Opens the instance metrics port to a scraper, in each namespace that
+hosts PostgreSQL. Selects only pods labelled cnpg.io/cluster, so the door
+opens on database instances and nothing else in the namespace. */}}
+{{- $np := .Values.metricsNetworkPolicy }}
+{{- if $np.enabled }}
+{{- if not $np.namespaces }}
+{{- fail "metricsNetworkPolicy.enabled is true but metricsNetworkPolicy.namespaces is empty: name the namespaces that host PostgreSQL" }}
+{{- end }}
+{{- if not $np.from }}
+{{- fail "metricsNetworkPolicy.enabled is true but metricsNetworkPolicy.from is empty: there is no default scraper, name one" }}
+{{- end }}
+{{- range $ns := $np.namespaces }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $np.name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "cnpg-operator.labels" $ | nindent 4 }}
+    {{- with $np.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with (include "cnpg-operator.annotations" (dict "root" $ "own" $np.annotations)) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+spec:
+  podSelector:
+    matchExpressions:
+      - key: cnpg.io/cluster
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        {{- toYaml $np.from | nindent 8 }}
+      ports:
+        - port: {{ $np.port }}
+          protocol: TCP
+{{- end }}
+{{- end }}

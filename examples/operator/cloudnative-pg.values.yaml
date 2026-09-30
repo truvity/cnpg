@@ -1,0 +1,47 @@
+# Values for the upstream `cloudnative-pg` chart
+# (https://cloudnative-pg.github.io/charts), the operator preset this
+# repository recommends. Tested against chart 0.29.0.
+#
+#   helm install cnpg cloudnative-pg \
+#     --repo https://cloudnative-pg.github.io/charts --version 0.29.0 \
+#     --namespace cnpg-system --create-namespace \
+#     -f cloudnative-pg.values.yaml
+#
+# Estate facts (nodeSelector, tolerations, image registry) are NOT here:
+# they are yours to add.
+
+# Unrequested pods are the first probe-kill victims under node contention.
+resources:
+  requests: {cpu: 100m, memory: 256Mi}
+
+crds:
+  create: true
+
+# Scrape the operator's own metrics through the chart's PodMonitor.
+# Needs the monitoring.coreos.com CRDs (a VictoriaMetrics operator
+# converts the object).
+monitoring:
+  podMonitorEnabled: true
+
+# ConfigMap changes need an operator pod restart to take effect.
+config:
+  data:
+    # Adopt a new instance-manager binary in place, which avoids a
+    # PostgreSQL restart on most operator upgrades (not all: some
+    # releases change probes and force one; read the release notes).
+    ENABLE_INSTANCE_MANAGER_INPLACE_UPDATES: "true"
+
+    # Propagate these labels and annotations from a Cluster onto the Pods,
+    # PVCs and Services the operator creates. Without them a GitOps tool
+    # shows perpetual drift on operator-created children, and a network
+    # policy selecting on a tenancy label misses the instance pods.
+    # Replace example.com/* with the label domain your platform stamps.
+    INHERITED_LABELS: "app.kubernetes.io/instance, app.kubernetes.io/part-of, example.com/*"
+    INHERITED_ANNOTATIONS: "argocd.argoproj.io/tracking-id"
+
+    # Stagger rollouts so an operator upgrade cannot restart every
+    # PostgreSQL at once. Seconds between clusters, and between the
+    # instances of one cluster. See cloudnative-pg.fast-rollout.values.yaml
+    # for a disposable environment.
+    CLUSTERS_ROLLOUT_DELAY: "120"
+    INSTANCES_ROLLOUT_DELAY: "30"

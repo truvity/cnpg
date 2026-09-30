@@ -1,0 +1,4 @@
+alerts:
+  enabled: true
+  certExpiry:
+    enabled: true

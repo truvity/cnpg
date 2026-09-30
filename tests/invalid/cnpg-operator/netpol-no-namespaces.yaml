@@ -1,0 +1,4 @@
+metricsNetworkPolicy:
+  enabled: true
+  from:
+    - podSelector: {}

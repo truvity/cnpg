@@ -1,0 +1,29 @@
+# Values for THIS repository's charts/cnpg-operator, filled with example
+# names. Every name below is a placeholder; none is a default.
+storageClasses:
+  enabled: true
+  classes:
+    # EKS Auto Mode: a class that keeps the volume when its claim goes.
+    - name: example-gp3
+      provisioner: ebs.csi.eks.amazonaws.com
+      parameters: {type: gp3, encrypted: "true"}
+      reclaimPolicy: Retain
+
+metricsNetworkPolicy:
+  enabled: true
+  namespaces: [example-pg]
+  from:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: monitoring}
+      podSelector:
+        matchLabels: {app.kubernetes.io/name: scraper}
+
+alerts:
+  enabled: true
+  kind: PrometheusRule
+
+admission:
+  databaseRoleGuard:
+    enabled: true
+    namespaceSelector:
+      matchLabels: {example.com/tenant: "true"}

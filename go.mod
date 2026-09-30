@@ -1,4 +1,4 @@
-module github.com/truvity/cnpg-cluster
+module github.com/truvity/cnpg/v2
 
 go 1.27.0
 

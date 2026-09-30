@@ -1,0 +1,12 @@
+# An OVERLAY for cloudnative-pg.values.yaml, for an environment where
+# databases are disposable and fast feedback beats a gentle upgrade:
+#
+#   helm upgrade --install cnpg cloudnative-pg ... \
+#     -f cloudnative-pg.values.yaml -f cloudnative-pg.fast-rollout.values.yaml
+#
+# The difference between environments is this file, not an environment
+# name in a template: the platform picks the overlay per environment.
+config:
+  data:
+    CLUSTERS_ROLLOUT_DELAY: "0"
+    INSTANCES_ROLLOUT_DELAY: "0"

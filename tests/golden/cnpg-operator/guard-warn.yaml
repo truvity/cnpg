@@ -1,0 +1,43 @@
+---
+# Source: cnpg-operator/templates/database-role-guard.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: cnpg-database-role-guard
+  labels:
+    app.kubernetes.io/name: cnpg-operator
+    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/managed-by: Helm
+spec:
+  failurePolicy: Ignore
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["postgresql.cnpg.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["databaseroles"]
+  validations:
+    - expression: "!has(object.spec.superuser) || object.spec.superuser == false"
+      message: "a DatabaseRole may not set superuser: that attribute is the platform's to grant"
+      reason: Forbidden
+
+---
+# Source: cnpg-operator/templates/database-role-guard.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: cnpg-database-role-guard
+  labels:
+    app.kubernetes.io/name: cnpg-operator
+    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/managed-by: Helm
+spec:
+  policyName: cnpg-database-role-guard
+  validationActions:
+    - Warn
+    - Audit
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+      - key: example.com/tenant
+        operator: Exists

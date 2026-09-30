@@ -1,0 +1,31 @@
+---
+# Source: cnpg-operator/templates/alerts.yaml
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: cnpg-baseline
+  namespace: default
+  labels:
+    app.kubernetes.io/name: cnpg-operator
+    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: cnpg-baseline
+      rules:
+        - alert: CnpgWalArchivingFailing
+          expr: "cnpg_pg_stat_archiver_last_failed_time{namespace=~\"pg-.*\"} > cnpg_pg_stat_archiver_last_archived_time{namespace=~\"pg-.*\"}"
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "WAL archiving is failing on {{ $labels.pod }}"
+            description: "The last failed WAL archive is newer than the last successful one. Point-in-time recovery is degrading and WAL is accumulating on the volume."
+        - alert: CnpgBackupTooOld
+          expr: "time() - cnpg_collector_last_available_backup_timestamp{namespace=~\"pg-.*\"} > 172800"
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No recent backup for {{ $labels.pod }}"
+            description: "The newest available backup is older than 172800 seconds."

@@ -1,0 +1,3 @@
+metricsNetworkPolicy:
+  enabled: true
+  namespaces: [pg]

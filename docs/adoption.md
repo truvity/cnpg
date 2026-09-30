@@ -1,6 +1,6 @@
 # Adoption
 
-How a platform takes `cnpg-cluster`/`cnpg-database` into use, and every
+How a platform takes `cnpg-operator`/`cnpg-cluster`/`cnpg-database` into use, and every
 breaking upgrade with its steps. The zero-diff gate applies to all of it:
 **a consumer adopts a release only when the render it produces is
 byte-identical to what runs, or differs exactly by the change the release
@@ -18,10 +18,48 @@ announces.**
   every identity-shaped value are plain inputs with empty defaults — see
   README "Install and a worked example" for two different estates' shapes.
 
+## Installing the operator (`cnpg-operator`)
+
+Once per Kubernetes cluster, by the platform. Two upstream charts install the
+operator; this repository supplies their values and one chart for the rest.
+
+1. Install the upstream `cloudnative-pg` chart with
+   `examples/operator/cloudnative-pg.values.yaml` (and, in an environment
+   where databases are disposable,
+   `examples/operator/cloudnative-pg.fast-rollout.values.yaml` on top). The
+   preset was written against chart 0.29.0.
+2. Install the upstream `plugin-barman-cloud` chart with
+   `examples/operator/plugin-barman-cloud.values.yaml` (chart 0.7.0), before
+   or with the operator, never after. It needs cert-manager. Exactly one
+   release owns the `ObjectStore` CRD.
+3. Install `cnpg-operator` with only the parts you want. Start from
+   `examples/operator/cnpg-operator.values.yaml`; every name in it is a
+   placeholder.
+
+What to fill in, by feature:
+
+- **Storage classes.** The class names and the provisioner are yours. The
+  default posture is `WaitForFirstConsumer` binding and expansion on; the
+  reclaim policy decides whether deleting a claim takes the volume with it,
+  so a production class is normally `Retain`.
+- **Metrics policy.** Name the namespaces that host PostgreSQL and the
+  scraper (`from` takes ordinary NetworkPolicy peers). The policy selects
+  pods labelled `cnpg.io/cluster` only.
+- **Alert rules.** Choose `PrometheusRule` or `VMRule`, add the labels your
+  rule selector needs, and narrow every expression with `alerts.selector`.
+  The certificate rule is off until `alerts.certExpiry.nameRegex` says which
+  Certificates are the database's. The rules read `cnpg_*` instance metrics
+  (enable `monitoring.podMonitor` on `cnpg-cluster` to have them scraped),
+  cert-manager's expiry metric and the kubelet's volume stats.
+- **Role guard.** `admission.databaseRoleGuard.namespaceSelector` is required
+  and must not be empty: the guard covers exactly the namespaces it selects.
+  Try `validationActions: [Warn, Audit]` first; it needs Kubernetes 1.30 or
+  newer (ValidatingAdmissionPolicy is GA there).
+
 ## Install order
 
 1. Install the CNPG operator and the barman-cloud plugin (if backups are
-   used) first; this chart renders CRs those controllers own.
+   used) first (see above); this chart renders CRs those controllers own.
 2. Render `charts/cnpg-cluster` with `profile` and, if the estate archives
    backups, `backup.bucketName` and the identity that may write to it.
 3. A project that owns a database but not the cluster installs

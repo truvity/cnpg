@@ -4,6 +4,12 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Feature:** new chart `cnpg-operator`, for the platform that installs the CloudNativePG operator once per Kubernetes cluster: optional StorageClasses, a metrics NetworkPolicy, baseline alert rules (PrometheusRule or VMRule) and a ValidatingAdmissionPolicy that refuses privileged `DatabaseRole`s. Everything is off by default and nothing is an estate default. It ships no subcharts; the operator and barman-cloud plugin presets are values under `examples/operator/`. `cnpg-cluster` and `cnpg-database` render byte-identical to v2.1.1.
+- **Change:** the Go module path is `github.com/truvity/cnpg/v2`, ahead of the repository rename from `truvity/cnpg-cluster` to `truvity/cnpg`. No Go package imports it; chart OCI paths are chart-name based and do not change.
+- First `docs/decisions/` records: `0001` (absorb and rename, charts by owner), `0002` (the operator chart).
+
 ## v2.1.1
 
 - **Fix:** both `values.schema.json` files admit `global`. Helm hands `global` to every subchart, and the strict schema refused it (`additional properties 'global' not allowed`), so v2.0.0 to v2.1.0 could not be embedded as a dependency at all. Render diff: none; a consumer that pins the chart as a subchart can move to this release.

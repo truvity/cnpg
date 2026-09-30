@@ -1,0 +1,18 @@
+# Values for the upstream `plugin-barman-cloud` chart
+# (https://cloudnative-pg.github.io/charts): WAL archiving and base
+# backups as a CNPG-I sidecar. Tested against chart 0.7.0.
+#
+# Install the plugin BEFORE or WITH the operator, never after it, and with
+# cert-manager present (it issues the plugin's serving certificate).
+#
+#   helm install cnpg-plugin-barman plugin-barman-cloud \
+#     --repo https://cloudnative-pg.github.io/charts --version 0.7.0 \
+#     --namespace cnpg-system -f plugin-barman-cloud.values.yaml
+
+# Exactly ONE release may own the ObjectStore CRD. Leave this true when
+# this is that release; set false when a separate CRD chart owns it.
+crds:
+  create: true
+
+resources:
+  requests: {cpu: 50m, memory: 128Mi}
