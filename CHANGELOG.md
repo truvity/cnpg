@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Fix:** both `values.schema.json` files admit `global`. Helm hands `global` to every subchart, and the strict schema refused it (`additional properties 'global' not allowed`), so v2.0.0 to v2.1.0 could not be embedded as a dependency at all. Render diff: none; a consumer that pins the chart as a subchart can move to this release.
+
 ## v2.1.0
 
 - **Feature:** `monitoring.podMonitor.enabled` (default `false`) renders a `monitoring.coreos.com/v1` `PodMonitor` for the cluster's instance pods (port `metrics`, `/metrics`), with optional `interval`, `metricRelabelings` and `labels`. The operator's own `spec.monitoring.enablePodMonitor` is deprecated upstream, so the chart renders the object itself. With the value at its default the render is byte-identical to v2.0.0; nothing to do on upgrade.

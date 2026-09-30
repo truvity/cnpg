@@ -6,6 +6,10 @@
   "additionalProperties": false,
   "required": ["databaseName", "clusterName", "namespace"],
   "properties": {
+    "global": {
+      "type": "object",
+      "description": "Helm injects `global` into every subchart's values, so a strict schema must admit it or the chart cannot be embedded as a dependency. The chart reads nothing from it."
+    },
     "databaseName": {
       "type": "string",
       "description": "PostgreSQL database name (spec.name on the rendered Database). Required."

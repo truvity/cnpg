@@ -5,6 +5,10 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "global": {
+      "type": "object",
+      "description": "Helm injects `global` into every subchart's values, so a strict schema must admit it or the chart cannot be embedded as a dependency. The chart reads nothing from it."
+    },
     "clusterName": {
       "type": "string",
       "description": "Name of the CNPG Cluster and the prefix for every resource this chart renders."
