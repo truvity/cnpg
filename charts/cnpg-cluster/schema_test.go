@@ -62,3 +62,17 @@ func TestSchema_RejectsBadProfileEnum(t *testing.T) {
 	})
 	require.Error(t, err)
 }
+
+// TestSchema_AcceptsGlobal: Helm always passes `global` down to a
+// subchart, and a strict schema that refuses it makes the chart
+// unusable as a dependency ("additional properties 'global' not
+// allowed") -- which is how every consumer embeds it.
+func TestSchema_AcceptsGlobal(t *testing.T) {
+	_, err := renderDocs(t, map[string]any{
+		"clusterName": "app-pg",
+		"namespace":   "app",
+		"profile":     "devel",
+		"global":      map[string]any{},
+	})
+	require.NoError(t, err)
+}
