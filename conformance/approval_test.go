@@ -97,7 +97,9 @@ func TestApproval(t *testing.T) {
 
 		_, approved := s.requestOutcome(t, otherNS)
 		assert.False(t, approved)
-		assert.NotContains(t, s.kubectl(t, "get", "secrets", "-n", otherNS, "-o", "name"), "intruder-ns", "no certificate was issued")
+		// (cert-manager's temporary key Secret, intruder-ns-<random>, is not
+		// the certificate's.)
+		assert.NotContains(t, strings.Fields(s.kubectl(t, "get", "secrets", "-n", otherNS, "-o", "name")), "secret/intruder-ns", "no certificate was issued")
 		assert.Equal(t, "False", strings.TrimSpace(s.kubectl(t, "get", "certificate", "intruder-ns", "-n", otherNS, "-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`)))
 	})
 
@@ -116,7 +118,7 @@ func TestApproval(t *testing.T) {
 		})
 
 		secrets := s.kubectl(t, "get", "secrets", "-n", appNS, "-o", "name")
-		assert.NotContains(t, secrets, "intruder-cn", "no certificate was issued")
+		assert.NotContains(t, strings.Fields(secrets), "secret/intruder-cn", "no certificate was issued")
 	})
 
 	t.Run("4 the admission policy refuses a superuser DatabaseRole in a product namespace", func(t *testing.T) {
