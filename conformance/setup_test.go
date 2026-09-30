@@ -85,6 +85,20 @@ func (s *suite) up(t *testing.T) error {
 	return nil
 }
 
+// retry runs fn until it succeeds or the time is up, returning the last error.
+func (s *suite) retry(timeout time.Duration, fn func() error) error {
+	deadline := time.Now().Add(timeout)
+
+	for {
+		err := fn()
+		if err == nil || time.Now().After(deadline) {
+			return err
+		}
+
+		time.Sleep(5 * time.Second)
+	}
+}
+
 func (s *suite) createCluster() error {
 	// One cluster, created fresh. A leftover one of the same name (an
 	// aborted run) is removed first.
@@ -125,7 +139,11 @@ func (s *suite) installCertificates() error {
 	// The test-only policies, before anything else requests a certificate:
 	// with the default approver off, an unapproved request waits forever
 	// (trust-manager's own webhook certificate included).
-	if err := s.do(time.Minute, "", "kubectl", "apply", "-f", s.path("conformance", "fixtures", "policies.yaml")); err != nil {
+	// Retried: the Deployment is ready before its validating webhook
+	// answers, and the first apply can meet "connection refused".
+	if err := s.retry(3*time.Minute, func() error {
+		return s.do(time.Minute, "", "kubectl", "apply", "-f", s.path("conformance", "fixtures", "policies.yaml"))
+	}); err != nil {
 		return err
 	}
 
