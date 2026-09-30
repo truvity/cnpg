@@ -51,9 +51,9 @@ func TestReplication(t *testing.T) {
 
 		// The replica is connected and streaming, as the replication role.
 		eventually(t, 2*time.Minute, 3*time.Second, "a streaming replica", func() error {
-			out := s.superuserSQL(t, primary, "select usename || ' ' || state from pg_stat_replication")
-			if !strings.Contains(out, "streaming_replica streaming") {
-				return fmt.Errorf("pg_stat_replication: %q", out)
+			out, err := s.superuserSQLErr(primary, "select usename || ' ' || state from pg_stat_replication")
+			if err != nil || !strings.Contains(out, "streaming_replica streaming") {
+				return fmt.Errorf("pg_stat_replication: %q (%v)", out, err)
 			}
 
 			return nil
@@ -67,9 +67,9 @@ func TestReplication(t *testing.T) {
 		require.NotEmpty(t, replica)
 
 		eventually(t, 2*time.Minute, 2*time.Second, "the row on the replica", func() error {
-			out := s.superuserSQL(t, replica, "select n from conformance_marker")
-			if out != "42" {
-				return fmt.Errorf("replica has %q", out)
+			out, err := s.superuserSQLErr(replica, "select n from conformance_marker")
+			if err != nil || out != "42" {
+				return fmt.Errorf("replica has %q (%v)", out, err)
 			}
 
 			return nil
