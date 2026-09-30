@@ -122,21 +122,22 @@ func (s *suite) installCertificates() error {
 		return err
 	}
 
+	// The test-only policies, before anything else requests a certificate:
+	// with the default approver off, an unapproved request waits forever
+	// (trust-manager's own webhook certificate included).
+	if err := s.do(time.Minute, "", "kubectl", "apply", "-f", s.path("conformance", "fixtures", "policies.yaml")); err != nil {
+		return err
+	}
+
 	// Secret targets are off by default; the Bundle the cnpg-cluster chart
 	// renders delivers <cluster>-client-ca into the database namespace as a
 	// Secret, and only a Secret trust-manager is authorized for.
-	if err := s.helm(10*time.Minute, "trust-manager", "trust-manager",
+	return s.helm(10*time.Minute, "trust-manager", "trust-manager",
 		"--repo", jetstackRepo, "--version", trustManagerVersion,
 		"--namespace", certManager,
 		"--set", "secretTargets.enabled=true",
 		"--set-json", `secretTargets.authorizedSecrets=["`+pgName+`-client-ca"]`,
-		"--set", "defaultPackage.enabled=false"); err != nil {
-		return err
-	}
-
-	// The test-only policies, before anything requests a certificate: with
-	// the default approver off, an unapproved request waits forever.
-	return s.do(time.Minute, "", "kubectl", "apply", "-f", s.path("conformance", "fixtures", "policies.yaml"))
+		"--set", "defaultPackage.enabled=false")
 }
 
 func (s *suite) operatorValues() []string {
