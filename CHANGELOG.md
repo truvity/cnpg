@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.2.1
 
 - **Fix:** `CnpgBackupTooOld` in `cnpg-platform` read `cnpg_collector_last_available_backup_timestamp`, which CloudNativePG deprecated in 1.26 and which only moves for the in-core Barman Cloud backup or volume snapshots; with the barman-cloud plugin (what `examples/operator/` installs) it stays 0, so the rule fired permanently and could never detect a stale backup. It now reads `barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`, the plugin sidecar's own metric (plugin-barman-cloud v0.13.0, chart 0.7.0). A cluster that backs up another way should set `alerts.backupAge.enabled=false`. Every other rule is unchanged, and each keeps its own `enabled`, threshold and `for` inputs.
 - **Test:** golden renders for the PrometheusRule and VMRule variants (all rules on, moved thresholds, single rule), and a `rulecheck` recipe and CI job that parses every rendered VMRule expression with the real VictoriaMetrics binary (truvity/observability `rulecheck` v0.19.0).
