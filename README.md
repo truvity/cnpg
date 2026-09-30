@@ -30,6 +30,11 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
   libpq/JDBC environment and an egress policy. See
   [docs/connecting.md](docs/connecting.md).
 
+- **cmd/cnpgctl** — a command-line tool. `cnpgctl verify` runs read-only
+  assertions against a live cluster: health, archiving, backups, TLS,
+  reload labels and pg_hba. Prebuilt for linux and darwin (amd64, arm64) on
+  each release; see [docs/cnpgctl.md](docs/cnpgctl.md).
+
 Published as OCI charts:
 
 ```
@@ -147,7 +152,7 @@ package a chart's dependencies today; see
 
 | repo | consumers (surface) |
 |---|---|
-| cnpg-cluster | truvity/gitops (chart `cnpg-cluster`) |
+| cnpg-cluster | truvity/gitops (chart `cnpg-cluster`; `cnpgctl` as a verification step) |
 | cnpg-platform | not yet adopted |
 
 ## Neighbours
@@ -166,6 +171,7 @@ package a chart's dependencies today; see
   into use, including the breaking migrations between the `scheduling`
   shape older releases assumed and the plain-input shape at HEAD.
 - [`docs/authentication.md`](docs/authentication.md) — the per-database client trust model, hba ordering and the people mapping.
+- [`docs/cnpgctl.md`](docs/cnpgctl.md) — the `cnpgctl verify` assertions and flags.
 - [`docs/reference.md`](docs/reference.md) — every value, generated from
   `values.yaml`'s own comments.
 - [`docs/decisions/`](docs/decisions/) — why the repository is shaped as it is:
@@ -200,7 +206,7 @@ turn every pull request red.
 ## Releasing
 
 Tag-triggered (`.github/workflows/release.yaml`): pushing `vX.Y.Z` packages
-and publishes all three charts at that version. `.github/workflows/auto-release.yaml`
+publishes all four charts at that version and attaches the `cnpgctl` archives to the GitHub release. `.github/workflows/auto-release.yaml`
 can cut patch tags on its own — same-day for a push whose merged PR carries
 the `security` label, weekly otherwise — but only once `vars.AUTO_RELEASE` is
 set for this repository; see that workflow for today's setting. Minors and

@@ -112,8 +112,7 @@ clean:
 check: test lint charts leak-canary
 
 # Build a snapshot release locally (no push, no tag) — exercises
-# goreleaser's GitHub-release/changelog machinery; this repo ships no
-# binaries (builds are skipped), so there is nothing else for it to do.
+# goreleaser's build, archive and changelog machinery (the cnpgctl archives).
 snapshot:
     goreleaser release --snapshot --clean
 
