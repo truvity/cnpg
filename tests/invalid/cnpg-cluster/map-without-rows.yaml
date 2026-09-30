@@ -1,0 +1,7 @@
+clusterName: pg
+namespace: app
+profile: devel
+postgresql:
+  pgHba:
+    beforeCatchAll:
+      - hostssl all all all cert map=people

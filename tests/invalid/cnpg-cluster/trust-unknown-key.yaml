@@ -1,0 +1,5 @@
+clusterName: pg
+namespace: app
+profile: devel
+trust:
+  ca: {enabled: true, bogus: 1}

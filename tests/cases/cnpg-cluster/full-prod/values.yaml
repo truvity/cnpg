@@ -1,0 +1,16 @@
+clusterName: pg
+namespace: app
+profile: devel
+bootstrap:
+  initdb: {database: app, owner: app-owner}
+roles:
+  - {name: my-app, auth: cert}
+profile: prod
+trust:
+  namespace: cert-manager
+  ca: {enabled: true}
+  policy: {enabled: true, roles: [my-app]}
+  bundle: {enabled: true}
+replication: {enabled: true}
+people:
+  - {email: ada@example.com, role: readonly}

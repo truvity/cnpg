@@ -1,0 +1,16 @@
+clusterName: pg
+namespace: app
+profile: devel
+bootstrap:
+  initdb: {database: app, owner: app-owner}
+roles:
+  - {name: my-app, auth: cert}
+trust:
+  namespace: cert-manager
+  bundle:
+    enabled: true
+    extraCertificates:
+      - |
+        -----BEGIN CERTIFICATE-----
+        people-root
+        -----END CERTIFICATE-----

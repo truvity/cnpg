@@ -120,7 +120,8 @@ and hand in here.
 | `walStorage.size` | string | `"5Gi"` | WAL volume size. `prod` only; `devel` skips the WAL volume entirely. |
 | `resources` | object | `{}` | Raw Kubernetes `ResourceRequirements` (passthrough). Empty = profile default (devel `100m`/`256Mi` request + `512Mi` limit with `shared_buffers: 64MB`; prod `250m`/`512Mi` request + `1Gi` limit). A set value replaces the default wholesale, not merges with it. |
 | `postgresql.parameters` | map | `{}` | Extra `postgresql.conf` parameters, merged over the profile's own (`synchronous_commit`, `shared_buffers`, `max_slot_wal_keep_size`). |
-| `postgresql.extra_pg_hba` | []string | `[]` | Extra `pg_hba.conf` lines, appended **after** the profile's own posture lines (hba is first-match; a leading blanket rule would shadow the password lines this chart emits per password role). |
+| `postgresql.extra_pg_hba` | []string | `[]` | Extra `pg_hba.conf` lines, appended **after** the catch-all `hostssl all all all cert`. hba is first-match, so these reach nothing today; kept for compatibility. Use `postgresql.pgHba.beforeCatchAll`. |
+| `postgresql.pgHba.beforeCatchAll` | []string | `[]` | Extra `pg_hba.conf` lines placed after the scram and people lines and before the catch-all, where they can match. |
 | `enableSuperuserAccess` | bool | `false` | `spec.enableSuperuserAccess`. |
 
 ### `serverTLS` (optional)
@@ -144,6 +145,25 @@ The `Certificate` sets `secretTemplate.labels: {cnpg.io/reload: "true"}` and
 the `{clusterName}-server-ca` Secret carries the same label. CloudNativePG
 reloads a user-provided server Secret only when it has that label; without
 it a renewed certificate is not served until the instance restarts.
+
+### `trust`, `replication`, `people` (optional, platform-installed)
+
+Per-database client trust; the platform installs the chart once per cluster. Everything is off by default and a default render is unchanged. Model and ordering: [`authentication.md`](authentication.md).
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `trust.namespace` | string | `""` | cert-manager's cluster resource namespace, also trust-manager's trust namespace. Required with `ca.enabled` or `bundle.enabled`. |
+| `trust.ca.enabled` | bool | `false` | Renders a self-signed `Issuer`, a CA `Certificate` (ECDSA P-384) in `trust.namespace`, and `ClusterIssuer` `cnpg-<namespace>-<clusterName>` using that CA. |
+| `trust.ca.duration` / `.renewBefore` | string | `87600h` / unset | CA lifetime. |
+| `trust.policy.enabled` | bool | `false` | Renders an approver-policy `CertificateRequestPolicy` (only the database namespace, `client auth` only, CN in `roles` plus `streaming_replica`, ECDSA only) and the `ClusterRole` + `RoleBinding` that let the requester `use` it. |
+| `trust.policy.roles` | []string | `[]` | Common names admitted. Names starting `pg_` are refused. |
+| `trust.policy.requester.name` / `.namespace` | string | `cert-manager` / `cert-manager` | The ServiceAccount that requests on behalf of a `Certificate`; bound in the database namespace only. |
+| `trust.bundle.enabled` | bool | `false` | Renders a trust-manager `Bundle` delivering `<clusterName>-client-ca` (key `ca.crt`, label `cnpg.io/reload`) into the database namespace. A `Bundle` is cluster-scoped and its Secret shares its name, so the cluster name must be unique across namespaces. |
+| `trust.bundle.extraCertificates` | []string (PEM) | `[]` | Extra roots in the bundle, e.g. a people root. |
+| `replication.enabled` | bool | `false` | Renders `Certificate` `<clusterName>-replication` (CN `streaming_replica`, `client auth`) from the ClusterIssuer and sets `certificates.clientCASecret: <clusterName>-client-ca` and `replicationTLSSecret: <clusterName>-replication` on the Cluster. |
+| `people[].email` / `.role` | string | `[]` | A row of the `people` pg_ident map and the database role the person may connect as. Roles starting `pg_` are refused. Non-empty `people` adds `hostssl all <roles> all cert map=people` before the catch-all. |
+
+A `map=` in any `pg_hba` line that names no rows (`map=people` with empty `people`, or any other map name) fails the render.
 
 ### `monitoring.podMonitor` (optional)
 

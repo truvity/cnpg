@@ -1,0 +1,5 @@
+clusterName: pg
+namespace: app
+profile: devel
+trust:
+  bundle: {enabled: true}
