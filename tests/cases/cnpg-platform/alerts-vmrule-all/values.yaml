@@ -1,0 +1,17 @@
+# Every rule on, as a VMRule, with thresholds moved off their defaults.
+alerts:
+  enabled: true
+  kind: VMRule
+  ruleLabels: {team: data}
+  backupAge:
+    maxAgeSeconds: 90000
+    for: 1h
+  replicationLag:
+    maxLagSeconds: 60
+  certExpiry:
+    enabled: true
+    nameRegex: "pg-.*"
+    warnDays: 30
+    criticalDays: 7
+  walDisk:
+    minFreeFraction: 0.25

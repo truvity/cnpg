@@ -4,6 +4,11 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Fix:** `CnpgBackupTooOld` in `cnpg-platform` read `cnpg_collector_last_available_backup_timestamp`, which CloudNativePG deprecated in 1.26 and which only moves for the in-core Barman Cloud backup or volume snapshots; with the barman-cloud plugin (what `examples/operator/` installs) it stays 0, so the rule fired permanently and could never detect a stale backup. It now reads `barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`, the plugin sidecar's own metric (plugin-barman-cloud v0.13.0, chart 0.7.0). A cluster that backs up another way should set `alerts.backupAge.enabled=false`. Every other rule is unchanged, and each keeps its own `enabled`, threshold and `for` inputs.
+- **Test:** golden renders for the PrometheusRule and VMRule variants (all rules on, moved thresholds, single rule), and a `rulecheck` recipe and CI job that parses every rendered VMRule expression with the real VictoriaMetrics binary (truvity/observability `rulecheck` v0.19.0).
+
 ## v2.2.0
 
 - **Feature:** new command `cnpgctl` (`cmd/cnpgctl`, archives for linux and darwin, amd64 and arm64, attached to each release; also `go run github.com/truvity/cnpg/v2/cmd/cnpgctl@<tag>`). `cnpgctl verify` runs read-only assertions against a live cluster, each printed PASS/FAIL with a reason, non-zero exit on any FAIL, `--output json` for machines: phase, ready instances and primary; the ContinuousArchiving condition and recoverability window; last successful backup within `--max-backup-age`; server CA, client CA and replication certificates labelled `cnpg.io/reload` and valid for `--min-cert-validity`; the `cnpg.io/reload` label on every user-provided Secret the Cluster names; and pg_hba sanity (no `trust`, every `map=` has pg_ident rows, the catch-all is last). The logic is the reusable package `pkg/verify`. See `docs/cnpgctl.md`. Nothing changes for the charts except that `cnpg-cluster` and `cnpg-database` now commit `appVersion: 0.0.0` like the other two, because the repository now builds a binary and the release stamps `appVersion` from the tag (the field was the upstream operator's version and no template reads it).

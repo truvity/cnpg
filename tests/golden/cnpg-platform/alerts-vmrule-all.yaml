@@ -1,0 +1,69 @@
+---
+# Source: cnpg-platform/templates/alerts.yaml
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: cnpg-baseline
+  namespace: default
+  labels:
+    app.kubernetes.io/name: cnpg-platform
+    app.kubernetes.io/instance: cnpg-platform
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: cnpg-baseline
+      rules:
+        - alert: CnpgWalArchivingFailing
+          expr: "cnpg_pg_stat_archiver_last_failed_time{} > cnpg_pg_stat_archiver_last_archived_time{}"
+          for: 15m
+          labels:
+            severity: critical
+            team: data
+          annotations:
+            summary: "WAL archiving is failing on {{ $labels.pod }}"
+            description: "The last failed WAL archive is newer than the last successful one. Point-in-time recovery is degrading and WAL is accumulating on the volume."
+        - alert: CnpgBackupTooOld
+          expr: "time() - barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{} > 90000"
+          for: 1h
+          labels:
+            severity: warning
+            team: data
+          annotations:
+            summary: "No recent backup for {{ $labels.pod }}"
+            description: "The newest successful backup recorded by the barman-cloud plugin is older than 90000 seconds, or there is none."
+        - alert: CnpgReplicationLagHigh
+          expr: "cnpg_pg_replication_lag{} > 60"
+          for: 10m
+          labels:
+            severity: warning
+            team: data
+          annotations:
+            summary: "Replica {{ $labels.pod }} is lagging"
+            description: "Replication lag has exceeded 60 seconds."
+        - alert: CnpgCertificateExpiring
+          expr: "certmanager_certificate_expiration_timestamp_seconds{name=~\"pg-.*\"} - time() < 30 * 86400"
+          for: 10m
+          labels:
+            severity: warning
+            team: data
+          annotations:
+            summary: "Certificate {{ $labels.name }} expires soon"
+            description: "Fewer than 30 days remain. A renewal that has not happened by now is stuck."
+        - alert: CnpgCertificateExpiryImminent
+          expr: "certmanager_certificate_expiration_timestamp_seconds{name=~\"pg-.*\"} - time() < 7 * 86400"
+          for: 10m
+          labels:
+            severity: critical
+            team: data
+          annotations:
+            summary: "Certificate {{ $labels.name }} is about to expire"
+            description: "Fewer than 7 days remain."
+        - alert: CnpgWalVolumeFillingUp
+          expr: "kubelet_volume_stats_available_bytes{persistentvolumeclaim=~\".*-wal\"} / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~\".*-wal\"} < 0.25"
+          for: 10m
+          labels:
+            severity: critical
+            team: data
+          annotations:
+            summary: "WAL volume {{ $labels.persistentvolumeclaim }} is nearly full"
+            description: "Less than 0.25 of the volume is free. A full WAL volume stops the instance."

@@ -99,6 +99,14 @@ charts:
 # muscle-memoried in. Remove after the next tagged release.
 chart-lint: charts
 
+# Parse every VMRule expression in the golden renders with the real
+# VictoriaMetrics binary (truvity/observability rulecheck, pinned), so an
+# expression the parser refuses can never ship. PrometheusRule goldens are
+# not read by rulecheck; their expressions are the same strings.
+rulecheck:
+    go run github.com/truvity/observability/cmd/rulecheck@v0.19.0 \
+        -vm-version v1.152.0 -vl-version v1.50.0 tests/golden/cnpg-platform
+
 # The reason this repository can be public. Runs in CI as its own job.
 leak-canary:
     hack/leak-canary.sh
@@ -119,7 +127,7 @@ clean:
 # — a standard-library advisory with no released fix must not turn
 # every PR red on a finding nobody can act on; security.yaml runs it
 # separately, daily and un-required.
-check: test lint charts leak-canary
+check: test lint charts leak-canary rulecheck
 
 # Build a snapshot release locally (no push, no tag) — exercises
 # goreleaser's build, archive and changelog machinery (the cnpgctl archives).

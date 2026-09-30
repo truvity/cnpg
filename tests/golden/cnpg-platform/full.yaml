@@ -123,14 +123,14 @@ spec:
             summary: "WAL archiving is failing on {{ $labels.pod }}"
             description: "The last failed WAL archive is newer than the last successful one. Point-in-time recovery is degrading and WAL is accumulating on the volume."
         - alert: CnpgBackupTooOld
-          expr: "time() - cnpg_collector_last_available_backup_timestamp{namespace=~\"pg-.*\"} > 90000"
+          expr: "time() - barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace=~\"pg-.*\"} > 90000"
           for: 1h
           labels:
             severity: page-later
             team: data
           annotations:
             summary: "No recent backup for {{ $labels.pod }}"
-            description: "The newest available backup is older than 90000 seconds."
+            description: "The newest successful backup recorded by the barman-cloud plugin is older than 90000 seconds, or there is none."
         - alert: CnpgReplicationLagHigh
           expr: "cnpg_pg_replication_lag{namespace=~\"pg-.*\"} > 60"
           for: 5m

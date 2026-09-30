@@ -52,7 +52,7 @@ func TestAlertRulesNameTheirMetricAndThreshold(t *testing.T) {
 
 	want := map[string]string{
 		"CnpgWalArchivingFailing":       "cnpg_pg_stat_archiver_last_failed_time",
-		"CnpgBackupTooOld":              "cnpg_collector_last_available_backup_timestamp",
+		"CnpgBackupTooOld":              "barman_cloud_cloudnative_pg_io_last_available_backup_timestamp",
 		"CnpgReplicationLagHigh":        "cnpg_pg_replication_lag",
 		"CnpgCertificateExpiring":       "certmanager_certificate_expiration_timestamp_seconds",
 		"CnpgCertificateExpiryImminent": "certmanager_certificate_expiration_timestamp_seconds",
