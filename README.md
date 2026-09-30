@@ -172,6 +172,10 @@ package a chart's dependencies today; see
   shape older releases assumed and the plain-input shape at HEAD.
 - [`docs/authentication.md`](docs/authentication.md) — the per-database client trust model, hba ordering and the people mapping.
 - [`docs/cnpgctl.md`](docs/cnpgctl.md) — the `cnpgctl verify` assertions and flags.
+- [`docs/conformance.md`](docs/conformance.md) — the kind conformance suite:
+  what the charts do with cert-manager, approver-policy, trust-manager and
+  the CloudNativePG operator, asserted on a disposable cluster
+  (`just conformance`, separate from `just check`).
 - [`docs/reference.md`](docs/reference.md) — every value, generated from
   `values.yaml`'s own comments.
 - [`docs/decisions/`](docs/decisions/) — why the repository is shaped as it is:
@@ -195,6 +199,7 @@ Used in production by its maintainers.
 ```sh
 devbox shell   # or rely on direnv
 just check     # test + lint + charts + leak-canary
+just conformance   # kind cluster + the real components; needs docker (docs/conformance.md)
 ```
 
 Chart versions are placeholders (`0.0.0`); the release workflow injects the

@@ -1,0 +1,49 @@
+# An S3 API for the backup assertion: LocalStack's community edition, the
+# same pinned image the family's kind box uses (truvity/policy hack/kind).
+# MinIO's public images are no longer published, and the assertion needs an
+# endpoint, not a product (charts/cnpg-cluster backup.endpoint).
+#
+# Not `latest` or `stable`: those resolve to a licensed build that exits
+# without a token. The community edition is the 4.x line.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: object-store
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: s3
+  namespace: object-store
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: s3}
+  template:
+    metadata:
+      labels: {app: s3}
+    spec:
+      containers:
+        - name: s3
+          image: localstack/localstack@sha256:3ebc37595918b8accb852f8048fef2aff047d465167edd655528065b07bc364a
+          env:
+            - {name: SERVICES, value: s3}
+          ports:
+            - containerPort: 4566
+          readinessProbe:
+            httpGet: {path: /_localstack/health, port: 4566}
+            periodSeconds: 5
+            failureThreshold: 60
+          resources:
+            requests: {cpu: 100m, memory: 512Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: s3
+  namespace: object-store
+spec:
+  selector: {app: s3}
+  ports:
+    - port: 4566
+      targetPort: 4566

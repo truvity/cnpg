@@ -1,0 +1,21 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+# One node. The suite proves what a chart's objects DO together (issuance,
+# approval, trust delivery, TLS reload), and nothing in that depends on
+# scheduling; a second node would only cost start-up time and inotify
+# instances (a second kind cluster on one machine can die with "too many
+# open files").
+nodes:
+  - role: control-plane
+# One controller-manager and one scheduler: no second one to hand off to, so
+# leader election only adds a way to die under load (kind generates kubeadm
+# v1beta3 config, where extraArgs is a map).
+kubeadmConfigPatches:
+  - |
+    kind: ClusterConfiguration
+    controllerManager:
+      extraArgs:
+        leader-elect: "false"
+    scheduler:
+      extraArgs:
+        leader-elect: "false"

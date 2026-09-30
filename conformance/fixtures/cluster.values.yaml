@@ -1,0 +1,21 @@
+# charts/cnpg-cluster with every trust object on: the platform's side.
+# serverTLS.caCertificates is passed with --set-file (the suite generates
+# the server CA).
+clusterName: pg
+namespace: app
+profile: devel
+# Two instances: replication has to be the thing under test.
+instances: 2
+storage: {size: 1Gi, storageClass: standard}
+bootstrap:
+  initdb: {database: app, owner: app_owner}
+serverTLS:
+  issuerRef: {name: conformance-server, kind: Issuer, group: cert-manager.io}
+trust:
+  namespace: cert-manager
+  ca: {enabled: true}
+  policy:
+    enabled: true
+    roles: [app_rw, app_ro]
+  bundle: {enabled: true}
+replication: {enabled: true}

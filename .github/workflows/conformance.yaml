@@ -1,0 +1,54 @@
+# The kind conformance suite (conformance/, docs/conformance.md): cert-manager,
+# approver-policy, trust-manager and the upstream CloudNativePG operator on a
+# disposable kind cluster, with this repository's charts installed on top,
+# asserting what they do together.
+#
+# Deliberately NOT part of ci.yaml's `check`: `just check` must stay free of
+# docker, a cluster and the network, and this job is minutes long. It is not
+# a required context. It runs when a change touches what it tests, on a
+# weekly schedule (upstream releases move under a pinned suite only through
+# a pin bump, but an image tag or a registry can still change under it),
+# on release tags, and on demand.
+#
+# Public repository, hosted runner, kind and mocks only: no cloud account,
+# no credential, no estate cluster. The shared `check` workflow (the same
+# one ci.yaml calls) runs the recipe; it bootstraps devbox, which pins go,
+# helm, just, kind and kubectl.
+#
+# Pinned by COMMIT SHA, never by tag or branch: tags move.
+name: Conformance
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "charts/**"
+      - "conformance/**"
+      - "examples/operator/**"
+      - "Justfile"
+      - "devbox.json"
+      - "devbox.lock"
+      - ".github/workflows/conformance.yaml"
+  schedule:
+    - cron: "0 5 * * 1" # Mondays, 5am UTC
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kind:
+    uses: truvity/ci-workflows/.github/workflows/check.yaml@02d66a9a2d64fe255d7703a1bebd764d0899f187 # v3.16.0
+    with:
+      recipes: '["conformance"]'
+      timeout-minutes: 60
+      # The backup and point-in-time restore assertion is opt-in locally
+      # (it pulls one more image and runs two more databases); CI runs it.
+      env-json: '{"CNPG_CONFORMANCE_BACKUP": "1"}'

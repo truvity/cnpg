@@ -1,0 +1,9 @@
+apiVersion: v2
+name: cnpg-conformance-client
+description: Test-only pod that connects through the cnpg-client helpers; never published.
+type: application
+version: 0.0.0
+dependencies:
+  - name: cnpg-client
+    version: 0.0.0
+    repository: file://../../../charts/cnpg-client

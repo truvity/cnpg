@@ -1,0 +1,8 @@
+# charts/cnpg-platform for the suite: only the admission guard. The storage
+# classes, the scraper policy and the alert rules need objects kind does not
+# carry (a cloud CSI driver, a scraper, the rule CRDs).
+admission:
+  databaseRoleGuard:
+    enabled: true
+    namespaceSelector:
+      matchLabels: {cnpg-conformance/guarded: "true"}
