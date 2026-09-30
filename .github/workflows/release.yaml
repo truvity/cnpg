@@ -39,4 +39,4 @@ jobs:
       # Chart-only repo: goreleaser runs with a builds-skip config (it
       # cuts the GitHub release + changelog); the artifacts are the
       # charts (three), pushed as oci://ghcr.io/truvity/charts/<name>.
-      charts: '["cnpg-cluster","cnpg-database","cnpg-operator"]'
+      charts: '["cnpg-cluster","cnpg-database","cnpg-platform"]'

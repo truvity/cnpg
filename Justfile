@@ -9,7 +9,7 @@ fmt:
 
 # The chart render tests (chart_test.go et al. drive `helm template`; they
 # carry the golden and negative roles for cnpg-cluster and cnpg-database)
-# and the golden renders of the charts that use tests/cases: cnpg-operator.
+# and the golden renders of the charts that use tests/cases: cnpg-platform.
 test:
     hack/golden.sh
     go test ./... -coverprofile=coverage.out
@@ -46,20 +46,20 @@ charts:
       echo "cnpg-database: an unknown key rendered" >&2
       exit 1
     fi
-    # cnpg-operator: schema, every negative fixture, and the example values.
+    # cnpg-platform: schema, every negative fixture, and the example values.
     # Not `! helm template`: bash's `set -e` ignores a negated command.
-    helm lint charts/cnpg-operator
-    if helm template x charts/cnpg-operator --set bogusKey=1 >/dev/null 2>&1; then
-      echo "cnpg-operator: an unknown key rendered" >&2
+    helm lint charts/cnpg-platform
+    if helm template x charts/cnpg-platform --set bogusKey=1 >/dev/null 2>&1; then
+      echo "cnpg-platform: an unknown key rendered" >&2
       exit 1
     fi
-    for values in tests/invalid/cnpg-operator/*.yaml; do
-      if helm template invalid charts/cnpg-operator -f "$values" >/dev/null 2>&1; then
+    for values in tests/invalid/cnpg-platform/*.yaml; do
+      if helm template invalid charts/cnpg-platform -f "$values" >/dev/null 2>&1; then
         echo "RENDERED BUT SHOULD HAVE FAILED: $values" >&2
         exit 1
       fi
     done
-    helm template x charts/cnpg-operator -f examples/operator/cnpg-operator.values.yaml >/dev/null
+    helm template x charts/cnpg-platform -f examples/operator/cnpg-platform.values.yaml >/dev/null
     echo "charts: schema-validated lint and render OK"
 
 # DEPRECATED: alias for `charts`, kept for anyone with the old name
@@ -99,7 +99,7 @@ snapshot:
 package:
     helm package charts/cnpg-cluster --destination dist/
     helm package charts/cnpg-database --destination dist/
-    helm package charts/cnpg-operator --destination dist/
+    helm package charts/cnpg-platform --destination dist/
 
 # DEPRECATED: alias for `package`. Remove after the next tagged release.
 helm-package: package

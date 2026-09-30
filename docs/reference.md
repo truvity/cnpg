@@ -5,7 +5,7 @@ Every value, generated from `values.yaml`'s own comments in each chart.
 machine-checked form of this table — an unknown top-level key, or a value of
 the wrong type, fails the render rather than being silently ignored.
 
-## charts/cnpg-operator
+## charts/cnpg-platform
 
 Everything is off until enabled, and there are no estate defaults. The
 chart renders nothing with its default values.

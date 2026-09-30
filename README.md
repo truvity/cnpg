@@ -6,11 +6,11 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
 
 | chart | installed by | how often |
 |---|---|---|
-| `cnpg-operator` | the platform | once per Kubernetes cluster |
+| `cnpg-platform` | the platform | once per Kubernetes cluster |
 | `cnpg-cluster` | the platform | once per PostgreSQL cluster |
 | `cnpg-database` | a product | once per database it owns |
 
-- **charts/cnpg-operator** — what a platform adds beside the upstream operator
+- **charts/cnpg-platform** — what a platform adds beside the upstream operator
   charts: storage classes, a metrics network policy, baseline alert rules and
   an admission guard against privileged database roles. The operator and
   barman-cloud plugin presets ship as values under
@@ -26,7 +26,7 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
 Published as OCI charts:
 
 ```
-oci://ghcr.io/truvity/charts/cnpg-operator
+oci://ghcr.io/truvity/charts/cnpg-platform
 oci://ghcr.io/truvity/charts/cnpg-cluster
 oci://ghcr.io/truvity/charts/cnpg-database
 ```
@@ -121,16 +121,16 @@ The upstream `cloudnative-pg` and `plugin-barman-cloud` charts install the
 operator. This repository contributes the preset they are installed with
 (`examples/operator/cloudnative-pg.values.yaml`: in-place instance-manager
 updates, inherited labels and annotations, staggered rollouts) and a chart,
-`cnpg-operator`, for the objects around it:
+`cnpg-platform`, for the objects around it:
 
 ```sh
-helm install cnpg-operator oci://ghcr.io/truvity/charts/cnpg-operator --version 2.2.0 -f values.yaml
+helm install cnpg-platform oci://ghcr.io/truvity/charts/cnpg-platform --version 2.2.0 -f values.yaml
 ```
 
-Everything in `cnpg-operator` is off until asked for, and nothing in it is
+Everything in `cnpg-platform` is off until asked for, and nothing in it is
 an estate name: storage class names and provisioner, the namespaces that
 host PostgreSQL, the scraper's selector and the tenant label selector are
-all inputs. `examples/operator/cnpg-operator.values.yaml` fills each with a
+all inputs. `examples/operator/cnpg-platform.values.yaml` fills each with a
 placeholder. It ships no subcharts, because the release workflow cannot
 package a chart's dependencies today; see
 [`docs/decisions/0002-operator-chart.md`](docs/decisions/0002-operator-chart.md).
@@ -140,7 +140,7 @@ package a chart's dependencies today; see
 | repo | consumers (surface) |
 |---|---|
 | cnpg-cluster | truvity/gitops (chart `cnpg-cluster`) |
-| cnpg-operator | not yet adopted |
+| cnpg-platform | not yet adopted |
 
 ## Neighbours
 

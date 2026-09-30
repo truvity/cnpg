@@ -1,6 +1,6 @@
 {{/* Labels on every rendered object: the chart's own, then the caller's. */}}
-{{- define "cnpg-operator.labels" -}}
-app.kubernetes.io/name: cnpg-operator
+{{- define "cnpg-platform.labels" -}}
+app.kubernetes.io/name: cnpg-platform
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- with .Values.commonLabels }}
@@ -9,7 +9,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
 {{/* Annotations: commonAnnotations, then the object's own. Empty renders nothing. */}}
-{{- define "cnpg-operator.annotations" -}}
+{{- define "cnpg-platform.annotations" -}}
 {{- $a := merge (dict) (.own | default dict) (.root.Values.commonAnnotations | default dict) -}}
 {{- with $a -}}
 annotations:

@@ -18,7 +18,7 @@ kind: StorageClass
 metadata:
   name: {{ .name }}
   labels:
-    {{- include "cnpg-operator.labels" $ | nindent 4 }}
+    {{- include "cnpg-platform.labels" $ | nindent 4 }}
     {{- with .labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
@@ -26,7 +26,7 @@ metadata:
   {{- if .isDefault }}
   {{- $_ := set $ann "storageclass.kubernetes.io/is-default-class" "true" }}
   {{- end }}
-  {{- with (include "cnpg-operator.annotations" (dict "root" $ "own" $ann)) }}
+  {{- with (include "cnpg-platform.annotations" (dict "root" $ "own" $ann)) }}
   {{- . | nindent 2 }}
   {{- end }}
 provisioner: {{ .provisioner }}

@@ -81,11 +81,11 @@ metadata:
   name: {{ $a.name }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "cnpg-operator.labels" . | nindent 4 }}
+    {{- include "cnpg-platform.labels" . | nindent 4 }}
     {{- with $a.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-  {{- with (include "cnpg-operator.annotations" (dict "root" . "own" $a.annotations)) }}
+  {{- with (include "cnpg-platform.annotations" (dict "root" . "own" $a.annotations)) }}
   {{- . | nindent 2 }}
   {{- end }}
 spec:

@@ -1,6 +1,6 @@
 # 0002. The operator chart ships the platform's objects, not the operator
 
-Status: accepted
+Status: accepted, superseded in part by 0003 (the chart name)
 
 ## Context
 

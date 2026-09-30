@@ -72,5 +72,5 @@ func TestNoEstateNamesInPreset(t *testing.T) {
 
 func TestOtherExamplesParse(t *testing.T) {
 	assert.NotEmpty(t, load(t, "plugin-barman-cloud.values.yaml"))
-	assert.NotEmpty(t, load(t, "cnpg-operator.values.yaml"))
+	assert.NotEmpty(t, load(t, "cnpg-platform.values.yaml"))
 }

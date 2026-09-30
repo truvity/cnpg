@@ -15,8 +15,8 @@ kind: ValidatingAdmissionPolicy
 metadata:
   name: {{ $g.name }}
   labels:
-    {{- include "cnpg-operator.labels" . | nindent 4 }}
-  {{- with (include "cnpg-operator.annotations" (dict "root" . "own" (dict))) }}
+    {{- include "cnpg-platform.labels" . | nindent 4 }}
+  {{- with (include "cnpg-platform.annotations" (dict "root" . "own" (dict))) }}
   {{- . | nindent 2 }}
   {{- end }}
 spec:
@@ -39,8 +39,8 @@ kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: {{ $g.name }}
   labels:
-    {{- include "cnpg-operator.labels" . | nindent 4 }}
-  {{- with (include "cnpg-operator.annotations" (dict "root" . "own" (dict))) }}
+    {{- include "cnpg-platform.labels" . | nindent 4 }}
+  {{- with (include "cnpg-platform.annotations" (dict "root" . "own" (dict))) }}
   {{- . | nindent 2 }}
   {{- end }}
 spec:
