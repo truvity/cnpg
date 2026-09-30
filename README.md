@@ -9,6 +9,7 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
 | `cnpg-platform` | the platform | once per Kubernetes cluster |
 | `cnpg-cluster` | the platform | once per PostgreSQL cluster |
 | `cnpg-database` | a product | once per product (its databases, roles, client certificates) |
+| `cnpg-client` | a product (library) | included by each application chart that connects |
 
 - **charts/cnpg-platform** — what a platform adds beside the upstream operator
   charts: storage classes, a metrics network policy, baseline alert rules and
@@ -24,12 +25,18 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
   database management), unprivileged `DatabaseRole` objects and per-role client
   certificates, behind one render-time guard.
 
+- **charts/cnpg-client** — a library chart an application chart includes to
+  connect with a client certificate and `sslmode=verify-full`: volumes, mounts,
+  libpq/JDBC environment and an egress policy. See
+  [docs/connecting.md](docs/connecting.md).
+
 Published as OCI charts:
 
 ```
 oci://ghcr.io/truvity/charts/cnpg-platform
 oci://ghcr.io/truvity/charts/cnpg-cluster
 oci://ghcr.io/truvity/charts/cnpg-database
+oci://ghcr.io/truvity/charts/cnpg-client
 ```
 
 ## Who it is for

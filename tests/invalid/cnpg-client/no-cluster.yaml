@@ -1,0 +1,3 @@
+client:
+  role: app
+  podSelector: {app: app}

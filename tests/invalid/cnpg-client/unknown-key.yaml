@@ -1,0 +1,5 @@
+client:
+  cluster: pg
+  role: app
+  bogus: 1
+  podSelector: {app: app}

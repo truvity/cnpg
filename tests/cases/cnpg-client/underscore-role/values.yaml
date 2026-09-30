@@ -1,0 +1,7 @@
+client:
+  cluster: pg
+  role: app_rw
+  database: appdb
+  dsnEnv: DATABASE_URL
+  podSelector:
+    app: app

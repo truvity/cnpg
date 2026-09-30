@@ -1,0 +1,11 @@
+client:
+  cluster: pg
+  role: app
+  database: appdb
+  dsnEnv: DATABASE_URL
+  service: ro
+  port: 5433
+  mountPath: /etc/pg
+  volumeName: pg-tls
+  podSelector:
+    app: app

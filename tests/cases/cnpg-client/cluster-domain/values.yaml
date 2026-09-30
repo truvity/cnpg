@@ -1,0 +1,9 @@
+client:
+  cluster: pg
+  role: app
+  namespace: data
+  clusterDomain: example.test
+  clusterNamespaceSelector: true
+  name: app-to-pg
+  podSelector:
+    app: app

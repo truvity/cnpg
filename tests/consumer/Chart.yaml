@@ -1,0 +1,9 @@
+apiVersion: v2
+name: cnpg-client-consumer
+description: Test-only consumer of the cnpg-client library chart; never published.
+type: application
+version: 0.0.0
+dependencies:
+  - name: cnpg-client
+    version: 0.0.0
+    repository: file://../../charts/cnpg-client

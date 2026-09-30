@@ -1,0 +1,9 @@
+client:
+  cluster: pg
+  role: app
+  database: appdb
+  keyDer: true
+  jdbcEnv: JDBC_URL
+  sslfactory: org.postgresql.ssl.SingleCertValidatingFactory
+  podSelector:
+    app: app
