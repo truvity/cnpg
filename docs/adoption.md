@@ -62,10 +62,9 @@ What to fill in, by feature:
    used) first (see above); this chart renders CRs those controllers own.
 2. Render `charts/cnpg-cluster` with `profile` and, if the estate archives
    backups, `backup.bucketName` and the identity that may write to it.
-3. A project that owns a database but not the cluster installs
-   `charts/cnpg-database` against an existing `clusterName`/`namespace`
-   instead of declaring its database inline under the cluster's own
-   `databases[]`.
+3. A product installs `charts/cnpg-database` (usually as a dependency of its
+   own chart) into its own namespace, against the platform's `clusterName`,
+   for its databases, roles and per-role client certificates.
 
 ## Adopting an existing hand-written `Cluster`
 
@@ -76,6 +75,25 @@ and diff the render against `kubectl get cluster <name> -o yaml` before
 applying. A diff at this step is a value to add, not a migration to plan.
 
 ## Breaking changes
+
+### Unreleased — `cnpg-database` becomes the product-installed chart
+
+`databaseName`, `clusterName` and `owner` keep their meaning and the default
+render (`clusterName`, `namespace`, `databaseName` only) is byte-identical to
+v2.1.1. Three things change, allowed inside v2 until the charts are stable:
+
+1. `namespace` must equal the release namespace (or be left unset); it used
+   to be free. Upgrade: install with `--namespace <that namespace>` or drop
+   the value.
+2. `databaseName` is optional (a product with only roles sets none) and is now
+   checked: `^[a-z][a-z0-9_]{0,62}$`, not `postgres`/`template0`/`template1`.
+3. `owner` is checked (`^[a-z][a-z0-9_-]{0,62}$`, never `pg_*`).
+
+A product that copied a `pg-guard` template around the cluster's values
+replaces it with `expect.clusterName`, `expect.databaseName` and
+`expect.owner` on this chart, set to the names derived from its own install
+name; the guard's other checks are built in. New optional inputs: `databases`,
+`roles`, `clientCertificate`, `clientCertificateIssuerRef`, `expect`.
 
 ### v2.0.0 — chart-side IAM removed; `cnpg-database` absorbed
 

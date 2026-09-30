@@ -176,10 +176,56 @@ port 9187 on the instance pods.
 
 ## charts/cnpg-database
 
+The chart a product installs (typically as a dependency of its own `-infra`
+chart) against the cluster the platform installed with `cnpg-cluster`. It
+renders, in the release namespace only, `Database` objects, unprivileged
+`DatabaseRole` objects and a cert-manager `Certificate` per role that asks for
+a client certificate. It renders nothing else.
+
+### Identity and guard
+
+One render-time guard (`templates/guard.yaml`) checks these; a mismatch fails
+the render instead of leaving a `Database` that never reconciles.
+
 | Key | Type | Default | What it does |
 |---|---|---|---|
-| `databaseName` | string | required | PostgreSQL database name (`spec.name` on the rendered `Database`). |
-| `clusterName` | string | required | Name of the existing CNPG `Cluster` this database belongs to. |
-| `namespace` | string | required | Namespace the `Database` CR is rendered into. |
-| `owner` | string | `app` | PostgreSQL role that owns this database. |
-| `allowedConsumers` | []string | `[]` | Retired (ADR-026): previously generated a `CiliumNetworkPolicy` ingress rule per entry. Kept as a no-op for values compatibility; per-install `NetworkPolicy` objects live in the consuming chart now. |
+| `clusterName` | string | required | Name of the platform's CNPG `Cluster`; a DNS label. |
+| `namespace` | string | `""` | Optional. When set it must equal the release namespace; the chart renders into the namespace it is installed into. |
+| `databaseName` | string | `""` | The primary database (`spec.name`). Empty renders none. Shape `^[a-z][a-z0-9_]{0,62}$`; `postgres`, `template0` and `template1` are refused. |
+| `owner` | string | `app` | Owner of the primary database and default owner of `databases[]`. Shape `^[a-z][a-z0-9_-]{0,62}$`; `pg_*` is refused. |
+| `expect.clusterName` / `expect.databaseName` / `expect.owner` | string | unset | Exact-match assertions for a product that derives these names from its own install name; a mismatch fails the render. |
+| `allowedConsumers` | []string | `[]` | Retired: no-op, kept for values compatibility. |
+
+### `databases[]`
+
+| Key | Type | Default | What it does |
+|---|---|---|---|
+| `databases[].name` | string | required | Database name, same shape as `databaseName`; names are compared with `_` and `-` equal, duplicates are refused. The object name is `{clusterName}-{name}` with `_` as `-`. |
+| `databases[].owner` | string | `owner` | Owner role. |
+| `databases[].ensure` | string | `present` | `present` or `absent`. |
+| `databases[].databaseReclaimPolicy` | string | unset | `retain` or `delete`. |
+| `databases[].schemas` | []string | `[]` | Declarative schemas, owned by `owner`. |
+
+### `roles[]`
+
+`superuser`, `replication`, `bypassrls`, `createrole` and `createdb` are
+refused at render time (the platform's admission policy refuses them as well).
+A role name starting with `pg_`, and membership in a `pg_*` role through
+`inRoles`, are refused.
+
+| Key | Type | Default | What it does |
+|---|---|---|---|
+| `roles[].name` | string | required | Role name, `^[a-z][a-z0-9_-]{0,62}$`. Also the certificate `commonName`. The object name is `{clusterName}-role-{name}` with `_` as `-`. |
+| `roles[].login` / `inherit` / `inRoles` / `connectionLimit` / `passwordSecret` / `disablePassword` / `validUntil` / `comment` / `ensure` / `databaseRoleReclaimPolicy` | | CNPG defaults | Passed to the `DatabaseRole` spec unchanged; `login` defaults to `true`, `ensure` to `present`. |
+| `roles[].clientCertificate.enabled` | bool | `false` | Renders a `Certificate` into Secret `{clusterName}-role-{name}` (`_` as `-`), `commonName` the role name, usage `client auth`, `rotationPolicy: Always`, `secretTemplate.labels: {cnpg.io/reload: "true"}`. Needs `login: true` and no `passwordSecret`. |
+| `roles[].clientCertificate.algorithm` / `size` / `duration` / `renewBefore` | | from `clientCertificate.*` | Per-role override of the defaults below. `size` defaults to 256 for `ECDSA` and 2048 for `RSA`. |
+| `roles[].clientCertificate.issuerRef` | object | from `clientCertificateIssuerRef` | `name`, `kind` (`ClusterIssuer` or `Issuer`), `group`. |
+| `roles[].clientCertificate.additionalOutputFormats` | []string | `[]` | `[DER]` adds the key as PKCS#8 DER in the Secret, for Java clients (pgjdbc). |
+
+### Certificate defaults
+
+| Key | Type | Default | What it does |
+|---|---|---|---|
+| `clientCertificate.algorithm` | string | `ECDSA` | `ECDSA` (P-256) or `RSA`. |
+| `clientCertificate.size` / `duration` / `renewBefore` / `additionalOutputFormats` | | unset | Defaults for every role's certificate. |
+| `clientCertificateIssuerRef` | object | `{}` | Empty name = the platform's naming contract, `ClusterIssuer` `cnpg-{namespace}-{clusterName}`. |

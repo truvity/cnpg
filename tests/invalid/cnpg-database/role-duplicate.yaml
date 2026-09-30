@@ -1,0 +1,4 @@
+clusterName: pg
+roles:
+  - name: a_b
+  - name: a-b

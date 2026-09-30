@@ -1,0 +1,162 @@
+---
+# Source: cnpg-database/templates/roles.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: pg-role-svc-a
+  namespace: prod-ns
+spec:
+  secretName: pg-role-svc-a
+  commonName: svc_a
+  usages:
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  secretTemplate:
+    labels:
+      cnpg.io/reload: "true"
+  additionalOutputFormats:
+    - type: DER
+  issuerRef:
+    name: cnpg-prod-ns-pg
+    kind: ClusterIssuer
+    group: cert-manager.io
+
+---
+# Source: cnpg-database/templates/roles.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: pg-role-rsa-client
+  namespace: prod-ns
+spec:
+  secretName: pg-role-rsa-client
+  commonName: rsa-client
+  usages:
+    - client auth
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+  duration: 720h
+  renewBefore: 240h
+  secretTemplate:
+    labels:
+      cnpg.io/reload: "true"
+  issuerRef:
+    name: custom-issuer
+    kind: Issuer
+    group: cert-manager.io
+
+---
+# Source: cnpg-database/templates/database.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-app
+  namespace: prod-ns
+spec:
+  name: app
+  owner: app
+  cluster:
+    name: pg
+
+---
+# Source: cnpg-database/templates/database.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-customer-a
+  namespace: prod-ns
+spec:
+  name: customer_a
+  owner: app
+  ensure: present
+  databaseReclaimPolicy: retain
+  cluster:
+    name: pg
+  schemas:
+    - name: core
+      owner: app
+      ensure: present
+
+---
+# Source: cnpg-database/templates/database.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-old-one
+  namespace: prod-ns
+spec:
+  name: old_one
+  owner: app
+  ensure: absent
+  cluster:
+    name: pg
+
+---
+# Source: cnpg-database/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: pg-role-svc-a
+  namespace: prod-ns
+spec:
+  cluster:
+    name: pg
+  name: svc_a
+  ensure: present
+  login: true
+  inRoles:
+    - customer_a_access
+  connectionLimit: 20
+  comment: "service a"
+  databaseRoleReclaimPolicy: retain
+
+---
+# Source: cnpg-database/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: pg-role-rsa-client
+  namespace: prod-ns
+spec:
+  cluster:
+    name: pg
+  name: rsa-client
+  ensure: present
+  login: true
+
+---
+# Source: cnpg-database/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: pg-role-pw-role
+  namespace: prod-ns
+spec:
+  cluster:
+    name: pg
+  name: pw_role
+  ensure: present
+  login: true
+  passwordSecret:
+    name: pw-secret
+  validUntil: "2030-01-01T00:00:00Z"
+
+---
+# Source: cnpg-database/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: pg-role-access-a
+  namespace: prod-ns
+spec:
+  cluster:
+    name: pg
+  name: access_a
+  ensure: present
+  login: false
+  inherit: true

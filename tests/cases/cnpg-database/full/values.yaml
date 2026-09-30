@@ -1,0 +1,35 @@
+clusterName: pg
+databaseName: app
+owner: app
+expect:
+  clusterName: pg
+  databaseName: app
+  owner: app
+databases:
+  - name: customer_a
+    schemas: [core]
+    databaseReclaimPolicy: retain
+  - name: old_one
+    ensure: absent
+roles:
+  - name: svc_a
+    inRoles: [customer_a_access]
+    connectionLimit: 20
+    comment: service a
+    databaseRoleReclaimPolicy: retain
+    clientCertificate:
+      enabled: true
+      additionalOutputFormats: [DER]
+  - name: rsa-client
+    clientCertificate:
+      enabled: true
+      algorithm: RSA
+      duration: 720h
+      renewBefore: 240h
+      issuerRef: {name: custom-issuer, kind: Issuer}
+  - name: pw_role
+    passwordSecret: pw-secret
+    validUntil: "2030-01-01T00:00:00Z"
+  - name: access_a
+    login: false
+    inherit: true

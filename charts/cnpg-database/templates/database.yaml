@@ -1,10 +1,37 @@
+{{- if .Values.databaseName }}
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
   name: {{ include "cnpg-database.fullname" . }}
-  namespace: {{ required "namespace is required" .Values.namespace }}
+  namespace: {{ include "cnpg-database.namespace" . }}
 spec:
-  name: {{ required "databaseName is required" .Values.databaseName }}
-  owner: {{ required "owner is required" .Values.owner }}
+  name: {{ .Values.databaseName }}
+  owner: {{ .Values.owner }}
   cluster:
-    name: {{ required "clusterName is required" .Values.clusterName }}
+    name: {{ .Values.clusterName }}
+{{- end }}
+{{- range .Values.databases }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: {{ $.Values.clusterName }}-{{ .name | replace "_" "-" }}
+  namespace: {{ include "cnpg-database.namespace" $ }}
+spec:
+  name: {{ .name }}
+  owner: {{ .owner | default $.Values.owner }}
+  ensure: {{ .ensure | default "present" }}
+  {{- with .databaseReclaimPolicy }}
+  databaseReclaimPolicy: {{ . }}
+  {{- end }}
+  cluster:
+    name: {{ $.Values.clusterName }}
+  {{- with .schemas }}
+  schemas:
+    {{- range . }}
+    - name: {{ . }}
+      owner: {{ $.Values.owner }}
+      ensure: present
+    {{- end }}
+  {{- end }}
+{{- end }}

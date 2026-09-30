@@ -46,6 +46,12 @@ charts:
       echo "cnpg-database: an unknown key rendered" >&2
       exit 1
     fi
+    for values in tests/invalid/cnpg-database/*.yaml; do
+      if helm template invalid charts/cnpg-database -f "$values" >/dev/null 2>&1; then
+        echo "RENDERED BUT SHOULD HAVE FAILED: $values" >&2
+        exit 1
+      fi
+    done
     # cnpg-platform: schema, every negative fixture, and the example values.
     # Not `! helm template`: bash's `set -e` ignores a negated command.
     helm lint charts/cnpg-platform

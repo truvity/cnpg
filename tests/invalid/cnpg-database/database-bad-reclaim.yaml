@@ -1,0 +1,4 @@
+clusterName: pg
+databases:
+  - name: d
+    databaseReclaimPolicy: drop

@@ -1,0 +1,5 @@
+clusterName: pg
+roles:
+  - name: r
+    login: false
+    clientCertificate: {enabled: true}
