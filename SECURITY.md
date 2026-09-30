@@ -3,7 +3,7 @@
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability, please report it privately via
-[GitHub Security Advisories](https://github.com/truvity/cnpg-cluster/security/advisories/new).
+[GitHub Security Advisories](https://github.com/truvity/cnpg/security/advisories/new).
 
 Do NOT open a public issue for security vulnerabilities.
 
@@ -13,16 +13,19 @@ Only the latest release is supported with security updates.
 
 ## What is in scope
 
-This repository publishes contracts, schemas, small configuration loaders and
-a worked example. Reports that matter most:
+This repository publishes:
 
-- A loader that accepts a configuration it should refuse, or that reports a
-  secret's value in an error or a log line.
-- A contract or a schema whose defaults are unsafe for anyone who follows
-  them.
-- Anything in the example that would be a vulnerability in a real service,
-  since the example is what people copy.
+- The charts `cnpg-platform`, `cnpg-cluster` and `cnpg-database`, as published to `oci://ghcr.io/truvity/charts`.
+- The example operator and barman-cloud plugin values under `examples/operator/`.
+- The Go module (`github.com/truvity/cnpg/v2`) that tests and guards the charts.
+- The documentation, where it tells an adopter to do something unsafe.
 
-This repository holds no credentials and its CI runs on hosted runners with
-no access to any private infrastructure. A finding that depends on a
-particular deployment belongs with that deployment's owner.
+Reports that matter most:
+
+- A chart default or a profile that weakens database TLS, client-certificate authentication, network policy or backup credentials.
+- The admission guard against privileged database roles, or the `cnpg-database` render-time guard, accepting a role or grant it should refuse.
+- A password, certificate key or backup credential reaching a rendered manifest, a log line or an error message.
+- An example value that would be a vulnerability in a real cluster, since examples are what people copy.
+
+A finding that depends on how a particular deployment uses this repository
+belongs with that deployment's owner.
