@@ -1,0 +1,9 @@
+admission:
+  databaseRoleGuard:
+    enabled: true
+    namespaceSelector:
+      matchExpressions:
+        - {key: example.com/tenant, operator: Exists}
+    validationActions: [Warn, Audit]
+    failurePolicy: Ignore
+    forbid: [superuser]

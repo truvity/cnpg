@@ -1,0 +1,4 @@
+storageClasses:
+  enabled: true
+  classes:
+    - {name: a, provisioner: p, reclaimPolicy: Recycle}

@@ -1,0 +1,13 @@
+# An EKS Auto Mode example: one class that keeps the volume when its claim
+# is deleted (production), one that does not (disposable clusters).
+storageClasses:
+  enabled: true
+  classes:
+    - name: example-gp3
+      provisioner: ebs.csi.eks.amazonaws.com
+      parameters: {type: gp3, encrypted: "true"}
+      reclaimPolicy: Retain
+    - name: example-gp3-delete
+      provisioner: ebs.csi.eks.amazonaws.com
+      parameters: {type: gp3, encrypted: "true"}
+      reclaimPolicy: Delete

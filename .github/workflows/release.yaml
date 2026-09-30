@@ -37,6 +37,6 @@ jobs:
     uses: truvity/ci-workflows/.github/workflows/release-public.yaml@83a33664e82b4df3764ed4b4544707320b51db92 # v3.13.1
     with:
       # Chart-only repo: goreleaser runs with a builds-skip config (it
-      # cuts the GitHub release + changelog); the artifacts are the two
-      # charts, pushed as oci://ghcr.io/truvity/charts/<name>.
-      charts: '["cnpg-cluster","cnpg-database"]'
+      # cuts the GitHub release + changelog); the artifacts are the
+      # charts (three), pushed as oci://ghcr.io/truvity/charts/<name>.
+      charts: '["cnpg-cluster","cnpg-database","cnpg-operator"]'

@@ -1,0 +1,108 @@
+{{- /* Baseline alert rules. Each rule is an expression over a metric the
+CloudNativePG instance exporter, cert-manager or the kubelet already
+publishes; thresholds are inputs. */}}
+{{- $a := .Values.alerts }}
+{{- if $a.enabled }}
+{{- $sel := $a.selector }}
+{{- $selC := ternary (printf ", %s" $sel) "" (ne $sel "") }}
+{{- if and $a.certExpiry.enabled (not $a.certExpiry.nameRegex) }}
+{{- fail "alerts.certExpiry.enabled is true but alerts.certExpiry.nameRegex is empty: say which Certificates are the database's" }}
+{{- end }}
+{{- if and $a.certExpiry.enabled (le (int $a.certExpiry.warnDays) (int $a.certExpiry.criticalDays)) }}
+{{- fail "alerts.certExpiry.warnDays must be greater than criticalDays: the warning has to come first" }}
+{{- end }}
+{{- $rules := list }}
+{{- if $a.archiving.enabled }}
+{{- $rules = append $rules (dict
+  "alert" "CnpgWalArchivingFailing"
+  "expr" (printf "cnpg_pg_stat_archiver_last_failed_time{%s} > cnpg_pg_stat_archiver_last_archived_time{%s}" (trimPrefix ", " $selC) (trimPrefix ", " $selC))
+  "for" $a.archiving.for
+  "severity" $a.severity.critical
+  "summary" "WAL archiving is failing on {{ $labels.pod }}"
+  "description" "The last failed WAL archive is newer than the last successful one. Point-in-time recovery is degrading and WAL is accumulating on the volume.") }}
+{{- end }}
+{{- if $a.backupAge.enabled }}
+{{- $rules = append $rules (dict
+  "alert" "CnpgBackupTooOld"
+  "expr" (printf "time() - cnpg_collector_last_available_backup_timestamp{%s} > %d" (trimPrefix ", " $selC) (int $a.backupAge.maxAgeSeconds))
+  "for" $a.backupAge.for
+  "severity" $a.severity.warning
+  "summary" "No recent backup for {{ $labels.pod }}"
+  "description" (printf "The newest available backup is older than %d seconds." (int $a.backupAge.maxAgeSeconds))) }}
+{{- end }}
+{{- if $a.replicationLag.enabled }}
+{{- $rules = append $rules (dict
+  "alert" "CnpgReplicationLagHigh"
+  "expr" (printf "cnpg_pg_replication_lag{%s} > %d" (trimPrefix ", " $selC) (int $a.replicationLag.maxLagSeconds))
+  "for" $a.replicationLag.for
+  "severity" $a.severity.warning
+  "summary" "Replica {{ $labels.pod }} is lagging"
+  "description" (printf "Replication lag has exceeded %d seconds." (int $a.replicationLag.maxLagSeconds))) }}
+{{- end }}
+{{- if $a.certExpiry.enabled }}
+{{- $m := printf "name=~\"%s\"%s" $a.certExpiry.nameRegex $selC }}
+{{- $rules = append $rules (dict
+  "alert" "CnpgCertificateExpiring"
+  "expr" (printf "certmanager_certificate_expiration_timestamp_seconds{%s} - time() < %d * 86400" $m (int $a.certExpiry.warnDays))
+  "for" $a.certExpiry.for
+  "severity" $a.severity.warning
+  "summary" "Certificate {{ $labels.name }} expires soon"
+  "description" (printf "Fewer than %d days remain. A renewal that has not happened by now is stuck." (int $a.certExpiry.warnDays))) }}
+{{- $rules = append $rules (dict
+  "alert" "CnpgCertificateExpiryImminent"
+  "expr" (printf "certmanager_certificate_expiration_timestamp_seconds{%s} - time() < %d * 86400" $m (int $a.certExpiry.criticalDays))
+  "for" $a.certExpiry.for
+  "severity" $a.severity.critical
+  "summary" "Certificate {{ $labels.name }} is about to expire"
+  "description" (printf "Fewer than %d days remain." (int $a.certExpiry.criticalDays))) }}
+{{- end }}
+{{- if $a.walDisk.enabled }}
+{{- $m := printf "persistentvolumeclaim=~\"%s\"%s" $a.walDisk.pvcRegex $selC }}
+{{- $rules = append $rules (dict
+  "alert" "CnpgWalVolumeFillingUp"
+  "expr" (printf "kubelet_volume_stats_available_bytes{%s} / kubelet_volume_stats_capacity_bytes{%s} < %v" $m $m $a.walDisk.minFreeFraction)
+  "for" $a.walDisk.for
+  "severity" $a.severity.critical
+  "summary" "WAL volume {{ $labels.persistentvolumeclaim }} is nearly full"
+  "description" (printf "Less than %v of the volume is free. A full WAL volume stops the instance." $a.walDisk.minFreeFraction)) }}
+{{- end }}
+{{- if not $rules }}
+{{- fail "alerts.enabled is true but every rule is off: nothing to render" }}
+{{- end }}
+---
+{{- if eq $a.kind "VMRule" }}
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+{{- else }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+{{- end }}
+metadata:
+  name: {{ $a.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cnpg-operator.labels" . | nindent 4 }}
+    {{- with $a.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with (include "cnpg-operator.annotations" (dict "root" . "own" $a.annotations)) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+spec:
+  groups:
+    - name: {{ $a.name }}
+      rules:
+        {{- range $r := $rules }}
+        - alert: {{ $r.alert }}
+          expr: {{ $r.expr | quote }}
+          for: {{ $r.for }}
+          labels:
+            severity: {{ $r.severity }}
+            {{- with $.Values.alerts.ruleLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          annotations:
+            summary: {{ $r.summary | quote }}
+            description: {{ $r.description | quote }}
+        {{- end }}
+{{- end }}

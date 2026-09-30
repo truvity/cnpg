@@ -1,0 +1,5 @@
+admission:
+  databaseRoleGuard:
+    enabled: true
+    namespaceSelector: {matchLabels: {a: b}}
+    forbid: [createdb]

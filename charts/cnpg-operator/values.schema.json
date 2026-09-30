@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "cnpg-operator values",
+  "description": "An unknown key is an error, not a silent no-op. Everything a schema cannot express (an enabled feature with nothing to act on) is refused by the chart's own render-time validation; every rule has a fixture under tests/invalid/cnpg-operator/.",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
+    "duration": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h|d|w|y)$" }
+  },
+  "properties": {
+    "global": { "type": "object", "description": "Admitted so the chart can be embedded; nothing reads it." },
+    "commonLabels": { "$ref": "#/definitions/stringMap" },
+    "commonAnnotations": { "$ref": "#/definitions/stringMap" },
+    "storageClasses": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "provisioner"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "provisioner": { "type": "string", "minLength": 1 },
+              "parameters": { "$ref": "#/definitions/stringMap" },
+              "reclaimPolicy": { "type": "string", "enum": ["Retain", "Delete"] },
+              "volumeBindingMode": { "type": "string", "enum": ["WaitForFirstConsumer", "Immediate"] },
+              "allowVolumeExpansion": { "type": "boolean" },
+              "isDefault": { "type": "boolean" },
+              "mountOptions": { "type": "array", "items": { "type": "string" } },
+              "labels": { "$ref": "#/definitions/stringMap" },
+              "annotations": { "$ref": "#/definitions/stringMap" }
+            }
+          }
+        }
+      }
+    },
+    "metricsNetworkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "name": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "namespaces": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "from": { "type": "array", "items": { "type": "object", "minProperties": 1 } },
+        "labels": { "$ref": "#/definitions/stringMap" },
+        "annotations": { "$ref": "#/definitions/stringMap" }
+      }
+    },
+    "alerts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "kind": { "type": "string", "enum": ["PrometheusRule", "VMRule"] },
+        "name": { "type": "string", "minLength": 1 },
+        "labels": { "$ref": "#/definitions/stringMap" },
+        "annotations": { "$ref": "#/definitions/stringMap" },
+        "ruleLabels": { "$ref": "#/definitions/stringMap" },
+        "selector": { "type": "string" },
+        "severity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "warning": { "type": "string", "minLength": 1 },
+            "critical": { "type": "string", "minLength": 1 }
+          }
+        },
+        "archiving": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "for": { "$ref": "#/definitions/duration" }
+          }
+        },
+        "backupAge": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "maxAgeSeconds": { "type": "integer", "minimum": 1 },
+            "for": { "$ref": "#/definitions/duration" }
+          }
+        },
+        "replicationLag": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "maxLagSeconds": { "type": "integer", "minimum": 1 },
+            "for": { "$ref": "#/definitions/duration" }
+          }
+        },
+        "certExpiry": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "nameRegex": { "type": "string" },
+            "warnDays": { "type": "integer", "minimum": 1 },
+            "criticalDays": { "type": "integer", "minimum": 1 },
+            "for": { "$ref": "#/definitions/duration" }
+          }
+        },
+        "walDisk": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "pvcRegex": { "type": "string", "minLength": 1 },
+            "minFreeFraction": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
+            "for": { "$ref": "#/definitions/duration" }
+          }
+        }
+      }
+    },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "databaseRoleGuard": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "name": { "type": "string", "minLength": 1 },
+            "namespaceSelector": { "type": "object" },
+            "validationActions": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "type": "string", "enum": ["Deny", "Warn", "Audit"] }
+            },
+            "failurePolicy": { "type": "string", "enum": ["Fail", "Ignore"] },
+            "forbid": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "type": "string", "enum": ["superuser", "replication", "bypassrls", "createrole"] }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,226 @@
+---
+# Source: cnpg-operator/templates/metrics-networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pg-metrics
+  namespace: pg-one
+  labels:
+    app.kubernetes.io/name: cnpg-operator
+    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/managed-by: Helm
+    example.com/team: data
+    example.com/layer: network
+  annotations:
+    example.com/owner: platform
+    example.com/why: scrape
+spec:
+  podSelector:
+    matchExpressions:
+      - key: cnpg.io/cluster
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: scraper
+      ports:
+        - port: 9187
+          protocol: TCP
+
+---
+# Source: cnpg-operator/templates/metrics-networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pg-metrics
+  namespace: pg-two
+  labels:
+    app.kubernetes.io/name: cnpg-operator
+    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/managed-by: Helm
+    example.com/team: data
+    example.com/layer: network
+  annotations:
+    example.com/owner: platform
+    example.com/why: scrape
+spec:
+  podSelector:
+    matchExpressions:
+      - key: cnpg.io/cluster
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: scraper
+      ports:
+        - port: 9187
+          protocol: TCP
+
+---
+# Source: cnpg-operator/templates/storageclasses.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: pg-retain
+  labels:
+    app.kubernetes.io/name: cnpg-operator
+    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/managed-by: Helm
+    example.com/team: data
+    example.com/tier: database
+  annotations:
+    example.com/note: kept
+    example.com/owner: platform
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: example.csi/driver
+parameters:
+  type: fast
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+allowVolumeExpansion: false
+mountOptions:
+  - noatime
+
+---
+# Source: cnpg-operator/templates/alerts.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pg-baseline
+  namespace: platform
+  labels:
+    app.kubernetes.io/name: cnpg-operator
+    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/managed-by: Helm
+    example.com/team: data
+    release: prom
+  annotations:
+    example.com/owner: platform
+    example.com/runbook: wiki
+spec:
+  groups:
+    - name: pg-baseline
+      rules:
+        - alert: CnpgWalArchivingFailing
+          expr: "cnpg_pg_stat_archiver_last_failed_time{namespace=~\"pg-.*\"} > cnpg_pg_stat_archiver_last_archived_time{namespace=~\"pg-.*\"}"
+          for: 10m
+          labels:
+            severity: page-now
+            team: data
+          annotations:
+            summary: "WAL archiving is failing on {{ $labels.pod }}"
+            description: "The last failed WAL archive is newer than the last successful one. Point-in-time recovery is degrading and WAL is accumulating on the volume."
+        - alert: CnpgBackupTooOld
+          expr: "time() - cnpg_collector_last_available_backup_timestamp{namespace=~\"pg-.*\"} > 90000"
+          for: 1h
+          labels:
+            severity: page-later
+            team: data
+          annotations:
+            summary: "No recent backup for {{ $labels.pod }}"
+            description: "The newest available backup is older than 90000 seconds."
+        - alert: CnpgReplicationLagHigh
+          expr: "cnpg_pg_replication_lag{namespace=~\"pg-.*\"} > 60"
+          for: 5m
+          labels:
+            severity: page-later
+            team: data
+          annotations:
+            summary: "Replica {{ $labels.pod }} is lagging"
+            description: "Replication lag has exceeded 60 seconds."
+        - alert: CnpgCertificateExpiring
+          expr: "certmanager_certificate_expiration_timestamp_seconds{name=~\"pg-.*\", namespace=~\"pg-.*\"} - time() < 21 * 86400"
+          for: 5m
+          labels:
+            severity: page-later
+            team: data
+          annotations:
+            summary: "Certificate {{ $labels.name }} expires soon"
+            description: "Fewer than 21 days remain. A renewal that has not happened by now is stuck."
+        - alert: CnpgCertificateExpiryImminent
+          expr: "certmanager_certificate_expiration_timestamp_seconds{name=~\"pg-.*\", namespace=~\"pg-.*\"} - time() < 7 * 86400"
+          for: 5m
+          labels:
+            severity: page-now
+            team: data
+          annotations:
+            summary: "Certificate {{ $labels.name }} is about to expire"
+            description: "Fewer than 7 days remain."
+        - alert: CnpgWalVolumeFillingUp
+          expr: "kubelet_volume_stats_available_bytes{persistentvolumeclaim=~\".*-wal\", namespace=~\"pg-.*\"} / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~\".*-wal\", namespace=~\"pg-.*\"} < 0.2"
+          for: 5m
+          labels:
+            severity: page-now
+            team: data
+          annotations:
+            summary: "WAL volume {{ $labels.persistentvolumeclaim }} is nearly full"
+            description: "Less than 0.2 of the volume is free. A full WAL volume stops the instance."
+
+---
+# Source: cnpg-operator/templates/database-role-guard.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: pg-role-guard
+  labels:
+    app.kubernetes.io/name: cnpg-operator
+    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/managed-by: Helm
+    example.com/team: data
+  annotations:
+    example.com/owner: platform
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["postgresql.cnpg.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["databaseroles"]
+  validations:
+    - expression: "!has(object.spec.superuser) || object.spec.superuser == false"
+      message: "a DatabaseRole may not set superuser: that attribute is the platform's to grant"
+      reason: Forbidden
+    - expression: "!has(object.spec.replication) || object.spec.replication == false"
+      message: "a DatabaseRole may not set replication: that attribute is the platform's to grant"
+      reason: Forbidden
+    - expression: "!has(object.spec.bypassrls) || object.spec.bypassrls == false"
+      message: "a DatabaseRole may not set bypassrls: that attribute is the platform's to grant"
+      reason: Forbidden
+    - expression: "!has(object.spec.createrole) || object.spec.createrole == false"
+      message: "a DatabaseRole may not set createrole: that attribute is the platform's to grant"
+      reason: Forbidden
+
+---
+# Source: cnpg-operator/templates/database-role-guard.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: pg-role-guard
+  labels:
+    app.kubernetes.io/name: cnpg-operator
+    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/managed-by: Helm
+    example.com/team: data
+  annotations:
+    example.com/owner: platform
+spec:
+  policyName: pg-role-guard
+  validationActions:
+    - Deny
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        example.com/tenant: "true"

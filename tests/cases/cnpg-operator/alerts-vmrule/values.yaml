@@ -1,0 +1,8 @@
+alerts:
+  enabled: true
+  kind: VMRule
+  selector: 'namespace=~"pg-.*"'
+  walDisk:
+    enabled: false
+  replicationLag:
+    enabled: false

@@ -1,6 +1,20 @@
-# cnpg-cluster
+# cnpg
 
-Helm charts for running PostgreSQL on [CloudNativePG](https://cloudnative-pg.io/):
+Helm charts for running PostgreSQL on [CloudNativePG](https://cloudnative-pg.io/),
+split by who installs them. (This repository was `truvity/cnpg-cluster`; GitHub
+redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
+
+| chart | installed by | how often |
+|---|---|---|
+| `cnpg-operator` | the platform | once per Kubernetes cluster |
+| `cnpg-cluster` | the platform | once per PostgreSQL cluster |
+| `cnpg-database` | a product | once per database it owns |
+
+- **charts/cnpg-operator** — what a platform adds beside the upstream operator
+  charts: storage classes, a metrics network policy, baseline alert rules and
+  an admission guard against privileged database roles. The operator and
+  barman-cloud plugin presets ship as values under
+  [`examples/operator/`](examples/operator/).
 
 - **charts/cnpg-cluster** — a CNPG `Cluster` with an opinionated two-posture
   profile model, plus roles, declared databases, backup `ObjectStore`s and
@@ -12,6 +26,7 @@ Helm charts for running PostgreSQL on [CloudNativePG](https://cloudnative-pg.io/
 Published as OCI charts:
 
 ```
+oci://ghcr.io/truvity/charts/cnpg-operator
 oci://ghcr.io/truvity/charts/cnpg-cluster
 oci://ghcr.io/truvity/charts/cnpg-database
 ```
@@ -27,8 +42,9 @@ TLS beyond the operator itself — `scheduling`, `backup` and `serverTLS` are
 all plain inputs with neutral (empty) defaults; see "Install and a worked
 example" below for how two different estates fill them in.
 
-It does not install the CNPG operator, a storage class, or cert-manager —
-those are the platform's own.
+`cnpg-cluster` does not install the CNPG operator, a storage class, or
+cert-manager. The operator is the platform's (see "The operator" below);
+cert-manager is the platform's own.
 
 ## The model
 
@@ -99,11 +115,32 @@ backup:
 
 Full value-by-value reference: [`docs/reference.md`](docs/reference.md).
 
+### The operator
+
+The upstream `cloudnative-pg` and `plugin-barman-cloud` charts install the
+operator. This repository contributes the preset they are installed with
+(`examples/operator/cloudnative-pg.values.yaml`: in-place instance-manager
+updates, inherited labels and annotations, staggered rollouts) and a chart,
+`cnpg-operator`, for the objects around it:
+
+```sh
+helm install cnpg-operator oci://ghcr.io/truvity/charts/cnpg-operator --version 2.2.0 -f values.yaml
+```
+
+Everything in `cnpg-operator` is off until asked for, and nothing in it is
+an estate name: storage class names and provisioner, the namespaces that
+host PostgreSQL, the scraper's selector and the tenant label selector are
+all inputs. `examples/operator/cnpg-operator.values.yaml` fills each with a
+placeholder. It ships no subcharts, because the release workflow cannot
+package a chart's dependencies today; see
+[`docs/decisions/0002-operator-chart.md`](docs/decisions/0002-operator-chart.md).
+
 ## Consumers
 
 | repo | consumers (surface) |
 |---|---|
 | cnpg-cluster | truvity/gitops (chart `cnpg-cluster`) |
+| cnpg-operator | not yet adopted |
 
 ## Neighbours
 
@@ -122,6 +159,8 @@ Full value-by-value reference: [`docs/reference.md`](docs/reference.md).
   shape older releases assumed and the plain-input shape at HEAD.
 - [`docs/reference.md`](docs/reference.md) — every value, generated from
   `values.yaml`'s own comments.
+- [`docs/decisions/`](docs/decisions/) — why the repository is shaped as it is:
+  `0001` the rename and the charts-by-owner split, `0002` the operator chart.
 
 ## The rule that makes this repository public
 
@@ -152,7 +191,7 @@ turn every pull request red.
 ## Releasing
 
 Tag-triggered (`.github/workflows/release.yaml`): pushing `vX.Y.Z` packages
-and publishes both charts at that version. `.github/workflows/auto-release.yaml`
+and publishes all three charts at that version. `.github/workflows/auto-release.yaml`
 can cut patch tags on its own — same-day for a push whose merged PR carries
 the `security` label, weekly otherwise — but only once `vars.AUTO_RELEASE` is
 set for this repository; see that workflow for today's setting. Minors and
@@ -162,7 +201,9 @@ version has merged.
 ## Provenance
 
 Extracted from its maintainers' internal estate so the cluster and database
-shapes can be consumed by any estate, MIT-licensed.
+shapes can be consumed by any estate, MIT-licensed. Renamed from
+`cnpg-cluster` when the operator chart arrived; see
+[`docs/decisions/0001-absorb-and-rename.md`](docs/decisions/0001-absorb-and-rename.md).
 
 ## Licence
 

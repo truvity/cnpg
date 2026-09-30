@@ -1,0 +1,110 @@
+# cnpg-operator: the platform-owned objects that sit beside the upstream
+# `cloudnative-pg` and `plugin-barman-cloud` charts. Install it ONCE per
+# Kubernetes cluster. Everything is off until asked for, and nothing here
+# names an estate: class names, provisioners, namespaces and selectors are
+# inputs. See docs/reference.md and examples/operator/.
+
+# Labels and annotations stamped on every object this chart renders.
+commonLabels: {}
+commonAnnotations: {}
+
+# StorageClasses for PostgreSQL volumes. Each entry needs a name and a
+# provisioner; the defaults below are the posture a database wants
+# (expandable, bound where the pod is scheduled).
+storageClasses:
+  enabled: false
+  # - name: example-retain            required
+  #   provisioner: example.csi/driver required
+  #   parameters: {type: gp3, encrypted: "true"}
+  #   reclaimPolicy: Retain           Retain | Delete (default Retain)
+  #   volumeBindingMode: WaitForFirstConsumer | Immediate (default WaitForFirstConsumer)
+  #   allowVolumeExpansion: true
+  #   isDefault: false
+  #   mountOptions: []
+  #   labels: {}
+  #   annotations: {}
+  classes: []
+
+# A NetworkPolicy that opens the instance pods' metrics port to a scraper.
+# Rendered once into each namespace listed, selecting only pods that carry
+# the cnpg.io/cluster label (database instances). Network policies are
+# additive: this unions with whatever baseline policy the namespace has.
+metricsNetworkPolicy:
+  enabled: false
+  name: cnpg-instance-metrics
+  port: 9187
+  # Namespaces that host PostgreSQL clusters. Required when enabled.
+  namespaces: []
+  # NetworkPolicyPeer objects allowed to scrape (namespaceSelector and/or
+  # podSelector). Required when enabled: there is no default scraper.
+  from: []
+  labels: {}
+  annotations: {}
+
+# Baseline alert rules over the metrics CloudNativePG, cert-manager and the
+# kubelet already export. Render as a PrometheusRule or a VMRule.
+alerts:
+  enabled: false
+  # PrometheusRule | VMRule
+  kind: PrometheusRule
+  name: cnpg-baseline
+  # Labels the rule selector of your Prometheus / VMAgent needs.
+  labels: {}
+  annotations: {}
+  # Labels added to every rule (routing keys for the alert router).
+  ruleLabels: {}
+  # Added to every expression's label matchers, e.g. `namespace=~"pg-.*"`.
+  # Empty matches every cluster the scraper sees.
+  selector: ""
+  severity:
+    warning: warning
+    critical: critical
+  archiving:
+    enabled: true
+    # Archiving has failed more recently than it last succeeded, for this long.
+    for: 15m
+  backupAge:
+    enabled: true
+    # Seconds since the newest available backup (default 2 days).
+    maxAgeSeconds: 172800
+    for: 30m
+  replicationLag:
+    enabled: true
+    maxLagSeconds: 300
+    for: 10m
+  certExpiry:
+    # Needs cert-manager metrics. Off until a matcher says which
+    # Certificates are the database's.
+    enabled: false
+    # RE2 regexp over the Certificate `name` label, e.g. "pg-.*". Required
+    # when enabled.
+    nameRegex: ""
+    warnDays: 14
+    criticalDays: 3
+    for: 10m
+  walDisk:
+    enabled: true
+    # RE2 regexp over the PVC name of the WAL volume (CloudNativePG names
+    # it <instance>-wal).
+    pvcRegex: ".*-wal"
+    # Free fraction below which to alert.
+    minFreeFraction: 0.15
+    for: 10m
+
+# A ValidatingAdmissionPolicy that refuses a DatabaseRole with superuser,
+# replication, bypassrls or createrole. A database role a product declares
+# is product-owned; these four attributes are the platform's.
+admission:
+  databaseRoleGuard:
+    enabled: false
+    name: cnpg-database-role-guard
+    # Namespaces the guard covers: a standard label selector. Required
+    # when enabled (an empty selector would cover every namespace,
+    # including the platform's own).
+    namespaceSelector: {}
+    # Deny | Warn | Audit
+    validationActions: [Deny]
+    # Fail | Ignore
+    failurePolicy: Fail
+    # Attributes refused. Subset of the four.
+    forbid: [superuser, replication, bypassrls, createrole]

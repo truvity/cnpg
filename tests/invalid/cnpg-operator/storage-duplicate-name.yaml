@@ -1,0 +1,5 @@
+storageClasses:
+  enabled: true
+  classes:
+    - {name: a, provisioner: p}
+    - {name: a, provisioner: p}

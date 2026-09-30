@@ -1,0 +1,4 @@
+alerts:
+  enabled: true
+  walDisk:
+    minFreeFraction: 1.5

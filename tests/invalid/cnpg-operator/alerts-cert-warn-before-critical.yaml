@@ -1,0 +1,7 @@
+alerts:
+  enabled: true
+  certExpiry:
+    enabled: true
+    nameRegex: "pg-.*"
+    warnDays: 3
+    criticalDays: 7

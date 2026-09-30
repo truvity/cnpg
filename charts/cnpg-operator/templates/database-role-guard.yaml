@@ -1,0 +1,53 @@
+{{- /* Refuses the attributes that make a DatabaseRole a platform decision.
+A product declares roles in its own namespace; superuser, replication,
+bypassrls and createrole are not its to grant itself. */}}
+{{- $g := .Values.admission.databaseRoleGuard }}
+{{- if $g.enabled }}
+{{- if not $g.namespaceSelector }}
+{{- fail "admission.databaseRoleGuard.enabled is true but namespaceSelector is empty: an empty selector would cover every namespace, the platform's own included" }}
+{{- end }}
+{{- if and (not $g.namespaceSelector.matchLabels) (not $g.namespaceSelector.matchExpressions) }}
+{{- fail "admission.databaseRoleGuard.namespaceSelector needs matchLabels or matchExpressions" }}
+{{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $g.name }}
+  labels:
+    {{- include "cnpg-operator.labels" . | nindent 4 }}
+  {{- with (include "cnpg-operator.annotations" (dict "root" . "own" (dict))) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+spec:
+  failurePolicy: {{ $g.failurePolicy }}
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["postgresql.cnpg.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["databaseroles"]
+  validations:
+    {{- range $attr := $g.forbid }}
+    - expression: {{ printf "!has(object.spec.%s) || object.spec.%s == false" $attr $attr | quote }}
+      message: {{ printf "a DatabaseRole may not set %s: that attribute is the platform's to grant" $attr | quote }}
+      reason: Forbidden
+    {{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $g.name }}
+  labels:
+    {{- include "cnpg-operator.labels" . | nindent 4 }}
+  {{- with (include "cnpg-operator.annotations" (dict "root" . "own" (dict))) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+spec:
+  policyName: {{ $g.name }}
+  validationActions:
+    {{- toYaml $g.validationActions | nindent 4 }}
+  matchResources:
+    namespaceSelector:
+      {{- toYaml $g.namespaceSelector | nindent 6 }}
+{{- end }}

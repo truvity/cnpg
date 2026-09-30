@@ -5,6 +5,51 @@ Every value, generated from `values.yaml`'s own comments in each chart.
 machine-checked form of this table — an unknown top-level key, or a value of
 the wrong type, fails the render rather than being silently ignored.
 
+## charts/cnpg-operator
+
+Everything is off until enabled, and there are no estate defaults. The
+chart renders nothing with its default values.
+
+| Key | Type | Default | What it does |
+|---|---|---|---|
+| `commonLabels` / `commonAnnotations` | map | `{}` | Stamped on every object the chart renders. |
+| `storageClasses.enabled` | bool | `false` | Render `storageClasses.classes`. Enabled with no classes fails the render. |
+| `storageClasses.classes[].name` | string | required | Class name. Duplicates fail the render. |
+| `storageClasses.classes[].provisioner` | string | required | CSI provisioner. |
+| `storageClasses.classes[].parameters` | map[string]string | `{}` | Provisioner parameters. |
+| `storageClasses.classes[].reclaimPolicy` | `Retain` \| `Delete` | `Retain` | What happens to the volume when its claim is deleted. |
+| `storageClasses.classes[].volumeBindingMode` | `WaitForFirstConsumer` \| `Immediate` | `WaitForFirstConsumer` | Bind where the pod is scheduled. |
+| `storageClasses.classes[].allowVolumeExpansion` | bool | `true` | Online growth. |
+| `storageClasses.classes[].isDefault` | bool | `false` | Sets the default-class annotation. At most one class. |
+| `storageClasses.classes[].mountOptions` / `labels` / `annotations` | list / map / map | empty | Passthrough. |
+| `metricsNetworkPolicy.enabled` | bool | `false` | One `NetworkPolicy` per listed namespace opening the metrics port on database instance pods. |
+| `metricsNetworkPolicy.name` | string | `cnpg-instance-metrics` | Policy name. |
+| `metricsNetworkPolicy.port` | int | `9187` | The instance exporter's port. |
+| `metricsNetworkPolicy.namespaces` | []string | `[]` | Required when enabled. |
+| `metricsNetworkPolicy.from` | []NetworkPolicyPeer | `[]` | Required when enabled; no default scraper. Each peer needs a selector. |
+| `alerts.enabled` | bool | `false` | Render the rule object. Enabled with every rule off fails the render. |
+| `alerts.kind` | `PrometheusRule` \| `VMRule` | `PrometheusRule` | Which CRD. |
+| `alerts.name` | string | `cnpg-baseline` | Object and group name. |
+| `alerts.labels` / `annotations` / `ruleLabels` | map | `{}` | On the object / on the object / on every rule. |
+| `alerts.selector` | string | `""` | Extra label matchers, added to every expression, e.g. `namespace=~"pg-.*"`. |
+| `alerts.severity.warning` / `.critical` | string | `warning` / `critical` | The `severity` label values. |
+| `alerts.archiving.enabled` / `.for` | bool / duration | `true` / `15m` | `CnpgWalArchivingFailing`: the last failed archive is newer than the last success. |
+| `alerts.backupAge.enabled` / `.maxAgeSeconds` / `.for` | bool / int / duration | `true` / `172800` / `30m` | `CnpgBackupTooOld`. |
+| `alerts.replicationLag.enabled` / `.maxLagSeconds` / `.for` | bool / int / duration | `true` / `300` / `10m` | `CnpgReplicationLagHigh`. |
+| `alerts.certExpiry.enabled` | bool | `false` | `CnpgCertificateExpiring` and `CnpgCertificateExpiryImminent`, from cert-manager's metric. |
+| `alerts.certExpiry.nameRegex` | string | `""` | Required when enabled: RE2 over the Certificate `name` label. |
+| `alerts.certExpiry.warnDays` / `.criticalDays` / `.for` | int / int / duration | `14` / `3` / `10m` | `warnDays` must exceed `criticalDays`. |
+| `alerts.walDisk.enabled` / `.pvcRegex` / `.minFreeFraction` / `.for` | bool / string / number / duration | `true` / `.*-wal` / `0.15` / `10m` | `CnpgWalVolumeFillingUp`, from kubelet volume stats; needs the cluster to have a WAL volume (`prod`). |
+| `admission.databaseRoleGuard.enabled` | bool | `false` | Render the `ValidatingAdmissionPolicy` and its binding. |
+| `admission.databaseRoleGuard.namespaceSelector` | LabelSelector | `{}` | Required when enabled, with `matchLabels` or `matchExpressions`. |
+| `admission.databaseRoleGuard.forbid` | []string | all four | Subset of `superuser`, `replication`, `bypassrls`, `createrole`. |
+| `admission.databaseRoleGuard.validationActions` | []string | `[Deny]` | `Deny`, `Warn`, `Audit`. |
+| `admission.databaseRoleGuard.failurePolicy` | string | `Fail` | `Fail` or `Ignore`. |
+| `admission.databaseRoleGuard.name` | string | `cnpg-database-role-guard` | Policy and binding name. |
+
+The guard assumes the `DatabaseRole` spec fields `superuser`, `replication`,
+`bypassrls` and `createrole`; a spec that omits one is accepted.
+
 ## charts/cnpg-cluster
 
 ### Identity

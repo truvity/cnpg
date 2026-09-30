@@ -1,0 +1,4 @@
+alerts:
+  enabled: true
+  archiving:
+    for: soon

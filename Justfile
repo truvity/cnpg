@@ -1,4 +1,4 @@
-# Development commands for cnpg-cluster (chart-only repository)
+# Development commands for cnpg (charts and, later, clients)
 
 # Disable go.work (parent workspace interferes with standalone module builds)
 export GOWORK := "off"
@@ -7,17 +7,22 @@ export GOWORK := "off"
 fmt:
     golangci-lint fmt ./...
 
-# Run the chart render tests (chart_test.go et al. drive `helm
-# template`). This repository has no golden renders — its Go tests
-# carry that role, including the negative (schema-rejected) cases.
+# The chart render tests (chart_test.go et al. drive `helm template`; they
+# carry the golden and negative roles for cnpg-cluster and cnpg-database)
+# and the golden renders of the charts that use tests/cases: cnpg-operator.
 test:
+    hack/golden.sh
     go test ./... -coverprofile=coverage.out
+
+# Regenerate the golden renders — review the diff before committing.
+golden:
+    hack/golden.sh update
 
 # Run linters
 lint:
     golangci-lint run ./...
 
-# Lint + render both charts against a minimum values set. The schema is
+# Lint + render the charts against a minimum values set. The schema is
 # part of the lint: an unknown top-level key must fail the render, not
 # be silently ignored (values.schema.json, component contract C2).
 # cnpg-cluster's deep posture assertions live in chart_test.go (recipe
@@ -41,6 +46,20 @@ charts:
       echo "cnpg-database: an unknown key rendered" >&2
       exit 1
     fi
+    # cnpg-operator: schema, every negative fixture, and the example values.
+    # Not `! helm template`: bash's `set -e` ignores a negated command.
+    helm lint charts/cnpg-operator
+    if helm template x charts/cnpg-operator --set bogusKey=1 >/dev/null 2>&1; then
+      echo "cnpg-operator: an unknown key rendered" >&2
+      exit 1
+    fi
+    for values in tests/invalid/cnpg-operator/*.yaml; do
+      if helm template invalid charts/cnpg-operator -f "$values" >/dev/null 2>&1; then
+        echo "RENDERED BUT SHOULD HAVE FAILED: $values" >&2
+        exit 1
+      fi
+    done
+    helm template x charts/cnpg-operator -f examples/operator/cnpg-operator.values.yaml >/dev/null
     echo "charts: schema-validated lint and render OK"
 
 # DEPRECATED: alias for `charts`, kept for anyone with the old name
@@ -75,11 +94,12 @@ check: test lint charts leak-canary
 snapshot:
     goreleaser release --snapshot --clean
 
-# Package both Helm charts locally (the release workflow stamps the
+# Package the Helm charts locally (the release workflow stamps the
 # real version from the tag).
 package:
     helm package charts/cnpg-cluster --destination dist/
     helm package charts/cnpg-database --destination dist/
+    helm package charts/cnpg-operator --destination dist/
 
 # DEPRECATED: alias for `package`. Remove after the next tagged release.
 helm-package: package

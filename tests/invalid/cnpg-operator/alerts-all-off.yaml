@@ -1,0 +1,6 @@
+alerts:
+  enabled: true
+  archiving: {enabled: false}
+  backupAge: {enabled: false}
+  replicationLag: {enabled: false}
+  walDisk: {enabled: false}

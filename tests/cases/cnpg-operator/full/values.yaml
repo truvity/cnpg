@@ -1,0 +1,59 @@
+commonLabels: {example.com/team: data}
+commonAnnotations: {example.com/owner: platform}
+storageClasses:
+  enabled: true
+  classes:
+    - name: pg-retain
+      provisioner: example.csi/driver
+      parameters: {type: fast}
+      reclaimPolicy: Retain
+      volumeBindingMode: Immediate
+      allowVolumeExpansion: false
+      isDefault: true
+      mountOptions: [noatime]
+      labels: {example.com/tier: database}
+      annotations: {example.com/note: kept}
+metricsNetworkPolicy:
+  enabled: true
+  name: pg-metrics
+  port: 9187
+  namespaces: [pg-one, pg-two]
+  from:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: monitoring}
+      podSelector:
+        matchLabels: {app.kubernetes.io/name: scraper}
+  labels: {example.com/layer: network}
+  annotations: {example.com/why: scrape}
+alerts:
+  enabled: true
+  kind: PrometheusRule
+  name: pg-baseline
+  labels: {release: prom}
+  annotations: {example.com/runbook: wiki}
+  ruleLabels: {team: data}
+  selector: 'namespace=~"pg-.*"'
+  severity: {warning: page-later, critical: page-now}
+  archiving: {enabled: true, for: 10m}
+  backupAge: {enabled: true, maxAgeSeconds: 90000, for: 1h}
+  replicationLag: {enabled: true, maxLagSeconds: 60, for: 5m}
+  certExpiry:
+    enabled: true
+    nameRegex: "pg-.*"
+    warnDays: 21
+    criticalDays: 7
+    for: 5m
+  walDisk:
+    enabled: true
+    pvcRegex: ".*-wal"
+    minFreeFraction: 0.2
+    for: 5m
+admission:
+  databaseRoleGuard:
+    enabled: true
+    name: pg-role-guard
+    namespaceSelector:
+      matchLabels: {example.com/tenant: "true"}
+    validationActions: [Deny]
+    failurePolicy: Fail
+    forbid: [superuser, replication, bypassrls, createrole]
