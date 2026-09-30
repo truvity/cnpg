@@ -6,9 +6,9 @@ upgrade is expected to clear.
 
 ## Unreleased
 
-- **Feature:** new chart `cnpg-operator`, for the platform that installs the CloudNativePG operator once per Kubernetes cluster: optional StorageClasses, a metrics NetworkPolicy, baseline alert rules (PrometheusRule or VMRule) and a ValidatingAdmissionPolicy that refuses privileged `DatabaseRole`s. Everything is off by default and nothing is an estate default. It ships no subcharts; the operator and barman-cloud plugin presets are values under `examples/operator/`. `cnpg-cluster` and `cnpg-database` render byte-identical to v2.1.1.
+- **Feature:** new chart `cnpg-platform`, the cluster-wide platform add-ons that upstream's charts lack: optional StorageClasses, a metrics NetworkPolicy, baseline alert rules (PrometheusRule or VMRule) and a ValidatingAdmissionPolicy that refuses privileged `DatabaseRole`s. The CloudNativePG operator itself stays upstream's `cloudnative-pg` chart (and `plugin-barman-cloud`), installed directly and tracked by renovate; this repository ships only recommended values for them under `examples/operator/`. Everything is off by default and nothing is an estate default. The chart ships no subcharts. `cnpg-cluster` and `cnpg-database` render byte-identical to v2.1.1.
 - **Change:** the repository was renamed from `truvity/cnpg-cluster` to `truvity/cnpg` (GitHub redirects the old name); the Go module path is `github.com/truvity/cnpg/v2` from the next release, and the GoReleaser `project_name` is now `cnpg`. No Go package imports it; chart OCI paths are chart-name based and do not change.
-- First `docs/decisions/` records: `0001` (absorb and rename, charts by owner), `0002` (the operator chart).
+- First `docs/decisions/` records: `0001` (absorb and rename, charts by owner), `0002` (the operator chart), `0003` (the platform chart is `cnpg-platform`).
 
 ## v2.1.1
 

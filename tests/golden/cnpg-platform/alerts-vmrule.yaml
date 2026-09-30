@@ -1,13 +1,13 @@
 ---
-# Source: cnpg-operator/templates/alerts.yaml
+# Source: cnpg-platform/templates/alerts.yaml
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMRule
 metadata:
   name: cnpg-baseline
   namespace: default
   labels:
-    app.kubernetes.io/name: cnpg-operator
-    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/name: cnpg-platform
+    app.kubernetes.io/instance: cnpg-platform
     app.kubernetes.io/managed-by: Helm
 spec:
   groups:

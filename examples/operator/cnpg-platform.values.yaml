@@ -1,4 +1,4 @@
-# Values for THIS repository's charts/cnpg-operator, filled with example
+# Values for THIS repository's charts/cnpg-platform, filled with example
 # names. Every name below is a placeholder; none is a default.
 storageClasses:
   enabled: true

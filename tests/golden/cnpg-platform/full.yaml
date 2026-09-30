@@ -1,13 +1,13 @@
 ---
-# Source: cnpg-operator/templates/metrics-networkpolicy.yaml
+# Source: cnpg-platform/templates/metrics-networkpolicy.yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: pg-metrics
   namespace: pg-one
   labels:
-    app.kubernetes.io/name: cnpg-operator
-    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/name: cnpg-platform
+    app.kubernetes.io/instance: cnpg-platform
     app.kubernetes.io/managed-by: Helm
     example.com/team: data
     example.com/layer: network
@@ -34,15 +34,15 @@ spec:
           protocol: TCP
 
 ---
-# Source: cnpg-operator/templates/metrics-networkpolicy.yaml
+# Source: cnpg-platform/templates/metrics-networkpolicy.yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: pg-metrics
   namespace: pg-two
   labels:
-    app.kubernetes.io/name: cnpg-operator
-    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/name: cnpg-platform
+    app.kubernetes.io/instance: cnpg-platform
     app.kubernetes.io/managed-by: Helm
     example.com/team: data
     example.com/layer: network
@@ -69,14 +69,14 @@ spec:
           protocol: TCP
 
 ---
-# Source: cnpg-operator/templates/storageclasses.yaml
+# Source: cnpg-platform/templates/storageclasses.yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: pg-retain
   labels:
-    app.kubernetes.io/name: cnpg-operator
-    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/name: cnpg-platform
+    app.kubernetes.io/instance: cnpg-platform
     app.kubernetes.io/managed-by: Helm
     example.com/team: data
     example.com/tier: database
@@ -94,15 +94,15 @@ mountOptions:
   - noatime
 
 ---
-# Source: cnpg-operator/templates/alerts.yaml
+# Source: cnpg-platform/templates/alerts.yaml
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: pg-baseline
   namespace: platform
   labels:
-    app.kubernetes.io/name: cnpg-operator
-    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/name: cnpg-platform
+    app.kubernetes.io/instance: cnpg-platform
     app.kubernetes.io/managed-by: Helm
     example.com/team: data
     release: prom
@@ -169,14 +169,14 @@ spec:
             description: "Less than 0.2 of the volume is free. A full WAL volume stops the instance."
 
 ---
-# Source: cnpg-operator/templates/database-role-guard.yaml
+# Source: cnpg-platform/templates/database-role-guard.yaml
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
   name: pg-role-guard
   labels:
-    app.kubernetes.io/name: cnpg-operator
-    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/name: cnpg-platform
+    app.kubernetes.io/instance: cnpg-platform
     app.kubernetes.io/managed-by: Helm
     example.com/team: data
   annotations:
@@ -204,14 +204,14 @@ spec:
       reason: Forbidden
 
 ---
-# Source: cnpg-operator/templates/database-role-guard.yaml
+# Source: cnpg-platform/templates/database-role-guard.yaml
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
   name: pg-role-guard
   labels:
-    app.kubernetes.io/name: cnpg-operator
-    app.kubernetes.io/instance: cnpg-operator
+    app.kubernetes.io/name: cnpg-platform
+    app.kubernetes.io/instance: cnpg-platform
     app.kubernetes.io/managed-by: Helm
     example.com/team: data
   annotations:

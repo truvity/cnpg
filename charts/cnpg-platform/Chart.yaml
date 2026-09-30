@@ -1,8 +1,8 @@
 apiVersion: v2
-name: cnpg-operator
+name: cnpg-platform
 description: >-
-  The platform's half of a CloudNativePG install, beside the upstream
-  operator charts: storage classes, a metrics network policy, baseline
+  Cluster-wide platform add-ons for a CloudNativePG install, beside the
+  upstream operator (installed directly, not by this chart): storage classes, a metrics network policy, baseline
   alert rules and an admission guard against privileged database roles.
   The operator and barman-cloud plugin presets ship as values under
   examples/operator.

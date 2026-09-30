@@ -1,4 +1,4 @@
-# cnpg-operator: the platform-owned objects that sit beside the upstream
+# cnpg-platform: the platform-owned objects that sit beside the upstream
 # `cloudnative-pg` and `plugin-barman-cloud` charts. Install it ONCE per
 # Kubernetes cluster. Everything is off until asked for, and nothing here
 # names an estate: class names, provisioners, namespaces and selectors are
