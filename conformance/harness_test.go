@@ -267,10 +267,24 @@ func (s *suite) psql(pod, query string, overrides ...string) (string, error) {
 func (s *suite) superuserSQL(t *testing.T, pod, query string) string {
 	t.Helper()
 
-	out := s.kubectl(t, "exec", "-n", appNS, pod, "-c", "postgres", "--",
+	out, err := s.superuserSQLErr(pod, query)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return out
+}
+
+// superuserSQLErr is superuserSQL for a caller that polls: an error is
+// "not yet", not a failure.
+func (s *suite) superuserSQLErr(pod, query string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	out, err := s.run(ctx, "", "kubectl", "exec", "-n", appNS, pod, "-c", "postgres", "--",
 		"psql", "-X", "-A", "-t", "-U", "postgres", "-d", database, "-v", "ON_ERROR_STOP=1", "-c", query)
 
-	return strings.TrimSpace(out)
+	return strings.TrimSpace(out), err
 }
 
 // primaryName names the current primary instance of a cluster.

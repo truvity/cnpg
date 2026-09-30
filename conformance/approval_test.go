@@ -76,24 +76,29 @@ func TestApproval(t *testing.T) {
 		_, err := s.apply(certificate(otherNS, "intruder-ns", roleRW))
 		require.NoError(t, err)
 
-		var denied string
-
-		eventually(t, 2*time.Minute, 3*time.Second, "the request is denied", func() error {
-			var approved bool
-
-			denied, approved = s.requestOutcome(t, otherNS)
+		// approver-policy answers a request no policy selects with an event
+		// and leaves it unapproved (it cannot deny what is none of its
+		// policies' business); a Denied condition would serve as well. Either
+		// way nothing approves it, and so nothing signs it.
+		eventually(t, 2*time.Minute, 3*time.Second, "approver-policy has looked at the request", func() error {
+			events := s.kubectl(t, "get", "events", "-n", otherNS, "-o", "jsonpath={range .items[*]}{.reason}: {.message}{\"\\n\"}{end}")
+			denied, approved := s.requestOutcome(t, otherNS)
 			require.False(t, approved, "a request from another namespace was approved")
 
-			if denied == "" {
-				return fmt.Errorf("not denied yet")
+			if denied == "" && !strings.Contains(events, "not applicable for any policy") {
+				return fmt.Errorf("no verdict yet:\n%s", events)
 			}
 
 			return nil
 		})
-		t.Logf("denied: %s", denied)
 
-		secrets := s.kubectl(t, "get", "secrets", "-n", otherNS, "-o", "name")
-		assert.NotContains(t, secrets, "intruder-ns", "no certificate was issued")
+		// Give cert-manager time to act on a wrongly approved request.
+		time.Sleep(15 * time.Second)
+
+		_, approved := s.requestOutcome(t, otherNS)
+		assert.False(t, approved)
+		assert.NotContains(t, s.kubectl(t, "get", "secrets", "-n", otherNS, "-o", "name"), "intruder-ns", "no certificate was issued")
+		assert.Equal(t, "False", strings.TrimSpace(s.kubectl(t, "get", "certificate", "intruder-ns", "-n", otherNS, "-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`)))
 	})
 
 	t.Run("3b the policy refuses a common name outside the allow-list", func(t *testing.T) {
@@ -127,9 +132,9 @@ spec:
 %s`, name, ns, pgName, strings.ReplaceAll(name, "-", "_"), extra)
 		}
 
-		out, err := s.apply(role(appNS, "pg-evil", "  superuser: true\n"))
+		out, err := s.apply(role(appNS, "evil-role", "  superuser: true\n"))
 		if err == nil {
-			s.kubectl(t, "delete", "databaserole", "pg-evil", "-n", appNS)
+			s.kubectl(t, "delete", "databaserole", "evil-role", "-n", appNS)
 		}
 
 		require.Error(t, err, "a superuser DatabaseRole was admitted:\n%s", out)
@@ -138,8 +143,8 @@ spec:
 
 		// The guard is about the attribute, not about DatabaseRoles: the
 		// same object without it is admitted.
-		_, err = s.apply(role(appNS, "pg-fine", ""))
+		_, err = s.apply(role(appNS, "fine-role", ""))
 		require.NoError(t, err)
-		s.kubectl(t, "delete", "databaserole", "pg-fine", "-n", appNS)
+		s.kubectl(t, "delete", "databaserole", "fine-role", "-n", appNS)
 	})
 }
