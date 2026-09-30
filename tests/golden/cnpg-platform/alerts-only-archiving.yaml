@@ -1,7 +1,7 @@
 ---
 # Source: cnpg-platform/templates/alerts.yaml
-apiVersion: operator.victoriametrics.com/v1beta1
-kind: VMRule
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
 metadata:
   name: cnpg-baseline
   namespace: default
@@ -14,18 +14,10 @@ spec:
     - name: cnpg-baseline
       rules:
         - alert: CnpgWalArchivingFailing
-          expr: "cnpg_pg_stat_archiver_last_failed_time{namespace=~\"pg-.*\"} > cnpg_pg_stat_archiver_last_archived_time{namespace=~\"pg-.*\"}"
+          expr: "cnpg_pg_stat_archiver_last_failed_time{} > cnpg_pg_stat_archiver_last_archived_time{}"
           for: 15m
           labels:
             severity: critical
           annotations:
             summary: "WAL archiving is failing on {{ $labels.pod }}"
             description: "The last failed WAL archive is newer than the last successful one. Point-in-time recovery is degrading and WAL is accumulating on the volume."
-        - alert: CnpgBackupTooOld
-          expr: "time() - barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace=~\"pg-.*\"} > 172800"
-          for: 30m
-          labels:
-            severity: warning
-          annotations:
-            summary: "No recent backup for {{ $labels.pod }}"
-            description: "The newest successful backup recorded by the barman-cloud plugin is older than 172800 seconds, or there is none."

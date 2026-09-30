@@ -1,0 +1,7 @@
+# Every rule on, as a PrometheusRule.
+alerts:
+  enabled: true
+  kind: PrometheusRule
+  certExpiry:
+    enabled: true
+    nameRegex: "pg-.*"

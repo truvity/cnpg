@@ -22,13 +22,19 @@ publishes; thresholds are inputs. */}}
   "description" "The last failed WAL archive is newer than the last successful one. Point-in-time recovery is degrading and WAL is accumulating on the volume.") }}
 {{- end }}
 {{- if $a.backupAge.enabled }}
+{{- /* The barman-cloud plugin's sidecar metric, relayed verbatim on each
+instance's metrics endpoint: plugin-barman-cloud v0.13.0 (chart 0.7.0),
+internal/cnpgi/instance/metrics.go lines 37-52 (name), 123 and 150 (value:
+ObjectStore status.serverRecoveryWindow[server].lastSuccessfulBackupTime, 0
+when there is none). cnpg_collector_last_available_backup_timestamp is
+deprecated since CloudNativePG 1.26 and stays 0 under the plugin. */}}
 {{- $rules = append $rules (dict
   "alert" "CnpgBackupTooOld"
-  "expr" (printf "time() - cnpg_collector_last_available_backup_timestamp{%s} > %d" (trimPrefix ", " $selC) (int $a.backupAge.maxAgeSeconds))
+  "expr" (printf "time() - barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{%s} > %d" (trimPrefix ", " $selC) (int $a.backupAge.maxAgeSeconds))
   "for" $a.backupAge.for
   "severity" $a.severity.warning
   "summary" "No recent backup for {{ $labels.pod }}"
-  "description" (printf "The newest available backup is older than %d seconds." (int $a.backupAge.maxAgeSeconds))) }}
+  "description" (printf "The newest successful backup recorded by the barman-cloud plugin is older than %d seconds, or there is none." (int $a.backupAge.maxAgeSeconds))) }}
 {{- end }}
 {{- if $a.replicationLag.enabled }}
 {{- $rules = append $rules (dict

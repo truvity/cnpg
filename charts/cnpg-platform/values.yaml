@@ -65,7 +65,12 @@ alerts:
     for: 15m
   backupAge:
     enabled: true
-    # Seconds since the newest available backup (default 2 days).
+    # Needs the barman-cloud plugin (plugin-barman-cloud >= v0.13.0), whose
+    # sidecar exports barman_cloud_cloudnative_pg_io_last_available_backup_timestamp
+    # (internal/cnpgi/instance/metrics.go). Set false for clusters that back
+    # up another way: no metric means no alert, but also no coverage.
+    # Seconds since the newest successful backup (default 2 days); a cluster
+    # with no backup at all (value 0) fires too.
     maxAgeSeconds: 172800
     for: 30m
   replicationLag:

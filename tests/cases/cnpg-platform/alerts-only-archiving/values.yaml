@@ -1,0 +1,10 @@
+# Each rule has its own switch: here only archiving (backups taken some
+# other way than the barman-cloud plugin).
+alerts:
+  enabled: true
+  backupAge:
+    enabled: false
+  replicationLag:
+    enabled: false
+  walDisk:
+    enabled: false
