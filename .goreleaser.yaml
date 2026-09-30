@@ -1,12 +1,45 @@
-project_name: cnpg
-
+# Tag-triggered release through truvity/ci-workflows release-public.yaml,
+# which runs goreleaser and then, in the same job, pushes every chart
+# named in the caller to ghcr.io/truvity/charts at the tag's version.
+#
+# One tag stamps everything: the charts, the Go module (a module needs no
+# build step; the tag is its version) and the cnpgctl binaries built
+# here. cnpgctl is a binary, not an image: it is run by a person or a
+# pipeline step against a cluster they already have access to, and a
+# container would add a credential hand-off and nothing else.
 version: 2
 
-# Chart-only repository: goreleaser cuts the GitHub release and the
-# changelog; the actual artifacts are the Helm charts, packaged and
-# pushed by the shared release workflow (ocictl helmctl) after this.
+project_name: cnpg
+
 builds:
-  - skip: true
+  - id: cnpgctl
+    main: ./cmd/cnpgctl
+    binary: cnpgctl
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.Version={{.Version}}
+
+archives:
+  - id: cnpgctl
+    ids: [cnpgctl]
+    formats: [tar.gz]
+    name_template: "cnpgctl_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
 
 changelog:
   use: github-native
+
+release:
+  github: {}
+  header: |
+    ## cnpg {{ .Tag }}
+
+    Charts: `oci://ghcr.io/truvity/charts/cnpg-platform`, `cnpg-cluster`,
+    `cnpg-database` and `cnpg-client` at `{{ .Version }}`.
+    Go module: `go get github.com/truvity/cnpg/v2@{{ .Tag }}`.
+    CLI: the `cnpgctl` archives below, or
+    `go run github.com/truvity/cnpg/v2/cmd/cnpgctl@{{ .Tag }} --help`.
