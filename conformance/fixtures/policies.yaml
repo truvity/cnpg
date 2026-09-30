@@ -53,6 +53,23 @@ spec:
     namespace:
       matchNames: [cnpg-system]
 ---
+# 4. trust-manager's webhook certificate, from the self-signed Issuer its
+#    chart renders in cert-manager's namespace.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: conformance-trust-manager
+spec:
+  allowed:
+    isCA: true
+    commonName: {value: "*"}
+    dnsNames: {values: ["*"]}
+    usages: [signing, digital signature, key encipherment, cert sign, crl sign, server auth, client auth]
+  selector:
+    issuerRef: {name: "trust-manager*", kind: Issuer, group: cert-manager.io}
+    namespace:
+      matchNames: [cert-manager]
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -61,7 +78,7 @@ rules:
   - apiGroups: [policy.cert-manager.io]
     resources: [certificaterequestpolicies]
     verbs: [use]
-    resourceNames: [conformance-ca-bootstrap, conformance-server, conformance-plugin]
+    resourceNames: [conformance-ca-bootstrap, conformance-server, conformance-plugin, conformance-trust-manager]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

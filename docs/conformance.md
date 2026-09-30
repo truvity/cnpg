@@ -33,8 +33,8 @@ kept in the same scratch directory. Everything is pinned in
    approver approves every request first and approver-policy's refusals would
    be decoration.
 2. approver-policy and trust-manager (secret targets on, authorized for
-   `pg-client-ca` only), then `conformance/fixtures/policies.yaml`: three
-   narrow test-only policies for the requests the charts do not cover (the
+   `pg-client-ca` only), then `conformance/fixtures/policies.yaml`: four
+   narrow test-only policies for the requests the charts do not cover (trust-manager's webhook, the
    chart's self-signed root, the server certificate, the barman-cloud
    plugin). They are scoped by issuer and namespace so they cannot admit what
    assertion 3 expects to be refused.
