@@ -1,17 +1,65 @@
-# cnpg-database: Logical database within a CloudNativePG cluster
-#
-# Creates a Database CR (CNPG 1.28+ declarative database management).
+# cnpg-database: what a product installs against the cluster the platform
+# gave it. Renders, in the release namespace only: Database objects,
+# DatabaseRole objects (never privileged), and a cert-manager Certificate
+# per role that asks for a client certificate. See docs/reference.md.
 
-# Database identity
-databaseName: ""
+# The platform's cluster (required), a DNS label.
 clusterName: ""
+# Optional. When set it must equal the release namespace.
 namespace: ""
 
-# Database owner (PostgreSQL role that owns this database)
+# The primary database (spec.name on the rendered Database). Empty = none.
+databaseName: ""
+# Owner of the primary database and the default owner of databases[].
 owner: "app"
 
-# RETIRED: allowedConsumers previously generated a CiliumNetworkPolicy
-# ingress rule per entry. The chart renders no network policy any more;
-# the consumer owns its own NetworkPolicies. Kept as a no-op for values
-# compatibility.
+# More databases, including per-customer ones.
+# - name: customer_a
+#   owner: app                       # default: owner
+#   ensure: present                  # present|absent
+#   databaseReclaimPolicy: retain    # retain|delete
+#   schemas: [app]
+databases: []
+
+# Unprivileged roles. superuser, replication, bypassrls, createrole and
+# createdb are refused at render time.
+# - name: svc_a
+#   login: true
+#   inherit: true
+#   inRoles: [customer_a_access]
+#   connectionLimit: -1
+#   passwordSecret: svc-a-password   # alternative to a client certificate
+#   disablePassword: false
+#   validUntil: "2030-01-01T00:00:00Z"
+#   comment: ""
+#   ensure: present
+#   databaseRoleReclaimPolicy: retain
+#   clientCertificate:
+#     enabled: true
+#     algorithm: ECDSA               # ECDSA|RSA (chart default below)
+#     size: 256
+#     duration: 2160h
+#     renewBefore: 360h
+#     issuerRef: {name: , kind: ClusterIssuer, group: cert-manager.io}
+#     additionalOutputFormats: [DER] # PKCS#8 DER for pgjdbc
+roles: []
+
+# Client-certificate defaults for every role (a role's own value wins).
+clientCertificate:
+  algorithm: ECDSA
+  size: null
+  duration: ""
+  renewBefore: ""
+  additionalOutputFormats: []
+
+# Default issuer for client certificates. Empty name = the platform's
+# naming contract, ClusterIssuer cnpg-<namespace>-<clusterName>.
+clientCertificateIssuerRef: {}
+
+# Optional exact-match assertions, for a product that derives these names
+# from its own install name and wants a mismatch to fail the render.
+expect: {}
+
+# RETIRED: allowedConsumers previously generated a network policy per
+# entry. No-op, kept for values compatibility.
 allowedConsumers: []

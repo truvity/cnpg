@@ -1,0 +1,12 @@
+---
+# Source: cnpg-database/templates/database.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-app
+  namespace: default
+spec:
+  name: app
+  owner: app
+  cluster:
+    name: pg

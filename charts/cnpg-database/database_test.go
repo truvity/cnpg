@@ -62,8 +62,7 @@ func field(obj map[string]any, path ...string) any {
 	return cur
 }
 
-// TestDatabase_MinimumValues: the minimum required values (databaseName,
-// clusterName, namespace) render a Database CR owned by the default
+// TestDatabase_MinimumValues: the minimum values (clusterName, databaseName) render a Database CR owned by the default
 // owner "app".
 func TestDatabase_MinimumValues(t *testing.T) {
 	obj, err := renderDatabase(t, map[string]any{
@@ -106,13 +105,12 @@ func TestSchema_RejectsWrongType(t *testing.T) {
 	assert.Contains(t, err.Error(), "owner")
 }
 
-// TestSchema_RejectsMissingRequired: databaseName, clusterName and
-// namespace are required by both the schema and the templates'
-// `required` calls; the schema catches it first.
+// TestSchema_RejectsMissingRequired: clusterName is required by both the
+// schema and the guard; the schema catches it first.
 func TestSchema_RejectsMissingRequired(t *testing.T) {
 	_, err := renderDatabase(t, map[string]any{
-		"clusterName": "pg",
-		"namespace":   "default",
+		"databaseName": "app",
+		"namespace":    "default",
 	})
 	require.Error(t, err)
 }

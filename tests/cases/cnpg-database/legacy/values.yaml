@@ -1,0 +1,5 @@
+clusterName: pg
+namespace: default
+databaseName: app
+owner: us-owner
+allowedConsumers: [anything]

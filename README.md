@@ -8,7 +8,7 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
 |---|---|---|
 | `cnpg-platform` | the platform | once per Kubernetes cluster |
 | `cnpg-cluster` | the platform | once per PostgreSQL cluster |
-| `cnpg-database` | a product | once per database it owns |
+| `cnpg-database` | a product | once per product (its databases, roles, client certificates) |
 
 - **charts/cnpg-platform** — what a platform adds beside the upstream operator
   charts: storage classes, a metrics network policy, baseline alert rules and
@@ -19,9 +19,10 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
 - **charts/cnpg-cluster** — a CNPG `Cluster` with an opinionated two-posture
   profile model, plus roles, declared databases, backup `ObjectStore`s and
   `ScheduledBackup`s.
-- **charts/cnpg-database** — a logical `Database` inside an existing cluster
-  (CNPG 1.28+ declarative database management), for a consumer that owns its
-  database but not the cluster.
+- **charts/cnpg-database** — what a product installs in its own namespace
+  against the platform's cluster: `Database` objects (CNPG 1.28+ declarative
+  database management), unprivileged `DatabaseRole` objects and per-role client
+  certificates, behind one render-time guard.
 
 Published as OCI charts:
 

@@ -1,0 +1,94 @@
+{{- /* The ONE render-time guard. Everything the product must get right
+about the platform's cluster is checked here, so a mismatch fails the
+render instead of surfacing as a Database that never reconciles.
+
+  clusterName   required, a DNS label
+  namespace     optional; must equal the release namespace when set
+  databaseName / owner / databases[].name / databases[].owner
+                PostgreSQL identifier shape; the reserved names refused
+  expect.*      optional exact-match assertions for a product that derives
+                these names from its own install name and wants a mismatch
+                to fail loudly
+  roles[]       never privileged; never pg_*; the client certificate's
+                commonName is the role name, so the name must be stable */}}
+{{- $v := .Values }}
+{{- if not $v.clusterName }}
+{{- fail "clusterName is required" }}
+{{- end }}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $v.clusterName) }}
+{{- fail (printf "clusterName %q is not a DNS label" $v.clusterName) }}
+{{- end }}
+{{- if and $v.namespace (ne $v.namespace .Release.Namespace) }}
+{{- fail (printf "namespace must be the release namespace %q (got %q); this chart renders into the namespace it is installed into" .Release.Namespace $v.namespace) }}
+{{- end }}
+{{- $expect := $v.expect | default dict }}
+{{- if and $expect.clusterName (ne $expect.clusterName $v.clusterName) }}
+{{- fail (printf "clusterName must be %q (got %q)" $expect.clusterName $v.clusterName) }}
+{{- end }}
+{{- if and $expect.databaseName (ne $expect.databaseName ($v.databaseName | default "")) }}
+{{- fail (printf "databaseName must be %q (got %q)" $expect.databaseName ($v.databaseName | default "")) }}
+{{- end }}
+{{- if and $expect.owner (ne $expect.owner $v.owner) }}
+{{- fail (printf "owner must be %q (got %q)" $expect.owner $v.owner) }}
+{{- end }}
+
+{{- $reservedDB := list "postgres" "template0" "template1" }}
+{{- $dbs := list }}
+{{- if $v.databaseName }}
+{{- $dbs = append $dbs (dict "name" $v.databaseName "owner" $v.owner) }}
+{{- end }}
+{{- range $v.databases }}
+{{- $dbs = append $dbs (dict "name" .name "owner" (.owner | default $v.owner)) }}
+{{- end }}
+{{- $seen := dict }}
+{{- range $dbs }}
+{{- if not (regexMatch "^[a-z][a-z0-9_]{0,62}$" .name) }}
+{{- fail (printf "database name %q must match ^[a-z][a-z0-9_]{0,62}$" .name) }}
+{{- end }}
+{{- if has .name $reservedDB }}
+{{- fail (printf "database name %q is reserved by PostgreSQL" .name) }}
+{{- end }}
+{{- if hasKey $seen (.name | replace "_" "-") }}
+{{- fail (printf "database name %q is declared twice (names are compared with _ and - equal)" .name) }}
+{{- end }}
+{{- $_ := set $seen (.name | replace "_" "-") true }}
+{{- if not (regexMatch "^[a-z][a-z0-9_-]{0,62}$" .owner) }}
+{{- fail (printf "owner %q of database %q must match ^[a-z][a-z0-9_-]{0,62}$" .owner .name) }}
+{{- end }}
+{{- if hasPrefix "pg_" .owner }}
+{{- fail (printf "owner %q of database %q: role names starting with pg_ are reserved by PostgreSQL" .owner .name) }}
+{{- end }}
+{{- end }}
+
+{{- $forbidden := list "superuser" "replication" "bypassrls" "createrole" "createdb" }}
+{{- $seenRole := dict }}
+{{- range $v.roles }}
+{{- $role := . }}
+{{- if not (regexMatch "^[a-z][a-z0-9_-]{0,62}$" .name) }}
+{{- fail (printf "role name %q must match ^[a-z][a-z0-9_-]{0,62}$" .name) }}
+{{- end }}
+{{- if hasPrefix "pg_" .name }}
+{{- fail (printf "role %q: names starting with pg_ are reserved by PostgreSQL" .name) }}
+{{- end }}
+{{- range $forbidden }}
+{{- if hasKey $role . }}
+{{- fail (printf "role %q: %s is refused; a product manages unprivileged roles only (the platform's admission policy refuses it too)" $role.name .) }}
+{{- end }}
+{{- end }}
+{{- range .inRoles | default list }}
+{{- if hasPrefix "pg_" . }}
+{{- fail (printf "role %q: inRoles %q: membership in a pg_* predefined role is refused" $role.name .) }}
+{{- end }}
+{{- end }}
+{{- if hasKey $seenRole (.name | replace "_" "-") }}
+{{- fail (printf "role %q is declared twice (names are compared with _ and - equal)" .name) }}
+{{- end }}
+{{- $_ := set $seenRole (.name | replace "_" "-") true }}
+{{- $cc := .clientCertificate | default dict }}
+{{- if and $cc.enabled (and (hasKey . "login") (not .login)) }}
+{{- fail (printf "role %q: a client certificate needs login: true" .name) }}
+{{- end }}
+{{- if and $cc.enabled .passwordSecret }}
+{{- fail (printf "role %q: clientCertificate and passwordSecret are alternatives; set one" .name) }}
+{{- end }}
+{{- end }}

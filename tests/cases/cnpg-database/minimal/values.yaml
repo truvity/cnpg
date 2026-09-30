@@ -1,0 +1,3 @@
+clusterName: pg
+namespace: default
+databaseName: app

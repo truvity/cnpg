@@ -1,0 +1,85 @@
+{{- /* DatabaseRole per roles[] entry, and a cert-manager Certificate per
+role that asks for a client certificate (Secret <cluster>-role-<role>,
+commonName = the role name). Underscores in the Secret and object names
+become "-": Kubernetes names may not carry them. */}}
+{{- range .Values.roles }}
+{{- $slug := .name | replace "_" "-" }}
+{{- $cc := .clientCertificate | default dict }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: {{ $.Values.clusterName }}-role-{{ $slug }}
+  namespace: {{ include "cnpg-database.namespace" $ }}
+spec:
+  cluster:
+    name: {{ $.Values.clusterName }}
+  name: {{ .name }}
+  ensure: {{ .ensure | default "present" }}
+  login: {{ if hasKey . "login" }}{{ .login }}{{ else }}true{{ end }}
+  {{- if hasKey . "inherit" }}
+  inherit: {{ .inherit }}
+  {{- end }}
+  {{- with .inRoles }}
+  inRoles:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if hasKey . "connectionLimit" }}
+  connectionLimit: {{ .connectionLimit }}
+  {{- end }}
+  {{- with .passwordSecret }}
+  passwordSecret:
+    name: {{ . }}
+  {{- end }}
+  {{- if hasKey . "disablePassword" }}
+  disablePassword: {{ .disablePassword }}
+  {{- end }}
+  {{- with .validUntil }}
+  validUntil: {{ . | quote }}
+  {{- end }}
+  {{- with .comment }}
+  comment: {{ . | quote }}
+  {{- end }}
+  {{- with .databaseRoleReclaimPolicy }}
+  databaseRoleReclaimPolicy: {{ . }}
+  {{- end }}
+{{- if $cc.enabled }}
+{{- $issuer := $cc.issuerRef | default $.Values.clientCertificateIssuerRef | default dict }}
+{{- $algo := $cc.algorithm | default $.Values.clientCertificate.algorithm }}
+{{- $size := $cc.size | default $.Values.clientCertificate.size | default (ternary 256 2048 (eq $algo "ECDSA")) }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $.Values.clusterName }}-role-{{ $slug }}
+  namespace: {{ include "cnpg-database.namespace" $ }}
+spec:
+  secretName: {{ $.Values.clusterName }}-role-{{ $slug }}
+  commonName: {{ .name }}
+  usages:
+    - client auth
+  privateKey:
+    algorithm: {{ $algo }}
+    size: {{ $size | int }}
+    rotationPolicy: Always
+  {{- with ($cc.duration | default $.Values.clientCertificate.duration) }}
+  duration: {{ . }}
+  {{- end }}
+  {{- with ($cc.renewBefore | default $.Values.clientCertificate.renewBefore) }}
+  renewBefore: {{ . }}
+  {{- end }}
+  secretTemplate:
+    labels:
+      cnpg.io/reload: "true"
+  {{- if ($cc.additionalOutputFormats | default $.Values.clientCertificate.additionalOutputFormats) }}
+  additionalOutputFormats:
+    {{- range ($cc.additionalOutputFormats | default $.Values.clientCertificate.additionalOutputFormats) }}
+    - type: {{ . }}
+    {{- end }}
+  {{- end }}
+  issuerRef:
+    name: {{ $issuer.name | default (include "cnpg-database.defaultIssuer" $) }}
+    kind: {{ $issuer.kind | default "ClusterIssuer" }}
+    group: {{ $issuer.group | default "cert-manager.io" }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,4 @@
+clusterName: pg
+roles:
+  - name: r
+    createrole: true

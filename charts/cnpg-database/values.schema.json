@@ -1,35 +1,297 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "cnpg-database",
-  "description": "A logical Database inside an existing CNPG cluster (CNPG 1.28+ declarative database management), for a consumer that owns its database but not the cluster. See docs/reference.md.",
+  "description": "What a product installs against the CNPG cluster the platform gave it: Databases, unprivileged DatabaseRoles and per-role client Certificates, in the release namespace. See docs/reference.md.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["databaseName", "clusterName", "namespace"],
+  "required": [
+    "clusterName"
+  ],
   "properties": {
     "global": {
       "type": "object",
       "description": "Helm injects `global` into every subchart's values, so a strict schema must admit it or the chart cannot be embedded as a dependency. The chart reads nothing from it."
     },
-    "databaseName": {
-      "type": "string",
-      "description": "PostgreSQL database name (spec.name on the rendered Database). Required."
-    },
     "clusterName": {
       "type": "string",
-      "description": "Name of the existing CNPG Cluster this database belongs to. Required."
+      "description": "Name of the platform's CNPG Cluster (a DNS label). Required."
     },
     "namespace": {
       "type": "string",
-      "description": "Namespace the Database CR is rendered into. Required."
+      "description": "Optional; must equal the release namespace when set."
+    },
+    "databaseName": {
+      "type": "string",
+      "description": "The primary database (spec.name). Empty renders none."
     },
     "owner": {
       "type": "string",
-      "description": "PostgreSQL role that owns this database. Defaults to 'app'."
+      "description": "Owner of the primary database and default owner of databases[]. Defaults to 'app'."
+    },
+    "databases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,62}$",
+            "description": "PostgreSQL database name."
+          },
+          "owner": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,62}$"
+          },
+          "ensure": {
+            "type": "string",
+            "enum": [
+              "present",
+              "absent"
+            ]
+          },
+          "databaseReclaimPolicy": {
+            "type": "string",
+            "enum": [
+              "retain",
+              "delete"
+            ]
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]{0,62}$",
+            "description": "Role name; never pg_*. Also the certificate commonName."
+          },
+          "ensure": {
+            "type": "string",
+            "enum": [
+              "present",
+              "absent"
+            ]
+          },
+          "login": {
+            "type": "boolean"
+          },
+          "inherit": {
+            "type": "boolean"
+          },
+          "inRoles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "connectionLimit": {
+            "type": "integer",
+            "minimum": -1
+          },
+          "passwordSecret": {
+            "type": "string"
+          },
+          "disablePassword": {
+            "type": "boolean"
+          },
+          "validUntil": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "databaseRoleReclaimPolicy": {
+            "type": "string",
+            "enum": [
+              "retain",
+              "delete"
+            ]
+          },
+          "clientCertificate": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "ECDSA",
+                  "RSA"
+                ]
+              },
+              "size": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "enum": [
+                  256,
+                  384,
+                  521,
+                  2048,
+                  3072,
+                  4096,
+                  null
+                ]
+              },
+              "duration": {
+                "type": "string"
+              },
+              "renewBefore": {
+                "type": "string"
+              },
+              "issuerRef": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "ClusterIssuer",
+                      "Issuer"
+                    ]
+                  },
+                  "group": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalOutputFormats": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "DER"
+                  ]
+                }
+              }
+            }
+          },
+          "superuser": {
+            "description": "Refused at render time: a product manages unprivileged roles only."
+          },
+          "replication": {
+            "description": "Refused at render time: a product manages unprivileged roles only."
+          },
+          "bypassrls": {
+            "description": "Refused at render time: a product manages unprivileged roles only."
+          },
+          "createrole": {
+            "description": "Refused at render time: a product manages unprivileged roles only."
+          },
+          "createdb": {
+            "description": "Refused at render time: a product manages unprivileged roles only."
+          }
+        }
+      }
+    },
+    "clientCertificate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "enum": [
+            "ECDSA",
+            "RSA"
+          ]
+        },
+        "size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "enum": [
+            256,
+            384,
+            521,
+            2048,
+            3072,
+            4096,
+            null
+          ]
+        },
+        "duration": {
+          "type": "string"
+        },
+        "renewBefore": {
+          "type": "string"
+        },
+        "additionalOutputFormats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "DER"
+            ]
+          }
+        }
+      }
+    },
+    "clientCertificateIssuerRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ClusterIssuer",
+            "Issuer"
+          ]
+        },
+        "group": {
+          "type": "string"
+        }
+      }
+    },
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "clusterName": {
+          "type": "string"
+        },
+        "databaseName": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        }
+      },
+      "description": "Optional exact-match assertions; a mismatch fails the render."
     },
     "allowedConsumers": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "RETIRED (ADR-026): previously generated a CiliumNetworkPolicy ingress rule per entry. Kept as a no-op for values compatibility; per-install NetworkPolicies live in the consuming chart now."
+      "items": {
+        "type": "string"
+      },
+      "description": "RETIRED: no-op, kept for values compatibility."
     }
   }
 }
