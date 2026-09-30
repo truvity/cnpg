@@ -1,0 +1,77 @@
+# Test-only approver-policy objects for what the charts do NOT cover. With
+# cert-manager's own approver disabled, every CertificateRequest needs a
+# policy that admits it; the chart's policy (trust.policy) covers the
+# ClusterIssuer and nothing else. These are as narrow as they can be: a
+# wider one would admit the requests assertion 3 expects to be refused.
+#
+# 1. The chart's self-signed root Issuer signs the CA Certificate in
+#    cert-manager's namespace.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: conformance-ca-bootstrap
+spec:
+  allowed:
+    isCA: true
+    commonName: {value: "*"}
+    usages: [signing, digital signature, key encipherment, cert sign, crl sign]
+  selector:
+    issuerRef: {name: cnpg-app-pg-selfsigned, kind: Issuer, group: cert-manager.io}
+    namespace:
+      matchNames: [cert-manager]
+---
+# 2. The server certificate, from the namespaced Issuer serverTLS names.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: conformance-server
+spec:
+  allowed:
+    isCA: false
+    dnsNames: {required: true, values: ["*"]}
+    usages: [digital signature, key encipherment, server auth]
+  selector:
+    issuerRef: {name: conformance-server, kind: Issuer, group: cert-manager.io}
+    namespace:
+      matchNames: [app]
+---
+# 3. The barman-cloud plugin's own certificates (the operator and the plugin
+#    speak mutual TLS), from the self-signed Issuers its chart renders in the
+#    operator's namespace. Only used by the backup assertion.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: conformance-plugin
+spec:
+  allowed:
+    isCA: true
+    commonName: {value: "*"}
+    dnsNames: {values: ["*"]}
+    usages: [signing, digital signature, key encipherment, cert sign, crl sign, server auth, client auth]
+  selector:
+    issuerRef: {name: "*", kind: Issuer, group: cert-manager.io}
+    namespace:
+      matchNames: [cnpg-system]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: conformance-policy-use
+rules:
+  - apiGroups: [policy.cert-manager.io]
+    resources: [certificaterequestpolicies]
+    verbs: [use]
+    resourceNames: [conformance-ca-bootstrap, conformance-server, conformance-plugin]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: conformance-policy-use
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: conformance-policy-use
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager

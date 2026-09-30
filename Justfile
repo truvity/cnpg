@@ -18,6 +18,16 @@ test:
 golden:
     hack/golden.sh update
 
+# The kind conformance suite: cert-manager, approver-policy, trust-manager
+# and the upstream operator on a disposable kind cluster, the charts on top,
+# and what they do together asserted (conformance/, docs/conformance.md).
+# Needs docker, kind, kubectl and helm and the network; NOT part of `check`,
+# which stays free of all of them. Set CNPG_CONFORMANCE_BACKUP=1 to add the
+# backup and point-in-time restore assertion, CNPG_CONFORMANCE_KEEP=1 to
+# keep the cluster afterwards.
+conformance:
+    CNPG_CONFORMANCE=required go test ./conformance/ -count=1 -v -timeout 50m
+
 # Run linters
 lint:
     golangci-lint run ./...

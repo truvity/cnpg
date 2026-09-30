@@ -1,0 +1,11 @@
+# charts/cnpg-database as a product installs it: one database, two
+# roles with client certificates from the platform's ClusterIssuer.
+clusterName: pg
+namespace: app
+databaseName: conformance_db
+owner: app_owner
+roles:
+  - name: app_rw
+    clientCertificate: {enabled: true}
+  - name: app_ro
+    clientCertificate: {enabled: true}

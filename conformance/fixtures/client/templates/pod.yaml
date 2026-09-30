@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  terminationGracePeriodSeconds: 1
+  # Not root: the key file is 0440 and owned by root inside the projected
+  # volume, which libpq accepts only when the process is in the file's group
+  # (fsGroup). This is the pod shape docs/connecting.md asks applications for.
+  securityContext:
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+  volumes:
+    {{- include "cnpg-client.volumes" (dict "context" $ "client" .Values.client) | nindent 4 }}
+  containers:
+    - name: psql
+      image: {{ .Values.image }}
+      command: [sleep, infinity]
+      env:
+        {{- include "cnpg-client.env" (dict "context" $ "client" .Values.client) | nindent 8 }}
+      volumeMounts:
+        {{- include "cnpg-client.volumeMounts" (dict "context" $ "client" .Values.client) | nindent 8 }}

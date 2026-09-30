@@ -22,6 +22,8 @@ cannot be edited after the push.
 - `charts` lints and renders every chart and proves every refusal fixture fails
 - `leak-canary`
 
+`just conformance` is not part of the gate: it stands a kind cluster up, needs docker and the network, and takes minutes (`docs/conformance.md`). CI runs it separately, on changes to the charts. Run it when a change touches trust, issuance, admission or replication, which no render test reaches.
+
 A change to a chart or to a rendered output regenerates the golden renders with `just golden`; review that diff in the pull request. Every render-time refusal has a fixture under `tests/invalid/` that must fail to render.
 
 ## Component contract
