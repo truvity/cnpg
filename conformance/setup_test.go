@@ -265,10 +265,14 @@ func (s *suite) installCluster() error {
 
 	// No --wait for the release itself: its objects are custom resources
 	// with no readiness helm knows; the wait below is on the Cluster.
-	if err := s.do(5*time.Minute, "", "helm", "upgrade", "--install", pgName, s.path("charts", "cnpg-cluster"),
-		"--namespace", appNS,
-		"-f", s.path("conformance", "fixtures", "cluster.values.yaml"),
-		"--set-file", "serverTLS.caCertificates="+caFile); err != nil {
+	// Retried: each webhook (cert-manager's, approver-policy's,
+	// trust-manager's, the operator's) can trail its Deployment's readiness.
+	if err := s.retry(3*time.Minute, func() error {
+		return s.do(5*time.Minute, "", "helm", "upgrade", "--install", pgName, s.path("charts", "cnpg-cluster"),
+			"--namespace", appNS,
+			"-f", s.path("conformance", "fixtures", "cluster.values.yaml"),
+			"--set-file", "serverTLS.caCertificates="+caFile)
+	}); err != nil {
 		return err
 	}
 
@@ -277,9 +281,11 @@ func (s *suite) installCluster() error {
 }
 
 func (s *suite) installDatabase() error {
-	if err := s.do(2*time.Minute, "", "helm", "upgrade", "--install", "db", s.path("charts", "cnpg-database"),
-		"--namespace", appNS,
-		"-f", s.path("conformance", "fixtures", "database.values.yaml")); err != nil {
+	if err := s.retry(3*time.Minute, func() error {
+		return s.do(2*time.Minute, "", "helm", "upgrade", "--install", "db", s.path("charts", "cnpg-database"),
+			"--namespace", appNS,
+			"-f", s.path("conformance", "fixtures", "database.values.yaml"))
+	}); err != nil {
 		return err
 	}
 
