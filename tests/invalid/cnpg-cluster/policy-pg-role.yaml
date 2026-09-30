@@ -1,0 +1,7 @@
+clusterName: pg
+namespace: app
+profile: devel
+trust:
+  policy:
+    enabled: true
+    roles: [pg_write_all_data]

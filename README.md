@@ -158,6 +158,7 @@ package a chart's dependencies today; see
 - [`docs/adoption.md`](docs/adoption.md) — how a platform takes this chart
   into use, including the breaking migrations between the `scheduling`
   shape older releases assumed and the plain-input shape at HEAD.
+- [`docs/authentication.md`](docs/authentication.md) — the per-database client trust model, hba ordering and the people mapping.
 - [`docs/reference.md`](docs/reference.md) — every value, generated from
   `values.yaml`'s own comments.
 - [`docs/decisions/`](docs/decisions/) — why the repository is shaped as it is:

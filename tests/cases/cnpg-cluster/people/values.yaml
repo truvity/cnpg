@@ -1,0 +1,11 @@
+clusterName: pg
+namespace: app
+profile: devel
+bootstrap:
+  initdb: {database: app, owner: app-owner}
+roles:
+  - {name: my-app, auth: cert}
+people:
+  - {email: ada@example.com, role: readonly}
+  - {email: bob@example.com, role: readonly}
+  - {email: cy@example.com, role: editor}

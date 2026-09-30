@@ -26,10 +26,72 @@ postgresql.extra_pg_hba, never replace.
 - hostssl all {{ .name | replace "-" "_" }} all scram-sha-256
 {{- end }}
 {{- end }}
+{{- $peopleRoles := include "cnpg-cluster.peopleRoles" . | trim }}
+{{- if $peopleRoles }}
+- hostssl all {{ $peopleRoles }} all cert map=people
+{{- end }}
+{{- range ((.Values.postgresql.pgHba | default dict).beforeCatchAll | default list) }}
+- {{ . }}
+{{- end }}
 - hostssl all all all cert
 {{- range .Values.postgresql.extra_pg_hba }}
 - {{ . }}
 {{- end }}
+{{- end -}}
+
+{{/*
+The distinct database roles people map to, sorted, comma-joined (an hba
+user list). Empty when `people` is empty. Validates the whole people
+surface and every `map=` an hba line names: a map with no rows would
+reject every connection that reaches it, silently, at connect time.
+*/}}
+{{- define "cnpg-cluster.peopleRoles" -}}
+{{- $roles := list -}}
+{{- range (.Values.people | default list) -}}
+{{- if hasPrefix "pg_" .role -}}
+{{- fail (printf "people: role %q starts with pg_, which PostgreSQL reserves for its predefined roles" .role) -}}
+{{- end -}}
+{{- $roles = append $roles .role -}}
+{{- end -}}
+{{- $lines := concat (((.Values.postgresql.pgHba | default dict).beforeCatchAll | default list)) (.Values.postgresql.extra_pg_hba | default list) -}}
+{{- range $lines -}}
+{{- range (regexFindAll "map=[^ \t]+" . -1) -}}
+{{- $name := trimPrefix "map=" . -}}
+{{- if ne $name "people" -}}
+{{- fail (printf "pg_hba line uses map=%s, but the only pg_ident map this chart renders is \"people\" (from values `people`)" $name) -}}
+{{- end -}}
+{{- if not $roles -}}
+{{- fail "pg_hba line uses map=people, but `people` is empty: a map with no rows rejects every connection that reaches it" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- uniq (sortAlpha $roles) | join "," -}}
+{{- end -}}
+
+{{/* pg_ident rows for the people map. */}}
+{{- define "cnpg-cluster.pgIdent" -}}
+{{- range (.Values.people | default list) }}
+- people {{ .email }} {{ .role }}
+{{- end }}
+{{- end -}}
+
+{{/* The per-database client CA Secret and the replication Secret. */}}
+{{- define "cnpg-cluster.replicationEnabled" -}}
+{{- if ((.Values.replication | default dict).enabled) -}}true{{- end -}}
+{{- end -}}
+
+{{/* Issuer and CA names; cluster-scoped, so namespace-qualified. */}}
+{{- define "cnpg-cluster.trustName" -}}
+{{- printf "cnpg-%s-%s" .Values.namespace .Values.clusterName -}}
+{{- end -}}
+
+{{/* Validates and returns the trust namespace. */}}
+{{- define "cnpg-cluster.trustNamespace" -}}
+{{- $ns := (.Values.trust | default dict).namespace | default "" -}}
+{{- if not $ns -}}
+{{- fail "trust.namespace is required with trust.ca.enabled or trust.bundle.enabled: the CA Secret must live in cert-manager's cluster resource namespace, which is also the namespace trust-manager reads sources from" -}}
+{{- end -}}
+{{- $ns -}}
 {{- end -}}
 
 {{/*

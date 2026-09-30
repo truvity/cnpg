@@ -181,7 +181,14 @@ resources: {}
 
 postgresql:
   parameters: {}
-  extra_pg_hba: []       # appended AFTER the profile posture lines
+  # KNOWN BUG, kept for compatibility: these lines are appended AFTER
+  # the catch-all `hostssl all all all cert`, and hba is first-match, so
+  # they reach nothing today. Use pgHba.beforeCatchAll.
+  extra_pg_hba: []
+  pgHba:
+    # Lines placed after the scram lines and the people line, BEFORE the
+    # catch-all cert line, where they can match.
+    beforeCatchAll: []
 
 enableSuperuserAccess: false
 
@@ -267,3 +274,58 @@ monitoring:
     # Extra labels on the PodMonitor object itself (e.g. a scraper's
     # podMonitorSelector). The chart's top-level `labels` are added too.
     labels: {}
+
+# ── Per-database client trust (optional, PLATFORM-installed) ─────────
+# Each database verifies its clients against ITS OWN CA (cert-manager),
+# not the operator's, so a certificate for one database does not work on
+# another. The platform installs this chart once per PostgreSQL cluster
+# and may turn on any part; products install only cnpg-database. All
+# off by default: a default render is unchanged. docs/authentication.md
+# has the trust model.
+trust:
+  # cert-manager's cluster resource namespace, which is ALSO the
+  # namespace trust-manager reads Bundle sources from. REQUIRED with
+  # ca.enabled or bundle.enabled.
+  namespace: ""
+  # A self-signed root Issuer and CA Certificate in `namespace`, and a
+  # ClusterIssuer named cnpg-<namespace>-<clusterName> that signs with
+  # it. The product cannot read the CA key.
+  ca:
+    enabled: false
+    duration: ""      # default 87600h
+    renewBefore: ""
+  # An approver-policy CertificateRequestPolicy: only the database
+  # namespace may request from that ClusterIssuer; client-auth usage
+  # only; CN in `roles` (plus streaming_replica); ECDSA only. Needs
+  # approver-policy with cert-manager's own approver disabled.
+  policy:
+    enabled: false
+    roles: []         # e.g. [my-app, my-owner]
+    # Who asks on behalf of a Certificate: cert-manager itself.
+    requester:
+      name: cert-manager
+      namespace: cert-manager
+  # A trust-manager Bundle delivering {clusterName}-client-ca (key
+  # ca.crt, label cnpg.io/reload) into the database namespace. Sources:
+  # the CA Secret plus extraCertificates. Needs trust-manager with
+  # secret targets enabled and authorized for that Secret name.
+  bundle:
+    enabled: false
+    # Extra PEM roots to trust, e.g. a people root for the pg_ident
+    # `people` mapping.
+    extraCertificates: []
+
+# The replication client certificate from the ClusterIssuer above, and
+# spec.certificates.clientCASecret / replicationTLSSecret on the Cluster
+# pointing at {clusterName}-client-ca and {clusterName}-replication.
+replication:
+  enabled: false
+
+# People (humans with a client certificate whose CN is their email):
+# rows of the `people` pg_ident map, and one hba line
+# `hostssl all <roles> all cert map=people` before the catch-all.
+# Only those roles are reachable through it; everything else keeps the
+# plain `cert` line. Role names starting pg_ are refused.
+people: []
+#  - email: ada@example.com
+#    role: readonly

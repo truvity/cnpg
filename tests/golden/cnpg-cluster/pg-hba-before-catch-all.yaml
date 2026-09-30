@@ -1,0 +1,80 @@
+---
+# Source: cnpg-cluster/templates/cluster.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg
+  namespace: app
+spec:
+  instances: 1
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  # Explicit on both postures: CNPG defaults enablePDB to true, so a
+  # devel single-instance cluster would otherwise get a primary PDB
+  # with 0 allowed disruptions and block node drains until the node
+  # pool's force-drain deadline (devel = no PDB).
+  enablePDB: false
+  postgresql:
+    parameters:
+      synchronous_commit: "off" # devel: fsync stays ON; test suites fly
+      shared_buffers: "64MB"
+    pg_hba:
+      - hostssl all app-owner all scram-sha-256
+      - hostssl replication all all cert
+      - hostssl all all all cert
+
+  storage:
+    size: 2Gi
+    storageClass: cnpg-gp3-delete
+    resizeInUseVolumes: true
+  resources:
+    limits:
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  affinity:
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: pg
+  bootstrap:
+    initdb:
+      database: app
+      owner: app-owner
+
+---
+# Source: cnpg-cluster/templates/databases.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-app
+  namespace: app
+spec:
+  name: app
+  owner: app-owner
+  ensure: present
+  cluster:
+    name: pg
+
+---
+# Source: cnpg-cluster/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: pg-my-app
+  namespace: app
+spec:
+  cluster:
+    name: pg
+  name: my_app
+  ensure: present
+  login: true
+  clientCertificate:
+    enabled: true
+  databaseRoleReclaimPolicy: retain

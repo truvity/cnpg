@@ -1,0 +1,144 @@
+---
+# Source: cnpg-cluster/templates/trust.yaml
+# approver-policy approves a request only when its requester may `use`
+# a policy that admits it. The requester of a Certificate is
+# cert-manager itself; bound in this namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cnpg-app-pg-policy-use
+rules:
+  - apiGroups: ["policy.cert-manager.io"]
+    resources: ["certificaterequestpolicies"]
+    verbs: ["use"]
+    resourceNames: ["cnpg-app-pg"]
+
+---
+# Source: cnpg-cluster/templates/trust.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cnpg-app-pg-policy-use
+  namespace: app
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cnpg-app-pg-policy-use
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+
+---
+# Source: cnpg-cluster/templates/trust.yaml
+# approver-policy: the ONLY namespace that may request from this
+# ClusterIssuer is app, for client-auth certificates
+# whose CN is one of the roles below (or streaming_replica), ECDSA only.
+# Anything else is denied, including DNS/IP/URI/email SANs.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: cnpg-app-pg
+spec:
+  allowed:
+    commonName:
+      required: true
+      validations:
+        - rule: "self in ['my-app', 'app_owner', 'streaming_replica']"
+          message: "the common name must be one of the declared roles or streaming_replica"
+    usages:
+      - client auth
+    isCA: false
+  constraints:
+    privateKey:
+      algorithm: ECDSA
+      minSize: 256
+      maxSize: 521
+  selector:
+    issuerRef:
+      name: cnpg-app-pg
+      kind: ClusterIssuer
+      group: cert-manager.io
+    namespace:
+      matchNames:
+        - app
+
+---
+# Source: cnpg-cluster/templates/cluster.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg
+  namespace: app
+spec:
+  instances: 1
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  # Explicit on both postures: CNPG defaults enablePDB to true, so a
+  # devel single-instance cluster would otherwise get a primary PDB
+  # with 0 allowed disruptions and block node drains until the node
+  # pool's force-drain deadline (devel = no PDB).
+  enablePDB: false
+  postgresql:
+    parameters:
+      synchronous_commit: "off" # devel: fsync stays ON; test suites fly
+      shared_buffers: "64MB"
+    pg_hba:
+      - hostssl all app-owner all scram-sha-256
+      - hostssl all all all cert
+
+  storage:
+    size: 2Gi
+    storageClass: cnpg-gp3-delete
+    resizeInUseVolumes: true
+  resources:
+    limits:
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  affinity:
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: pg
+  bootstrap:
+    initdb:
+      database: app
+      owner: app-owner
+
+---
+# Source: cnpg-cluster/templates/databases.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-app
+  namespace: app
+spec:
+  name: app
+  owner: app-owner
+  ensure: present
+  cluster:
+    name: pg
+
+---
+# Source: cnpg-cluster/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: pg-my-app
+  namespace: app
+spec:
+  cluster:
+    name: pg
+  name: my_app
+  ensure: present
+  login: true
+  clientCertificate:
+    enabled: true
+  databaseRoleReclaimPolicy: retain

@@ -1,0 +1,5 @@
+clusterName: pg
+namespace: app
+profile: devel
+people:
+  - {email: "not an email", role: readonly}

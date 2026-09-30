@@ -1,0 +1,9 @@
+clusterName: pg
+namespace: app
+profile: devel
+people:
+  - {email: ada@example.com, role: readonly}
+postgresql:
+  pgHba:
+    beforeCatchAll:
+      - hostssl all all all cert map=staff
