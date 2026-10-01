@@ -59,7 +59,11 @@ spec:
     {{- end }}
   {{- end }}
 
-  {{- if or $prod .Values.labels }}
+  {{- $backupOff := not .Values.backup.expected }}
+  {{- if and $backupOff (not .Values.backup.notExpectedReason) }}
+  {{- fail "backup.expected is false but backup.notExpectedReason is empty: say why this cluster is deliberately not backed up" }}
+  {{- end }}
+  {{- if or $prod .Values.labels $backupOff }}
   inheritedMetadata:
     {{- if $prod }}
     annotations:
@@ -67,9 +71,17 @@ spec:
       # moves stateless workloads around them instead.
       karpenter.sh/do-not-disrupt: "true"
     {{- end }}
-    {{- with .Values.labels }}
+    {{- if or .Values.labels $backupOff }}
     labels:
+      {{- with .Values.labels }}
       {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- if $backupOff }}
+      # Read by the PodMonitor (podTargetLabels) so the platform's
+      # "backup not configured" alert skips this cluster. Reaches running
+      # pods without a restart: the operator patches pod metadata in place.
+      cnpg-cluster/backup-expected: "false"
+      {{- end }}
     {{- end }}
   {{- end }}
 

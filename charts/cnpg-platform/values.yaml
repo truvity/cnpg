@@ -92,6 +92,15 @@ alerts:
     # RE2 over the scrape job; a PodMonitor's job is <namespace>/<name>.
     jobRegex: ".+/.+"
     for: 10m
+  backupNotConfigured:
+    enabled: true
+    # An instance that exports cnpg_collector_up but no barman-cloud backup
+    # series has no backups configured (CnpgBackupTooOld cannot see it).
+    # A cluster that is deliberately not backed up opts out with
+    # backup.expected=false (plus a reason) in the cnpg-cluster chart; its
+    # PodMonitor then labels the series cnpg_cluster_backup_expected="false".
+    # Needs that PodMonitor (or the same label) to be able to opt out.
+    for: 1h
   certExpiry:
     # Needs cert-manager metrics. Off until a matcher says which
     # Certificates are the database's.
