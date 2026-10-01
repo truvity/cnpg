@@ -62,6 +62,13 @@ What to fill in, by feature:
    used) first (see above); this chart renders CRs those controllers own.
 2. Render `charts/cnpg-cluster` with `profile` and, if the estate archives
    backups, `backup.bucketName` and the identity that may write to it.
+   A cluster that is deliberately not backed up (for example a rebuildable
+   index) sets `backup.expected: false` and a `backup.notExpectedReason`;
+   without that, `cnpg-platform`'s `CnpgBackupNotConfigured` warning fires
+   after an hour for any instance that exports no backup metric. The opt-out
+   travels as a pod label and a `PodMonitor` target label, so it needs the
+   chart's `PodMonitor`. Upgrading with `alerts.enabled` therefore adds one
+   rule: set `alerts.backupNotConfigured.enabled=false` to keep the old set.
 3. A product installs `charts/cnpg-database` (usually as a dependency of its
    own chart) into its own namespace, against the platform's `clusterName`,
    for its databases, roles and per-role client certificates.
