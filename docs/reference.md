@@ -185,7 +185,8 @@ Per-database client trust; the platform installs the chart once per cluster. Eve
 | `trust.policy.requester.name` / `.namespace` | string | `cert-manager` / `cert-manager` | The ServiceAccount that requests on behalf of a `Certificate`; bound in the database namespace only. |
 | `trust.bundle.enabled` | bool | `false` | Renders a trust-manager `Bundle` delivering `<clusterName>-client-ca` (key `ca.crt`, label `cnpg.io/reload`) into the database namespace. A `Bundle` is cluster-scoped and its Secret shares its name, so the cluster name must be unique across namespaces. |
 | `trust.bundle.extraCertificates` | []string (PEM) | `[]` | Extra roots in the bundle, e.g. a people root. |
-| `replication.enabled` | bool | `false` | Renders `Certificate` `<clusterName>-replication` (CN `streaming_replica`, `client auth`) from the ClusterIssuer and sets `certificates.clientCASecret: <clusterName>-client-ca` and `replicationTLSSecret: <clusterName>-replication` on the Cluster. |
+| `replication.enabled` | bool | `false` | Renders a `Certificate` (CN `streaming_replica`, `client auth`) from the ClusterIssuer and sets `certificates.clientCASecret: <clusterName>-client-ca` and `replicationTLSSecret` (the Secret name below) on the Cluster. |
+| `replication.secretName` | string | `""` | Secret the replication `Certificate` writes. Empty = `<clusterName>-replication-tls`, which never collides with the operator's own `<clusterName>-replication`, `-ca` or `-server`. See `docs/adoption.md`. |
 | `people[].email` / `.role` | string | `[]` | A row of the `people` pg_ident map and the database role the person may connect as. Roles starting `pg_` are refused. Non-empty `people` adds `hostssl all <roles> all cert map=people` before the catch-all. |
 
 A `map=` in any `pg_hba` line that names no rows (`map=people` with empty `people`, or any other map name) fails the render.

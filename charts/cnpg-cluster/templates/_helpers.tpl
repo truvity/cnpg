@@ -76,6 +76,15 @@ reject every connection that reaches it, silently, at connect time.
 {{- end -}}
 
 {{/* The per-database client CA Secret and the replication Secret. */}}
+{{/* The Secret the chart-issued replication Certificate writes. Never
+<cluster>-replication, -ca or -server: those are the names the CNPG
+operator generates itself, and cert-manager will not overwrite an
+operator-owned Secret. */}}
+{{- define "cnpg-cluster.replicationSecretName" -}}
+{{- $r := .Values.replication | default dict -}}
+{{- if $r.secretName -}}{{ $r.secretName | trim }}{{- else -}}{{ .Values.clusterName }}-replication-tls{{- end -}}
+{{- end }}
+
 {{- define "cnpg-cluster.replicationEnabled" -}}
 {{- if ((.Values.replication | default dict).enabled) -}}true{{- end -}}
 {{- end -}}

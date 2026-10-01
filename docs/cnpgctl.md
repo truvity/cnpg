@@ -54,7 +54,7 @@ Secret the cluster does not use) and never fails the run.
 | recoverability window | `status.firstRecoverabilityPoint` is set |
 | last backup recent | `status.lastSuccessfulBackup` is within `--max-backup-age` |
 | TLS server certificate | the Secret named by `spec.certificates.serverTLSSecret` is labelled `cnpg.io/reload: "true"` and its certificate is valid for `--min-cert-validity` |
-| TLS server CA, client CA, replication certificate | same, for `spec.certificates.serverCASecret` / `clientCASecret` / `replicationTLSSecret`; when the spec does not name one, the contract name `<cluster>-server-ca`, `<cluster>-client-ca`, `<cluster>-replication` is checked if the Secret exists, and skipped if not |
+| TLS server CA, client CA, replication certificate | same, for `spec.certificates.serverCASecret` / `clientCASecret` / `replicationTLSSecret`; when the spec does not name one, the contract name `<cluster>-server-ca`, `<cluster>-client-ca`, `<cluster>-replication` is checked (the chart names its replication Secret in the spec, so this fallback applies only to hand-written Clusters) if the Secret exists, and skipped if not |
 | Secret `<name>` reload label | every user-provided Secret the `Cluster` references (the certificate Secrets above, `superuserSecret`, `bootstrap.initdb.secret`, managed roles' `passwordSecret`, `externalClusters` credentials) carries `cnpg.io/reload: "true"` |
 | pg_hba has no trust | no `spec.postgresql.pg_hba` line uses `trust` |
 | pg_hba maps have pg_ident rows | every `map=NAME` has at least one `spec.postgresql.pg_ident` row for `NAME` |

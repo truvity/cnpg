@@ -82,10 +82,10 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: pg-replication
+  name: pg-replication-tls
   namespace: app
 spec:
-  secretName: pg-replication
+  secretName: pg-replication-tls
   commonName: streaming_replica
   usages:
     - client auth
@@ -161,7 +161,7 @@ spec:
     # our own replication certificate: the operator accepts a client CA
     # without its key only when replicationTLSSecret is given too.
     clientCASecret: pg-client-ca
-    replicationTLSSecret: pg-replication
+    replicationTLSSecret: pg-replication-tls
   inheritedMetadata:
     annotations:
       # Instance pods must never be consolidation victims — Karpenter

@@ -364,9 +364,17 @@ trust:
 
 # The replication client certificate from the ClusterIssuer above, and
 # spec.certificates.clientCASecret / replicationTLSSecret on the Cluster
-# pointing at {clusterName}-client-ca and {clusterName}-replication.
+# pointing at {clusterName}-client-ca and the replication Secret below.
 replication:
   enabled: false
+  # Name of the Secret the replication Certificate writes (and the Cluster
+  # reads). Empty = {clusterName}-replication-tls. It must not be
+  # {clusterName}-replication, -ca or -server: the CNPG operator generates
+  # Secrets with those names when it manages certificates itself, and
+  # cert-manager never overwrites a Secret it did not issue. Set it to
+  # {clusterName}-replication only when no operator Secret of that name
+  # exists any more.
+  secretName: ""
 
 # People (humans with a client certificate whose CN is their email):
 # rows of the `people` pg_ident map, and one hba line

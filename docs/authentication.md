@@ -20,7 +20,7 @@ Issuer (self-signed)  ->  CA Certificate  (Secret in trust.namespace, holds the 
                       ClusterIssuer cnpg-<namespace>-<cluster>
                               |  (only the database namespace, only the listed CNs:
                               |   CertificateRequestPolicy)
-        Certificate <cluster>-replication, and one per role (cnpg-database)
+        Certificate <cluster>-replication-tls, and one per role (cnpg-database)
                               |
 Bundle <cluster>-client-ca  ->  Secret <cluster>-client-ca  (ca.crt only, no key)
                               |
