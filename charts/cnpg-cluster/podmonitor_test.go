@@ -238,3 +238,49 @@ func TestPodMonitor_SchemaRejects(t *testing.T) {
 	_, err = renderDocs(t, v)
 	require.Error(t, err)
 }
+
+// TestBackupNotExpected: opting out of the backup alert labels the instance
+// pods and has the PodMonitor copy the label onto the series; the default
+// render carries neither, and an opt-out without a reason fails.
+func TestBackupNotExpected(t *testing.T) {
+	const key = "cnpg-cluster/backup-expected"
+
+	podLabels := func(docs map[string][]map[string]any) map[string]any {
+		require.Len(t, docs["Cluster"], 1)
+
+		spec := docs["Cluster"][0]["spec"].(map[string]any)
+		im, ok := spec["inheritedMetadata"].(map[string]any)
+		if !ok {
+			return nil
+		}
+
+		l, _ := im["labels"].(map[string]any)
+
+		return l
+	}
+
+	def, err := renderDocsAPI(t, baseValues(), podMonitorAPI)
+	require.NoError(t, err)
+	assert.NotContains(t, podLabels(def), key)
+	assert.NotContains(t, def["PodMonitor"][0]["spec"], "podTargetLabels")
+
+	explicit := baseValues()
+	explicit["backup"] = map[string]any{"expected": true}
+	got, err := renderDocsAPI(t, explicit, podMonitorAPI)
+	require.NoError(t, err)
+	assert.Equal(t, def, got, "expected: true is the default render")
+
+	v := baseValues()
+	v["labels"] = map[string]any{"example.com/tier": "primary"}
+	v["backup"] = map[string]any{"expected": false, "notExpectedReason": "rebuildable index"}
+	off, err := renderDocsAPI(t, v, podMonitorAPI)
+	require.NoError(t, err)
+	assert.Equal(t, "false", podLabels(off)[key])
+	assert.Equal(t, "primary", podLabels(off)["example.com/tier"], "user labels are kept")
+	assert.Equal(t, []any{key}, off["PodMonitor"][0]["spec"].(map[string]any)["podTargetLabels"])
+
+	v["backup"] = map[string]any{"expected": false}
+	_, err = renderDocsAPI(t, v, podMonitorAPI)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "backup.notExpectedReason is empty")
+}

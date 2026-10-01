@@ -12,3 +12,5 @@ alerts:
     enabled: false
   scrapeDown:
     enabled: false
+  backupNotConfigured:
+    enabled: false

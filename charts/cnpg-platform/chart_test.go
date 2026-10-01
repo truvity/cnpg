@@ -59,6 +59,7 @@ func TestAlertRulesNameTheirMetricAndThreshold(t *testing.T) {
 		"CnpgWalVolumeFillingUp":        "kubelet_volume_stats_available_bytes",
 		"CnpgInstanceExporterDown":      "cnpg_collector_up",
 		"CnpgInstanceScrapeDown":        "up{",
+		"CnpgBackupNotConfigured":       "unless on (namespace, pod) barman_cloud_cloudnative_pg_io_last_available_backup_timestamp",
 	}
 
 	got := map[string]bool{}
@@ -136,4 +137,38 @@ func TestAbsenceGuardsFollowTheSelectorAndSwitches(t *testing.T) {
 	got = exprs("alerts.scrapeDown.enabled=false")
 	assert.NotContains(t, got, "CnpgInstanceScrapeDown")
 	assert.Contains(t, got, "CnpgInstanceExporterDown")
+}
+
+// TestBackupNotConfigured: the rule is cnpg_collector_up unless the barman
+// series exists for the same (namespace, pod), skips clusters that opted out
+// with cnpg_cluster_backup_expected="false", follows alerts.selector, is a
+// warning, and has its own switch and `for`.
+func TestBackupNotConfigured(t *testing.T) {
+	rule := func(sets ...string) map[string]any {
+		docs := render(t, append([]string{"alerts.enabled=true"}, sets...)...)
+		rules := docs[0]["spec"].(map[string]any)["groups"].([]any)[0].(map[string]any)["rules"].([]any)
+
+		for _, r := range rules {
+			if m := r.(map[string]any); m["alert"] == "CnpgBackupNotConfigured" {
+				return m
+			}
+		}
+
+		return nil
+	}
+
+	const tail = ` unless on (namespace, pod) barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`
+
+	r := rule()
+	require.NotNil(t, r)
+	assert.Equal(t, `cnpg_collector_up{cnpg_cluster_backup_expected!="false"}`+tail, r["expr"])
+	assert.Equal(t, "warning", r["labels"].(map[string]any)["severity"])
+	assert.Equal(t, "1h", r["for"])
+	assert.Contains(t, r["annotations"].(map[string]any)["description"], "backup.expected=false")
+
+	r = rule("alerts.selector=namespace=~\"pg-.*\"", "alerts.backupNotConfigured.for=3h")
+	assert.Equal(t, `cnpg_collector_up{namespace=~"pg-.*", cnpg_cluster_backup_expected!="false"}`+tail, r["expr"])
+	assert.Equal(t, "3h", r["for"])
+
+	assert.Nil(t, rule("alerts.backupNotConfigured.enabled=false"))
 }

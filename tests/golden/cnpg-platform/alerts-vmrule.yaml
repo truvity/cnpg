@@ -45,3 +45,11 @@ spec:
           annotations:
             summary: "The metrics of {{ $labels.pod }} are not being scraped"
             description: "The scrape target of a CloudNativePG instance has been down: its exporter is hung or unreachable (a network policy, a TLS mismatch), so the lag, archiving and HA rules cannot see the instance."
+        - alert: CnpgBackupNotConfigured
+          expr: "cnpg_collector_up{namespace=~\"pg-.*\", cnpg_cluster_backup_expected!=\"false\"} unless on (namespace, pod) barman_cloud_cloudnative_pg_io_last_available_backup_timestamp"
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "No backup is configured for {{ $labels.pod }}"
+            description: "The instance exports no barman-cloud backup metric, so CnpgBackupTooOld cannot see it: backups are not configured. Configure them, or, if this cluster is deliberately not backed up, opt out in the cnpg-cluster chart with backup.expected=false and a backup.notExpectedReason."
