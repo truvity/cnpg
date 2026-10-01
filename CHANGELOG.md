@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.3.0
 
 - **Feature:** `cnpg-cluster` can use an existing server TLS Secret and server CA Secret by name. New optional values `serverTLS.existingSecret` (a `kubernetes.io/tls` Secret) and `serverTLS.existingCASecret` (a Secret holding `ca.crt`), both empty by default: when set, the Cluster gets `spec.certificates.serverTLSSecret` / `serverCASecret` with those names and the chart renders no `Certificate`, `Issuer` or CA `Secret` for the server side, so a cluster whose clients already verify an existing CA keeps that CA. The render fails when only one of the two is set, or when they are combined with `serverTLS.issuerRef`. The chart does not own these Secrets: their producer must label them `cnpg.io/reload`, or CloudNativePG does not serve a renewed certificate until the instance restarts. A default render is byte-identical. See `docs/reference.md`.
 
