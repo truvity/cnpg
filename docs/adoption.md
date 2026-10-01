@@ -74,6 +74,32 @@ field for field — `profile`, `instances`, `storage`, `resources`,
 and diff the render against `kubectl get cluster <name> -o yaml` before
 applying. A diff at this step is a value to add, not a migration to plan.
 
+### Operator-generated Secrets are left behind
+
+A Cluster the operator used to manage certificates for owns three Secrets
+the operator generated: `<cluster>-replication`, `<cluster>-ca` and
+`<cluster>-server` (owned by the Cluster, labelled
+`app.kubernetes.io/managed-by: cloudnative-pg`). The chart never uses those
+names: the replication Certificate writes `<cluster>-replication-tls`
+(`replication.secretName`), the server side uses `<cluster>-server-tls` and
+`<cluster>-server-ca`, and the client CA is `<cluster>-client-ca`. A chart
+Certificate that wrote an operator-named Secret would be stuck in
+`IncorrectIssuer` (cert-manager does not overwrite a Secret it did not
+issue) while the Cluster, already pointing at the per-database client CA,
+failed with `x509: certificate signed by unknown authority`.
+
+After adoption the three operator Secrets are unused. Wait until the
+Cluster is `Ready` on the chart's Secrets
+(`kubectl get cluster app-db -o jsonpath='{.spec.certificates}'`), then
+delete them:
+
+```sh
+kubectl -n app delete secret app-db-replication app-db-ca app-db-server
+```
+
+Deleting before the Cluster is Ready on the chart's Secrets makes the
+operator regenerate them.
+
 ## Breaking changes
 
 ### Unreleased — `cnpg-database` becomes the product-installed chart

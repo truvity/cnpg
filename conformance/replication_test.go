@@ -42,7 +42,7 @@ func TestReplication(t *testing.T) {
 		assert.NotContains(t, data, "ca.key", "the client CA Secret carries the CA's key")
 		assert.Equal(t, pgName+"-client-ca",
 			s.kubectl(t, "get", "cluster.postgresql.cnpg.io", pgName, "-n", appNS, "-o", "jsonpath={.spec.certificates.clientCASecret}"))
-		assert.Equal(t, pgName+"-replication",
+		assert.Equal(t, pgName+"-replication-tls",
 			s.kubectl(t, "get", "cluster.postgresql.cnpg.io", pgName, "-n", appNS, "-o", "jsonpath={.spec.certificates.replicationTLSSecret}"))
 
 		assert.Equal(t, "2", s.kubectl(t, "get", "cluster.postgresql.cnpg.io", pgName, "-n", appNS, "-o", "jsonpath={.status.readyInstances}"))
