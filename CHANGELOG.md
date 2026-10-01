@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Feature:** `cnpg-cluster` can archive to an ObjectStore it does not own. New value `backup.objectStoreName` (default empty): when set, the chart renders no `ObjectStore`, and the Cluster's barman-cloud plugin entry and the `ScheduledBackup` refer to that name instead of `<clusterName>-objectstore`. Bucket, prefix, endpoint, credentials, compression and retention are then the referenced object's. The render fails when `objectStoreName` is combined with `bucketName`, `s3Prefix`, `endpoint`, `endpointCA` or `existingSecret` (they would be silently ignored), and when `serverName` is empty (the default, `clusterName`, is only right for an archive this chart created, and a wrong guess starts a second timeline in somebody else's archive). A default render is byte-identical. This lets a platform that already mints the ObjectStore adopt a Cluster without moving its archive. See `docs/reference.md` and `docs/adoption.md`.
+
 ## v2.5.0
 
 - **Feature:** `cnpg-platform` baseline alerts gain `CnpgBackupNotConfigured` (warning, `for: 1h`): `cnpg_collector_up{cnpg_cluster_backup_expected!="false"} unless on (namespace, pod) barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`, because a cluster with no backups has no backup series and `CnpgBackupTooOld` read it as healthy. Values `alerts.backupNotConfigured.enabled` (`true`) and `.for` (`1h`), following `alerts.selector`. An install that renders the alerts gains one rule; set `enabled: false` to keep the old set.

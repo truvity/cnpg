@@ -141,3 +141,48 @@ the names but cluster.yaml.
 true
 {{- end -}}
 {{- end -}}
+
+{{/*
+The ObjectStore the Cluster's plugin and the ScheduledBackup name: the one
+the platform made (backup.objectStoreName) or, when empty, the one this
+chart renders from backup.bucketName.
+*/}}
+{{- define "cnpg-cluster.objectStoreName" -}}
+{{- .Values.backup.objectStoreName | default (printf "%s-objectstore" .Values.clusterName) -}}
+{{- end -}}
+
+{{/*
+Archiving is on when backup.enabled and the cluster has somewhere to
+archive to: a bucket this chart describes, or an ObjectStore somebody else
+owns. Prints "true" or nothing.
+*/}}
+{{- define "cnpg-cluster.backupActive" -}}
+{{- if and .Values.backup.enabled (or .Values.backup.bucketName .Values.backup.objectStoreName) -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+backup.objectStoreName names an ObjectStore this chart does not render, so
+nothing the chart would have written into one may be set beside it: it would
+be silently ignored. serverName is required, because the default
+(clusterName) is a guess about somebody else's archive layout, and a wrong
+guess starts a second timeline there.
+*/}}
+{{- define "cnpg-cluster.backupGuard" -}}
+{{- $b := .Values.backup -}}
+{{- if $b.objectStoreName -}}
+{{- if $b.bucketName -}}
+{{- fail "backup.objectStoreName and backup.bucketName are mutually exclusive: name an existing ObjectStore, or describe the bucket for this chart to render one" -}}
+{{- end -}}
+{{- if not $b.serverName -}}
+{{- fail "backup.objectStoreName needs backup.serverName: this cluster's directory inside the referenced archive (the default, clusterName, is only right for an archive this chart created)" -}}
+{{- end -}}
+{{- range $k := list "s3Prefix" "endpoint" "existingSecret" -}}
+{{- if index $b $k -}}
+{{- fail (printf "backup.%s describes an ObjectStore this chart renders, and backup.objectStoreName names one it does not: unset backup.%s" $k $k) -}}
+{{- end -}}
+{{- end -}}
+{{- if $b.endpointCA -}}
+{{- fail "backup.endpointCA describes an ObjectStore this chart renders, and backup.objectStoreName names one it does not: unset backup.endpointCA" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

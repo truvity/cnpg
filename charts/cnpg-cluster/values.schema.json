@@ -36,6 +36,7 @@
         "expected": { "type": "boolean", "description": "Whether this cluster is meant to be backed up. false opts out of the platform's 'backup not configured' alert and requires notExpectedReason." },
         "notExpectedReason": { "type": "string", "description": "Why the cluster is deliberately not backed up. Required, non-empty, when expected is false." },
         "bucketName": { "type": "string", "description": "S3 (or S3-compatible) bucket backups are written to. Empty = archiving off." },
+        "objectStoreName": { "type": "string", "description": "Name of an existing ObjectStore (barmancloud.cnpg.io) in the cluster namespace, used instead of bucketName: the chart renders no ObjectStore and the plugin and ScheduledBackup refer to this one. Requires serverName; excludes bucketName, s3Prefix, endpoint, endpointCA and existingSecret." },
         "s3Prefix": { "type": "string", "description": "Prefix under the bucket. Defaults to '{namespace}/{clusterName}/' when empty." },
         "serverName": { "type": "string", "description": "Barman server directory under the prefix. Defaults to clusterName. Bump on a recreated (fresh initdb) cluster so it does not reuse its predecessor's archive directory." },
         "schedule": { "type": "string", "description": "Cron schedule for the ScheduledBackup, e.g. '0 0 2 * * *'." },

@@ -224,7 +224,7 @@ spec:
   {{- end }}
   {{- end }}
 
-  {{- if and .Values.backup.enabled .Values.backup.bucketName }}
+  {{- if include "cnpg-cluster.backupActive" . }}
   plugins:
     - name: barman-cloud.cloudnative-pg.io
       enabled: true
@@ -232,6 +232,6 @@ spec:
       # made sense while nothing consumed the archive.
       isWALArchiver: true
       parameters:
-        barmanObjectName: {{ .Values.clusterName }}-objectstore
+        barmanObjectName: {{ include "cnpg-cluster.objectStoreName" . }}
         serverName: {{ .Values.backup.serverName | default .Values.clusterName }}
   {{- end }}

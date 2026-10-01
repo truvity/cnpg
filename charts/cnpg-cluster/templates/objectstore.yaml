@@ -1,4 +1,5 @@
-{{- if and .Values.backup.enabled .Values.backup.bucketName }}
+{{- include "cnpg-cluster.backupGuard" . }}
+{{- if and .Values.backup.enabled .Values.backup.bucketName (not .Values.backup.objectStoreName) }}
 apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
 metadata:

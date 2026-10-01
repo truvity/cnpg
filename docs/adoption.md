@@ -81,6 +81,30 @@ field for field — `profile`, `instances`, `storage`, `resources`,
 and diff the render against `kubectl get cluster <name> -o yaml` before
 applying. A diff at this step is a value to add, not a migration to plan.
 
+### Keeping the archive of the Cluster you adopt
+
+A Cluster that already archives has a barman server directory
+(`<bucket>/<prefix>/<serverName>/`) holding its base backups and WAL. Adopt it
+without moving that directory: the chart must hand the plugin the same bucket,
+prefix and `serverName`, or archiving silently starts a second timeline
+elsewhere (or `check-wal-archive` refuses it).
+
+- The chart renders the store itself: set `backup.bucketName`, leave
+  `backup.s3Prefix` empty if the old prefix was `{namespace}/{clusterName}`
+  (otherwise set it), and set `backup.serverName` to the old directory name.
+  The chart's ObjectStore is named `<clusterName>-objectstore`; a differently
+  named one that points at the same path can be deleted AFTER the Cluster
+  refers to the new one.
+- Another owner already renders the ObjectStore: set `backup.objectStoreName`
+  to its name and `backup.serverName` to the old directory; the chart renders
+  no store and the object keeps its owner, bucket, credentials and retention.
+
+Before the first sync, set `argocd.argoproj.io/sync-options:
+Prune=false,Delete=false` on the live ObjectStore: if the previous owner
+stops rendering it first, a deleted ObjectStore stalls WAL archiving.
+After the sync, `ContinuousArchiving` must be `True` and
+`cnpg_pg_stat_archiver_last_archived_time` must advance.
+
 ### Operator-generated Secrets are left behind
 
 A Cluster the operator used to manage certificates for owns three Secrets

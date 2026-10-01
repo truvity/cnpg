@@ -49,6 +49,16 @@ backup:
   expected: true
   notExpectedReason: ""
   bucketName: ""
+  # An ObjectStore that already exists in the cluster's namespace, made by
+  # something else (the platform, a stack of its own). Set it INSTEAD of
+  # bucketName: the chart then renders no ObjectStore, and the Cluster's
+  # plugin and the ScheduledBackup refer to this name. Everything the
+  # ObjectStore describes (bucket, prefix, endpoint, credentials,
+  # compression, retention) is then that object's, so s3Prefix, endpoint,
+  # endpointCA and existingSecret must stay empty, and serverName is
+  # REQUIRED: it is this cluster's directory inside that archive. Empty =
+  # the chart renders "{clusterName}-objectstore" from bucketName.
+  objectStoreName: ""
   # s3Prefix defaults to {namespace}/{clusterName}/ when empty — the
   # permission-model write scope. Override only for recovery drills.
   s3Prefix: ""
