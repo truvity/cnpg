@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.5.0
 
 - **Feature:** `cnpg-platform` baseline alerts gain `CnpgBackupNotConfigured` (warning, `for: 1h`): `cnpg_collector_up{cnpg_cluster_backup_expected!="false"} unless on (namespace, pod) barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`, because a cluster with no backups has no backup series and `CnpgBackupTooOld` read it as healthy. Values `alerts.backupNotConfigured.enabled` (`true`) and `.for` (`1h`), following `alerts.selector`. An install that renders the alerts gains one rule; set `enabled: false` to keep the old set.
 - **Feature:** `cnpg-cluster` can declare that a cluster is deliberately not backed up: `backup.expected` (default `true`) and `backup.notExpectedReason`. `expected: false` with an empty reason fails the render. It adds the pod label `cnpg-cluster/backup-expected: "false"` via `spec.inheritedMetadata.labels` (applied to running pods in place, no restart) and `podTargetLabels` on the `PodMonitor`, so the series carry `cnpg_cluster_backup_expected="false"` and the new alert skips the cluster. A default render is unchanged. See `docs/reference.md`.
