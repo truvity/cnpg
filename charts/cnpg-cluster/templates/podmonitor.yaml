@@ -45,6 +45,12 @@ spec:
     matchLabels:
       cnpg.io/cluster: {{ .Values.clusterName }}
       cnpg.io/podRole: instance
+  {{- if not .Values.backup.expected }}
+  {{- /* Copies the pod label cnpg-cluster/backup-expected onto every scraped
+  series as cnpg_cluster_backup_expected (non-alphanumerics become `_`). */}}
+  podTargetLabels:
+    - cnpg-cluster/backup-expected
+  {{- end }}
   podMetricsEndpoints:
     - port: metrics
       path: /metrics

@@ -39,6 +39,15 @@ labels: {}
 # Empty bucket = archiving off, the usual devel default.
 backup:
   enabled: false
+  # Whether this cluster is meant to be backed up. The platform's
+  # "backup not configured" alert fires for every instance that serves no
+  # backup metric, unless the cluster declares here that it is deliberately
+  # not backed up (a rebuildable index, a scratch database). false REQUIRES
+  # notExpectedReason; it labels the instance pods
+  # cnpg-cluster/backup-expected: "false" and the PodMonitor copies that onto
+  # the scraped series as cnpg_cluster_backup_expected="false".
+  expected: true
+  notExpectedReason: ""
   bucketName: ""
   # s3Prefix defaults to {namespace}/{clusterName}/ when empty — the
   # permission-model write scope. Override only for recovery drills.

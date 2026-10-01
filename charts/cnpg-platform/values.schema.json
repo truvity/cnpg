@@ -79,6 +79,14 @@
             "for": { "$ref": "#/definitions/duration" }
           }
         },
+        "backupNotConfigured": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "for": { "$ref": "#/definitions/duration" }
+          }
+        },
         "scrapeDown": {
           "type": "object",
           "additionalProperties": false,
