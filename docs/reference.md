@@ -36,6 +36,8 @@ chart renders nothing with its default values.
 | `alerts.archiving.enabled` / `.for` | bool / duration | `true` / `15m` | `CnpgWalArchivingFailing`: the last failed archive is newer than the last success. |
 | `alerts.backupAge.enabled` / `.maxAgeSeconds` / `.for` | bool / int / duration | `true` / `172800` / `30m` | `CnpgBackupTooOld`: `time() - barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`. The metric is the barman-cloud plugin sidecar's (plugin-barman-cloud v0.13.0, the release of chart 0.7.0: `internal/cnpgi/instance/metrics.go` lines 37-52 name it, 123 and 150 fill it from the ObjectStore `status.serverRecoveryWindow[server].lastSuccessfulBackupTime`; the operator relays plugin metrics under their own names). It is 0 when no backup is recorded, so a never-backed-up cluster fires too. The in-core `cnpg_collector_last_available_backup_timestamp` is deprecated since CloudNativePG 1.26 and stays 0 under the plugin, so it is not used. Set `enabled: false` if backups are taken another way. |
 | `alerts.replicationLag.enabled` / `.maxLagSeconds` / `.for` | bool / int / duration | `true` / `300` / `10m` | `CnpgReplicationLagHigh`. |
+| `alerts.exporterDown.enabled` / `.for` | bool / duration | `true` / `5m` | `CnpgInstanceExporterDown`: `cnpg_collector_up == 0`, the exporter is up but cannot reach PostgreSQL. |
+| `alerts.scrapeDown.enabled` / `.jobRegex` / `.for` | bool / string / duration | `true` / `.+/.+` / `10m` | `CnpgInstanceScrapeDown`: `up{container="postgres",job=~"<jobRegex>"} == 0`, the instance's scrape target is down. The `cnpg-cluster` PodMonitor's job is `<namespace>/<clusterName>` and its target is the `postgres` container. A target that is absent (no PodMonitor, scrape dropped) cannot fire an `up == 0` rule. |
 | `alerts.certExpiry.enabled` | bool | `false` | `CnpgCertificateExpiring` and `CnpgCertificateExpiryImminent`, from cert-manager's metric. |
 | `alerts.certExpiry.nameRegex` | string | `""` | Required when enabled: RE2 over the Certificate `name` label. |
 | `alerts.certExpiry.warnDays` / `.criticalDays` / `.for` | int / int / duration | `14` / `3` / `10m` | `warnDays` must exceed `criticalDays`. |
@@ -188,27 +190,54 @@ Per-database client trust; the platform installs the chart once per cluster. Eve
 
 A `map=` in any `pg_hba` line that names no rows (`map=people` with empty `people`, or any other map name) fails the render.
 
-### `monitoring.podMonitor` (optional)
+### `monitoring`
 
 Every instance pod serves the PostgreSQL exporter on port 9187 (port name
-`metrics`). Enabling this renders a `monitoring.coreos.com/v1` `PodMonitor`
-for the cluster's instance pods (`cnpg.io/cluster: {clusterName}`,
-`cnpg.io/podRole: instance`). It is a chart value rather than the operator's
-`Cluster.spec.monitoring.enablePodMonitor` because that field is deprecated
-upstream: the CloudNativePG 1.30 monitoring documentation ("Deprecation of
-Automatic `PodMonitor` Creation") says it will be removed and tells users to
-create the `PodMonitor` manually. The chart never sets it.
+`metrics`). By default the chart renders a `monitoring.coreos.com/v1`
+`PodMonitor` for the cluster's instance pods (`cnpg.io/cluster: {clusterName}`,
+`cnpg.io/podRole: instance`), named after the cluster, so its scrape job is
+`<namespace>/<clusterName>`. It is rendered only when the cluster serves the
+`PodMonitor` API (`.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PodMonitor"`:
+prometheus-operator, or the VictoriaMetrics operator's converter). A cluster
+without those CRDs installs unchanged and the object is simply absent;
+`helm template` cannot ask a cluster, so pass
+`--api-versions monitoring.coreos.com/v1/PodMonitor` to see it. It is a chart
+value rather than the operator's `Cluster.spec.monitoring.enablePodMonitor`
+because that field is deprecated upstream: the CloudNativePG 1.30 monitoring
+documentation ("Deprecation of Automatic `PodMonitor` Creation") says it will
+be removed and tells users to create the `PodMonitor` manually. The chart never
+sets it.
 
 | Key | Type | Default | What it does |
 |---|---|---|---|
-| `monitoring.podMonitor.enabled` | bool | `false` | Render the `PodMonitor`. Off, the render is byte-identical to earlier releases. Needs the `PodMonitor` CRD. |
+| `monitoring.podMonitor.enabled` | bool | `true` | Render the `PodMonitor` when the `PodMonitor` API is served. `false` never renders it. |
 | `monitoring.podMonitor.interval` | string | `""` | Scrape interval (e.g. `30s`). Empty = the scraper's default. |
-| `monitoring.podMonitor.metricRelabelings` | []object | `[]` | Passthrough to the endpoint. Write `action` on every rule: only the prometheus-operator CRD defaults it, and the VictoriaMetrics operator converts these objects. |
+| `monitoring.podMonitor.dropPgSettings` | bool | `true` | Drop the `cnpg_pg_settings_*` family (one series per PostgreSQL setting per instance, roughly 500-700) with a `metricRelabelings` rule. |
+| `monitoring.podMonitor.keepPgSettings` | []string | the eight settings the upstream dashboard reads | With `dropPgSettings`, the `name` values of `cnpg_pg_settings_setting` kept anyway: `block_size`, `effective_cache_size`, `maintenance_work_mem`, `max_connections`, `random_page_cost`, `seq_page_cost`, `shared_buffers`, `work_mem`. Empty = drop the whole family. |
+| `monitoring.podMonitor.metricRelabelings` | []object | `[]` | Passthrough to the endpoint, rendered AFTER the drop, so yours append. Write `action` on every rule: only the prometheus-operator CRD defaults it, and the VictoriaMetrics operator converts these objects. |
 | `monitoring.podMonitor.labels` | map | `{}` | Extra labels on the `PodMonitor` object (merged with top-level `labels`). |
+| `monitoring.networkPolicy.from` | []NetworkPolicyPeer | `[]` | Who may reach TCP 9187 on this cluster's instance pods. Non-empty renders `NetworkPolicy` `<clusterName>-metrics` (ingress, selector `cnpg.io/cluster: {clusterName}`, `cnpg.io/podRole: instance`); empty renders none. |
+| `monitoring.networkPolicy.enabled` | bool | unset | Optional. `true` with an empty `from` fails the render (an empty peer list means allow-all, so there is no default scraper); `false` suppresses the policy. |
+| `monitoring.networkPolicy.labels` | map | `{}` | Extra labels on the `NetworkPolicy` (merged with top-level `labels`). |
+
+**Labels.** The exporter already puts `cluster="<clusterName>"` on its own
+series (the CloudNativePG monitoring documentation shows
+`cnpg_collector_up{cluster="cluster-example"} 1`), and the upstream Grafana
+dashboard's `cluster` variable reads exactly that label from
+`cnpg_collector_up`; its other variables use `namespace` and `pod`, which the
+scrape adds. So the chart adds no `cluster` relabeling: with the scraper's
+default `honor_labels: false`, a target label of that name would move the
+exporter's value to `exported_cluster` and break the dashboard. The upstream
+`cluster` chart's own PodMonitor adds none either.
+
+**The `pg_settings` drop and the dashboard.** The upstream dashboard reads
+`cnpg_pg_settings_setting` for the eight settings above, so the default drop
+keeps those and removes the rest (two relabel rules: mark the kept names with a
+temporary label, then drop the family's unmarked series).
 
 The exporter is served over plain HTTP; the chart does not enable
 `spec.monitoring.tls`. A default-deny ingress policy must admit the scraper to
-port 9187 on the instance pods.
+port 9187 on the instance pods: set `monitoring.networkPolicy.from`.
 
 ### `scheduling` (estate facts — no default)
 

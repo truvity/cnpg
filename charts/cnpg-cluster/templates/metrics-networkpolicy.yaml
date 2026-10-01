@@ -1,0 +1,34 @@
+{{- /* Opens the instance metrics port (TCP 9187) to a scraper. Rendered only
+when monitoring.networkPolicy.from names who may reach it: an empty peers list
+in a NetworkPolicy ingress rule means "allow all", so there is no default
+scraper and an explicit enabled: true with no peers is refused. Selects this
+cluster's instance pods only. Without any NetworkPolicy the port is already
+reachable; this object matters where a default-deny policy is in force. */}}
+{{- $np := .Values.monitoring.networkPolicy }}
+{{- if and (hasKey $np "enabled") $np.enabled (not $np.from) }}
+{{- fail "monitoring.networkPolicy.enabled is true but monitoring.networkPolicy.from is empty: an empty peer list would allow every source, name the scraper" }}
+{{- end }}
+{{- if and $np.from (or (not (hasKey $np "enabled")) $np.enabled) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Values.clusterName }}-metrics
+  namespace: {{ .Values.namespace }}
+  {{- with (merge (dict) ($np.labels | default dict) (.Values.labels | default dict)) }}
+  labels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: {{ .Values.clusterName }}
+      cnpg.io/podRole: instance
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        {{- toYaml $np.from | nindent 8 }}
+      ports:
+        - port: 9187
+          protocol: TCP
+{{- end }}

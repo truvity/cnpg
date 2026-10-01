@@ -4,3 +4,5 @@ alerts:
   backupAge: {enabled: false}
   replicationLag: {enabled: false}
   walDisk: {enabled: false}
+  exporterDown: {enabled: false}
+  scrapeDown: {enabled: false}

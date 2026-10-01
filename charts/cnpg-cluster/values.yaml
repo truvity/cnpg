@@ -257,33 +257,69 @@ scheduling:
   #  - key: arch
   #    operator: Exists
 
-# ── Monitoring (optional) ────────────────────────────────────────────
+# ── Monitoring ───────────────────────────────────────────────────────
 # Every instance pod serves the PostgreSQL exporter on port 9187 (port
 # name `metrics`, path /metrics). Nothing scrapes it unless a scraper is
-# told to. With podMonitor.enabled the chart renders a
-# monitoring.coreos.com/v1 PodMonitor for this cluster's instance pods.
-# Needs the PodMonitor CRD (prometheus-operator, or the VictoriaMetrics
-# operator's converter); default off, so a default render is unchanged.
+# told to, so the chart renders a monitoring.coreos.com/v1 PodMonitor for
+# this cluster's instance pods BY DEFAULT -- but only when the cluster
+# serves that API (.Capabilities.APIVersions: prometheus-operator, or the
+# VictoriaMetrics operator's converter). Without the CRDs nothing is
+# rendered and the install is unchanged. `helm template` cannot ask a
+# cluster: add --api-versions monitoring.coreos.com/v1/PodMonitor.
 #
 # Why here and not in the operator: Cluster.spec.monitoring.enablePodMonitor
 # is DEPRECATED upstream ("will be removed in a future version of the
 # operator"; CloudNativePG 1.30 docs, monitoring, "Deprecation of Automatic
 # PodMonitor Creation") -- create the PodMonitor yourself, as this does.
 # The chart never sets the deprecated field.
+#
+# Labels: the exporter already puts `cluster="<clusterName>"` on its own
+# series (e.g. cnpg_collector_up), which is what the upstream Grafana
+# dashboard reads. The chart therefore adds no `cluster` relabeling (a target
+# label of that name would move the exporter's to exported_cluster).
 monitoring:
   podMonitor:
-    enabled: false
+    # Render the PodMonitor when the PodMonitor API is served.
+    enabled: true
     # e.g. "30s". Empty = the scraper's own default.
     interval: ""
-    # Passed through to the endpoint. Write `action` explicitly on every
-    # rule: only the prometheus-operator CRD defaults it, and the
-    # VictoriaMetrics operator converts these objects.
+    # Drop the cnpg_pg_settings_* family before it is stored: one series per
+    # PostgreSQL setting per instance (roughly 500-700), rarely queried.
+    dropPgSettings: true
+    # With dropPgSettings, the settings (the `name` label of
+    # cnpg_pg_settings_setting) that are kept anyway: the ones the upstream
+    # CloudNativePG Grafana dashboard reads. Empty = drop the whole family.
+    keepPgSettings:
+      - block_size
+      - effective_cache_size
+      - maintenance_work_mem
+      - max_connections
+      - random_page_cost
+      - seq_page_cost
+      - shared_buffers
+      - work_mem
+    # Passed through to the endpoint AFTER the drop above, so yours append.
+    # Write `action` explicitly on every rule: only the prometheus-operator
+    # CRD defaults it, and the VictoriaMetrics operator converts these
+    # objects.
     metricRelabelings: []
     #  - action: drop
     #    sourceLabels: [__name__]
-    #    regex: cnpg_pg_settings_setting
+    #    regex: cnpg_pg_stat_statements_.*
     # Extra labels on the PodMonitor object itself (e.g. a scraper's
     # podMonitorSelector). The chart's top-level `labels` are added too.
+    labels: {}
+  # Ingress NetworkPolicy to TCP 9187 on this cluster's instance pods,
+  # rendered ONLY when `from` is non-empty. There is no default scraper: an
+  # empty peer list would allow every source, so `enabled: true` with an empty
+  # `from` fails the render. Leave `enabled` unset to render exactly when
+  # `from` is set; `enabled: false` suppresses it.
+  networkPolicy:
+    # Standard NetworkPolicyPeer entries, e.g.
+    #  - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+    #    podSelector: {matchLabels: {app.kubernetes.io/name: vmagent}}
+    from: []
+    # Extra labels on the NetworkPolicy (merged with top-level `labels`).
     labels: {}
 
 # ── Per-database client trust (optional, PLATFORM-installed) ─────────

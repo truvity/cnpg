@@ -57,6 +57,8 @@ func TestAlertRulesNameTheirMetricAndThreshold(t *testing.T) {
 		"CnpgCertificateExpiring":       "certmanager_certificate_expiration_timestamp_seconds",
 		"CnpgCertificateExpiryImminent": "certmanager_certificate_expiration_timestamp_seconds",
 		"CnpgWalVolumeFillingUp":        "kubelet_volume_stats_available_bytes",
+		"CnpgInstanceExporterDown":      "cnpg_collector_up",
+		"CnpgInstanceScrapeDown":        "up{",
 	}
 
 	got := map[string]bool{}
@@ -100,4 +102,38 @@ func TestMetricsPolicySelectsInstancesOnly(t *testing.T) {
 		assert.Equal(t, "cnpg.io/cluster", sel["key"])
 		assert.Equal(t, "Exists", sel["operator"])
 	}
+}
+
+// TestAbsenceGuardsFollowTheSelectorAndSwitches: the exporter-down and
+// scrape-down rules carry alerts.selector, scrape-down is scoped to a
+// PodMonitor job's postgres container, and each has its own switch.
+func TestAbsenceGuardsFollowTheSelectorAndSwitches(t *testing.T) {
+	exprs := func(sets ...string) map[string]string {
+		docs := render(t, append([]string{"alerts.enabled=true"}, sets...)...)
+		rules := docs[0]["spec"].(map[string]any)["groups"].([]any)[0].(map[string]any)["rules"].([]any)
+		out := map[string]string{}
+
+		for _, r := range rules {
+			rule := r.(map[string]any)
+			out[rule["alert"].(string)] = rule["expr"].(string)
+		}
+
+		return out
+	}
+
+	got := exprs("alerts.selector=namespace=~\"pg-.*\"")
+	assert.Equal(t, `cnpg_collector_up{namespace=~"pg-.*"} == 0`, got["CnpgInstanceExporterDown"])
+	assert.Equal(t, `up{container="postgres",job=~".+/.+", namespace=~"pg-.*"} == 0`, got["CnpgInstanceScrapeDown"])
+
+	got = exprs()
+	assert.Equal(t, `cnpg_collector_up{} == 0`, got["CnpgInstanceExporterDown"])
+	assert.Equal(t, `up{container="postgres",job=~".+/.+"} == 0`, got["CnpgInstanceScrapeDown"])
+
+	got = exprs("alerts.exporterDown.enabled=false", "alerts.scrapeDown.jobRegex=pg/.+")
+	assert.NotContains(t, got, "CnpgInstanceExporterDown")
+	assert.Contains(t, got["CnpgInstanceScrapeDown"], `job=~"pg/.+"`)
+
+	got = exprs("alerts.scrapeDown.enabled=false")
+	assert.NotContains(t, got, "CnpgInstanceScrapeDown")
+	assert.Contains(t, got, "CnpgInstanceExporterDown")
 }
