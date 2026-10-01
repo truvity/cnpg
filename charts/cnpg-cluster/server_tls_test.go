@@ -170,3 +170,47 @@ func TestServerTLS_ReloadLabelMergesWithChartLabels(t *testing.T) {
 	assert.Equal(t, map[string]any{"app.kubernetes.io/part-of": "app"}, field(docs["Certificate"][0], "metadata", "labels"))
 	assert.Equal(t, map[string]any{"cnpg.io/reload": "true"}, field(docs["Certificate"][0], "spec", "secretTemplate", "labels"))
 }
+
+// TestServerTLS_ExistingSecretsByName: naming both Secrets points the
+// Cluster at them and renders nothing for the server side.
+func TestServerTLS_ExistingSecretsByName(t *testing.T) {
+	docs, err := renderDocs(t, tlsValues(map[string]any{
+		"existingSecret":   "app-db-server-tls",
+		"existingCASecret": "app-db-server-ca",
+	}))
+	require.NoError(t, err)
+
+	require.Len(t, docs["Cluster"], 1)
+	assert.Equal(t, map[string]any{
+		"serverTLSSecret": "app-db-server-tls",
+		"serverCASecret":  "app-db-server-ca",
+	}, field(docs["Cluster"][0], "spec", "certificates"))
+	assert.Empty(t, docs["Certificate"])
+	assert.Empty(t, docs["Issuer"])
+	assert.Empty(t, docs["Secret"])
+}
+
+// TestServerTLS_ExistingSecretsNeedBoth: one name alone is refused.
+func TestServerTLS_ExistingSecretsNeedBoth(t *testing.T) {
+	for _, one := range []map[string]any{
+		{"existingSecret": "app-db-server-tls"},
+		{"existingCASecret": "app-db-server-ca"},
+	} {
+		_, err := renderDocs(t, tlsValues(one))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "go together")
+	}
+}
+
+// TestServerTLS_ExistingSecretsExcludeIssuer: the chart's own Certificate
+// and names-only mode are mutually exclusive.
+func TestServerTLS_ExistingSecretsExcludeIssuer(t *testing.T) {
+	_, err := renderDocs(t, tlsValues(map[string]any{
+		"issuerRef":        map[string]any{"name": "example-issuer", "kind": "ClusterIssuer"},
+		"caCertificates":   testRoots,
+		"existingSecret":   "app-db-server-tls",
+		"existingCASecret": "app-db-server-ca",
+	}))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot be combined with serverTLS.issuerRef")
+}

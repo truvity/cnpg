@@ -146,6 +146,29 @@ the `{clusterName}-server-ca` Secret carries the same label. CloudNativePG
 reloads a user-provided server Secret only when it has that label; without
 it a renewed certificate is not served until the instance restarts.
 
+#### Names-only mode: Secrets that already exist
+
+When something else already mints the server certificate Secret and the
+server CA Secret (for example `app-db-server-tls` and `app-db-server-ca`) and
+clients verify against that CA, name them and the chart renders nothing for
+the server side:
+
+| Key | Type | Default | What it does |
+|---|---|---|---|
+| `serverTLS.existingSecret` | string | `""` | Name of an existing `kubernetes.io/tls` Secret. Becomes `spec.certificates.serverTLSSecret`. |
+| `serverTLS.existingCASecret` | string | `""` | Name of an existing Secret holding the CA in `ca.crt`. Becomes `spec.certificates.serverCASecret`. |
+
+No `Certificate`, `Issuer` or CA `Secret` is rendered for the server side;
+the client CA, replication and trust objects are unaffected. The render
+fails when only one of the two names is set, and when they are combined with
+`serverTLS.issuerRef` (the chart cannot both request the certificate and use
+one that exists).
+
+The chart does not own these Secrets, so their producer must label them
+`cnpg.io/reload` (any value, for example `""`): CloudNativePG reloads a
+referenced Secret only with that label, otherwise a renewed certificate is not
+served until the instance restarts.
+
 ### `trust`, `replication`, `people` (optional, platform-installed)
 
 Per-database client trust; the platform installs the chart once per cluster. Everything is off by default and a default render is unchanged. Model and ordering: [`authentication.md`](authentication.md).

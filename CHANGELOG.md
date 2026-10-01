@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Feature:** `cnpg-cluster` can use an existing server TLS Secret and server CA Secret by name. New optional values `serverTLS.existingSecret` (a `kubernetes.io/tls` Secret) and `serverTLS.existingCASecret` (a Secret holding `ca.crt`), both empty by default: when set, the Cluster gets `spec.certificates.serverTLSSecret` / `serverCASecret` with those names and the chart renders no `Certificate`, `Issuer` or CA `Secret` for the server side, so a cluster whose clients already verify an existing CA keeps that CA. The render fails when only one of the two is set, or when they are combined with `serverTLS.issuerRef`. The chart does not own these Secrets: their producer must label them `cnpg.io/reload`, or CloudNativePG does not serve a renewed certificate until the instance restarts. A default render is byte-identical. See `docs/reference.md`.
+
 ## v2.2.1
 
 - **Fix:** `CnpgBackupTooOld` in `cnpg-platform` read `cnpg_collector_last_available_backup_timestamp`, which CloudNativePG deprecated in 1.26 and which only moves for the in-core Barman Cloud backup or volume snapshots; with the barman-cloud plugin (what `examples/operator/` installs) it stays 0, so the rule fired permanently and could never detect a stale backup. It now reads `barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`, the plugin sidecar's own metric (plugin-barman-cloud v0.13.0, chart 0.7.0). A cluster that backs up another way should set `alerts.backupAge.enabled=false`. Every other rule is unchanged, and each keeps its own `enabled`, threshold and `for` inputs.

@@ -13,7 +13,7 @@ announces.**
   (`alpha.cnpg.io/failoverQuorum`) unconditionally.
 - The `barman-cloud.cloudnative-pg.io` plugin, when `backup.enabled` or a
   `recovery` bootstrap is used.
-- `cert-manager`, only if `serverTLS.issuerRef.name` is set.
+- `cert-manager`, only if `serverTLS.issuerRef.name` is set (not needed for `serverTLS.existingSecret`/`existingCASecret`, which only name Secrets that already exist).
 - Nothing else. `scheduling`, `backup.encryption`, `backup.endpoint` and
   every identity-shaped value are plain inputs with empty defaults — see
   README "Install and a worked example" for two different estates' shapes.

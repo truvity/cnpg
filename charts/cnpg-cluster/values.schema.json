@@ -226,7 +226,9 @@
         "duration": { "type": "string" },
         "renewBefore": { "type": "string" },
         "privateKey": { "type": "object", "description": "Passed through to the Certificate's spec.privateKey, e.g. {algorithm: ECDSA, size: 384}." },
-        "caCertificates": { "type": "string", "description": "PEM roots that verify the issued chain. Required when issuerRef.name is set." }
+        "caCertificates": { "type": "string", "description": "PEM roots that verify the issued chain. Required when issuerRef.name is set." },
+        "existingSecret": { "type": "string", "description": "Names-only mode: an existing kubernetes.io/tls Secret for the server certificate. Set together with existingCASecret, not with issuerRef. Its producer must label it cnpg.io/reload." },
+        "existingCASecret": { "type": "string", "description": "Names-only mode: an existing Secret holding the server CA in ca.crt. Set together with existingSecret, not with issuerRef. Its producer must label it cnpg.io/reload." }
       }
     },
     "trust": {

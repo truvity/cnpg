@@ -228,6 +228,17 @@ serverTLS:
   # puts the intermediate there, and libpq will not accept a trust anchor
   # that is not self-signed.
   caCertificates: ""
+  # Names-only mode: a kubernetes.io/tls Secret and a CA Secret (key
+  # ca.crt) that something else already mints, e.g. "app-db-server-tls" and
+  # "app-db-server-ca". The Cluster's spec.certificates.serverTLSSecret /
+  # serverCASecret point at them and the chart renders NO Certificate,
+  # Issuer or CA Secret for the server side. Set BOTH or neither, and not
+  # together with issuerRef: the render refuses either mistake.
+  # The chart does not own these Secrets, so their producer must label them
+  # cnpg.io/reload (any value, e.g. ""); CloudNativePG reloads a referenced
+  # Secret only with it, else a renewal is not served until a restart.
+  existingSecret: ""
+  existingCASecret: ""
 
 # Node placement. ESTATE FACTS (C13): a pool name and a node taint are
 # one platform's shape, not a property of this chart, so neither has a
