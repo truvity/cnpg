@@ -6,3 +6,4 @@ alerts:
   walDisk: {enabled: false}
   exporterDown: {enabled: false}
   scrapeDown: {enabled: false}
+  backupNotConfigured: {enabled: false}
