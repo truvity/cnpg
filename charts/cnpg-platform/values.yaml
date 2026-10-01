@@ -77,6 +77,21 @@ alerts:
     enabled: true
     maxLagSeconds: 300
     for: 10m
+  # Guards against silent absence: the rules above read cnpg_* series, and
+  # an instance whose exporter or scrape is down simply stops producing
+  # them, which looks healthy.
+  exporterDown:
+    enabled: true
+    # cnpg_collector_up == 0: the exporter runs but cannot reach PostgreSQL.
+    for: 5m
+  scrapeDown:
+    enabled: true
+    # up == 0 on the `postgres` container of a PodMonitor target (needs the
+    # cnpg-cluster chart's PodMonitor or an equivalent). Absent targets
+    # (no PodMonitor, scrape dropped) cannot fire an `up == 0` rule.
+    # RE2 over the scrape job; a PodMonitor's job is <namespace>/<name>.
+    jobRegex: ".+/.+"
+    for: 10m
   certExpiry:
     # Needs cert-manager metrics. Off until a matcher says which
     # Certificates are the database's.

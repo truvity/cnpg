@@ -286,16 +286,27 @@
     "monitoring": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Optional metrics scraping of the instance pods.",
+      "description": "Metrics scraping of the instance pods.",
       "properties": {
         "podMonitor": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean", "description": "Render a monitoring.coreos.com/v1 PodMonitor for the instance pods (port metrics, /metrics). Default false." },
+            "enabled": { "type": "boolean", "description": "Render a monitoring.coreos.com/v1 PodMonitor for the instance pods (port metrics, /metrics) when the cluster serves that API. Default true." },
             "interval": { "type": "string", "description": "Scrape interval, e.g. 30s. Empty = the scraper's default." },
-            "metricRelabelings": { "type": "array", "items": { "type": "object" }, "description": "Passed through to the endpoint; write action explicitly on every rule." },
+            "dropPgSettings": { "type": "boolean", "description": "Drop the cnpg_pg_settings_* metric family (roughly 500-700 series per instance). Default true." },
+            "keepPgSettings": { "type": "array", "items": { "type": "string", "pattern": "^[A-Za-z0-9_.]+$" }, "description": "Settings (the name label of cnpg_pg_settings_setting) kept when dropPgSettings is on. Empty = drop the whole family." },
+            "metricRelabelings": { "type": "array", "items": { "type": "object" }, "description": "Passed through to the endpoint after the pg_settings drop; write action explicitly on every rule." },
             "labels": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Extra labels on the PodMonitor object." }
+          }
+        },
+        "networkPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "description": "Optional. Unset = render exactly when from is non-empty. true with an empty from fails the render; false suppresses the object." },
+            "from": { "type": "array", "items": { "type": "object" }, "description": "NetworkPolicyPeer entries allowed to reach the metrics port (TCP 9187). Empty = no NetworkPolicy." },
+            "labels": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Extra labels on the NetworkPolicy." }
           }
         }
       }

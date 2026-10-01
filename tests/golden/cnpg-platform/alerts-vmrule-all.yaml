@@ -67,3 +67,21 @@ spec:
           annotations:
             summary: "WAL volume {{ $labels.persistentvolumeclaim }} is nearly full"
             description: "Less than 0.25 of the volume is free. A full WAL volume stops the instance."
+        - alert: CnpgInstanceExporterDown
+          expr: "cnpg_collector_up{} == 0"
+          for: 5m
+          labels:
+            severity: critical
+            team: data
+          annotations:
+            summary: "The metrics exporter on {{ $labels.pod }} cannot reach PostgreSQL"
+            description: "cnpg_collector_up is 0: the instance's exporter is up but its database connection is not, so the cnpg_pg_* series the other rules read are missing or stale."
+        - alert: CnpgInstanceScrapeDown
+          expr: "up{container=\"postgres\",job=~\".+/.+\"} == 0"
+          for: 10m
+          labels:
+            severity: critical
+            team: data
+          annotations:
+            summary: "The metrics of {{ $labels.pod }} are not being scraped"
+            description: "The scrape target of a CloudNativePG instance has been down: its exporter is hung or unreachable (a network policy, a TLS mismatch), so the lag, archiving and HA rules cannot see the instance."

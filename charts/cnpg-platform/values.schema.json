@@ -71,6 +71,23 @@
             "critical": { "type": "string", "minLength": 1 }
           }
         },
+        "exporterDown": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "for": { "$ref": "#/definitions/duration" }
+          }
+        },
+        "scrapeDown": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "jobRegex": { "type": "string", "minLength": 1 },
+            "for": { "$ref": "#/definitions/duration" }
+          }
+        },
         "archiving": {
           "type": "object",
           "additionalProperties": false,

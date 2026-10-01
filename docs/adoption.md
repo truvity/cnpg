@@ -49,7 +49,7 @@ What to fill in, by feature:
   rule selector needs, and narrow every expression with `alerts.selector`.
   The certificate rule is off until `alerts.certExpiry.nameRegex` says which
   Certificates are the database's. The rules read `cnpg_*` instance metrics
-  (enable `monitoring.podMonitor` on `cnpg-cluster` to have them scraped),
+  (`cnpg-cluster` renders a `PodMonitor` for them by default where the PodMonitor API is served; see `monitoring.podMonitor`),
   cert-manager's expiry metric and the kubelet's volume stats.
 - **Role guard.** `admission.databaseRoleGuard.namespaceSelector` is required
   and must not be empty: the guard covers exactly the namespaces it selects.

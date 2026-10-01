@@ -23,13 +23,26 @@ const testRoots = "-----BEGIN CERTIFICATE-----\nroot-one\n-----END CERTIFICATE--
 func renderDocs(t *testing.T, values map[string]any) (map[string][]map[string]any, error) {
 	t.Helper()
 
+	return renderDocsAPI(t, values)
+}
+
+// renderDocsAPI is renderDocs on a cluster that serves the given API
+// versions (helm template --api-versions), e.g. the PodMonitor CRD.
+func renderDocsAPI(t *testing.T, values map[string]any, apis ...string) (map[string][]map[string]any, error) {
+	t.Helper()
+
 	raw, err := yaml.Marshal(values)
 	require.NoError(t, err)
 
 	file := filepath.Join(t.TempDir(), "values.yaml")
 	require.NoError(t, os.WriteFile(file, raw, 0o600))
 
-	out, err := exec.CommandContext(t.Context(), "helm", "template", "pg", ".", "-f", file).CombinedOutput()
+	args := []string{"template", "pg", ".", "-f", file}
+	for _, a := range apis {
+		args = append(args, "--api-versions", a)
+	}
+
+	out, err := exec.CommandContext(t.Context(), "helm", args...).CombinedOutput()
 	if err != nil {
 		return nil, &renderError{out: string(out)}
 	}
