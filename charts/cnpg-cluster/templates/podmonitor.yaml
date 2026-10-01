@@ -23,6 +23,9 @@ settings first and drop the unmarked rest. */}}
 {{- range $pm.keepPgSettings }}{{ $names = append $names (regexQuoteMeta .) }}{{ end }}
 {{- $relabelings = append $relabelings (dict "action" "replace" "sourceLabels" (list "__name__" "name") "separator" ";" "regex" (printf "cnpg_pg_settings_setting;(%s)" (join "|" $names)) "targetLabel" "__tmp_keep_pg_setting" "replacement" "1") }}
 {{- $relabelings = append $relabelings (dict "action" "drop" "sourceLabels" (list "__name__" "__tmp_keep_pg_setting") "separator" ";" "regex" "cnpg_pg_settings_.*;") }}
+{{- /* Prometheus does not reliably strip __-prefixed labels after metric
+relabeling, so remove the marker explicitly. */}}
+{{- $relabelings = append $relabelings (dict "action" "labeldrop" "regex" "__tmp_keep_pg_setting") }}
 {{- else }}
 {{- $relabelings = append $relabelings (dict "action" "drop" "sourceLabels" (list "__name__") "regex" "cnpg_pg_settings_.*") }}
 {{- end }}

@@ -82,7 +82,7 @@ func TestPodMonitor_DefaultDropsPgSettings(t *testing.T) {
 	assert.NotContains(t, ep, "interval")
 
 	rel := ep["metricRelabelings"].([]any)
-	require.Len(t, rel, 2)
+	require.Len(t, rel, 3)
 
 	keep := rel[0].(map[string]any)
 	assert.Equal(t, "replace", keep["action"])
@@ -92,6 +92,10 @@ func TestPodMonitor_DefaultDropsPgSettings(t *testing.T) {
 	drop := rel[1].(map[string]any)
 	assert.Equal(t, "drop", drop["action"])
 	assert.Equal(t, "cnpg_pg_settings_.*;", drop["regex"])
+
+	// The marker label is removed explicitly: Prometheus does not reliably
+	// strip __-prefixed labels after metric relabeling.
+	assert.Equal(t, map[string]any{"action": "labeldrop", "regex": "__tmp_keep_pg_setting"}, rel[2])
 
 	raw, err := yaml.Marshal(rel)
 	require.NoError(t, err)
@@ -142,10 +146,11 @@ func TestPodMonitor_UserRelabelingsAppend(t *testing.T) {
 	assert.Equal(t, "30s", ep["interval"])
 
 	rel := ep["metricRelabelings"].([]any)
-	require.Len(t, rel, 3)
+	require.Len(t, rel, 4)
+	assert.Equal(t, "labeldrop", rel[2].(map[string]any)["action"])
 	assert.Equal(t, "replace", rel[0].(map[string]any)["action"])
 	assert.Equal(t, "cnpg_pg_settings_.*;", rel[1].(map[string]any)["regex"])
-	assert.Equal(t, user, rel[2])
+	assert.Equal(t, user, rel[3])
 }
 
 func peers() []any {

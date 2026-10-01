@@ -232,8 +232,10 @@ exporter's value to `exported_cluster` and break the dashboard. The upstream
 
 **The `pg_settings` drop and the dashboard.** The upstream dashboard reads
 `cnpg_pg_settings_setting` for the eight settings above, so the default drop
-keeps those and removes the rest (two relabel rules: mark the kept names with a
-temporary label, then drop the family's unmarked series).
+keeps those and removes the rest (three relabel rules: mark the kept names with a
+temporary label, drop the family's unmarked series, then `labeldrop` the temporary
+label, because Prometheus does not reliably strip `__`-prefixed labels after metric
+relabeling).
 
 The exporter is served over plain HTTP; the chart does not enable
 `spec.monitoring.tls`. A default-deny ingress policy must admit the scraper to
