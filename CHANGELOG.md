@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.4.0
 
 - **Feature:** `cnpg-cluster` renders its `PodMonitor` by default. `monitoring.podMonitor.enabled` is now `true`, but the object is rendered only when the cluster serves the `monitoring.coreos.com/v1` `PodMonitor` API (`.Capabilities.APIVersions`), so a cluster without the Prometheus-operator CRDs installs unchanged; `helm template` needs `--api-versions monitoring.coreos.com/v1/PodMonitor` to show it. Set `enabled: false` to opt out. Where the CRD is served, the render gains one `PodMonitor` (job `<namespace>/<clusterName>`) and nothing else.
 - **Feature:** the default `PodMonitor` drops the `cnpg_pg_settings_*` family (roughly 500-700 series per instance) before storage, except the eight settings the upstream CloudNativePG Grafana dashboard reads. New values `monitoring.podMonitor.dropPgSettings` (`true`) and `keepPgSettings`; your `metricRelabelings` are rendered after the drop and keep working. Set `dropPgSettings: false` to keep every series.
