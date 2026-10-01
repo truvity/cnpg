@@ -37,12 +37,18 @@ spec:
   # pool's force-drain deadline (devel = no PDB).
   enablePDB: {{ $prod }}
 
-  {{- if or (include "cnpg-cluster.serverTLSEnabled" .) (include "cnpg-cluster.replicationEnabled" .) }}
+  {{- $existing := include "cnpg-cluster.serverTLSExisting" . }}
+  {{- if or (include "cnpg-cluster.serverTLSEnabled" .) $existing (include "cnpg-cluster.replicationEnabled" .) }}
   certificates:
     {{- if include "cnpg-cluster.serverTLSEnabled" . }}
     # Server certificate from cert-manager (templates/server-tls.yaml).
     serverTLSSecret: {{ .Values.clusterName }}-server-tls
     serverCASecret: {{ .Values.clusterName }}-server-ca
+    {{- else if $existing }}
+    # Secrets that already exist, named by serverTLS.existingSecret /
+    # existingCASecret; the chart renders no object for them.
+    serverTLSSecret: {{ .Values.serverTLS.existingSecret | trim }}
+    serverCASecret: {{ .Values.serverTLS.existingCASecret | trim }}
     {{- end }}
     {{- if include "cnpg-cluster.replicationEnabled" . }}
     # Per-database client CA (delivered by trust-manager, no ca.key) and

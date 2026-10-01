@@ -110,3 +110,25 @@ serverTLS is on when an issuer is named. Chained defaults, not dig:
 {{- $tls := .Values.serverTLS | default dict -}}
 {{- if ($tls.issuerRef | default dict).name -}}true{{- end -}}
 {{- end -}}
+
+{{/*
+Names-only server TLS: serverTLS.existingSecret + existingCASecret name
+Secrets somebody else owns. Prints "true" when both are set; fails when only
+one is, or when the chart's own Certificate (issuerRef) is asked for too.
+Rendering no object for these Secrets is the point, so nothing else reads
+the names but cluster.yaml.
+*/}}
+{{- define "cnpg-cluster.serverTLSExisting" -}}
+{{- $tls := .Values.serverTLS | default dict -}}
+{{- $tlsName := trim ($tls.existingSecret | default "") -}}
+{{- $caName := trim ($tls.existingCASecret | default "") -}}
+{{- if or $tlsName $caName -}}
+{{- if not (and $tlsName $caName) -}}
+{{- fail "serverTLS.existingSecret and serverTLS.existingCASecret go together: set both or neither" -}}
+{{- end -}}
+{{- if include "cnpg-cluster.serverTLSEnabled" . -}}
+{{- fail "serverTLS.existingSecret/existingCASecret cannot be combined with serverTLS.issuerRef: either the chart requests the server certificate or it uses Secrets that already exist" -}}
+{{- end -}}
+true
+{{- end -}}
+{{- end -}}
