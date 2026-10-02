@@ -34,6 +34,11 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
   assertions against a live cluster: health, archiving, backups, TLS,
   reload labels and pg_hba. Prebuilt for linux and darwin (amd64, arm64) on
   each release; see [docs/cnpgctl.md](docs/cnpgctl.md).
+- **clients/** — PostgreSQL client adapters that connect an application the
+  way these charts expect: `verify-full` only, certificates re-read per
+  connection, switchover-aware retry. Go (`pgx`) and TypeScript (`pg`) today,
+  Python and Kotlin to follow; one contract and one conformance suite, see
+  [clients/README.md](clients/README.md).
 
 Published as OCI charts:
 
@@ -200,6 +205,7 @@ Used in production by its maintainers.
 devbox shell   # or rely on direnv
 just check     # test + lint + charts + leak-canary
 just conformance   # kind cluster + the real components; needs docker (docs/conformance.md)
+just clients-go-conformance clients-ts-conformance   # client adapters against a TLS PostgreSQL; needs docker (clients/README.md)
 ```
 
 Chart versions are placeholders (`0.0.0`); the release workflow injects the

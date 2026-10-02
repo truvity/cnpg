@@ -9,7 +9,8 @@
     "just@1.58.0",
     "kind@0.32.0",
     "kubectl@1.34",
-    "kubernetes-helm@4.2.4"
+    "kubernetes-helm@4.2.4",
+    "nodejs@22"
   ],
   "env": {
     "GOEXPERIMENT": "jsonv2"
