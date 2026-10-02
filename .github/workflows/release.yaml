@@ -111,3 +111,36 @@ jobs:
           mvn -B -ntp versions:set -DnewVersion="${TAG#v}" -DgenerateBackupPoms=false
           mvn -B -ntp verify
           mvn -B -ntp deploy -DskipTests
+
+  # The Python client (clients/python, truvity-cnpg-client): the wheel and the
+  # sdist, attached to the GitHub release of the tag. GitHub Packages has no
+  # Python registry, and release assets of a public repository download
+  # without a token. Public PyPI (trusted publishing) is a later decision.
+  # After the release job, which creates the GitHub release.
+  python:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.17"
+      - name: Build, test and attach
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        working-directory: clients/python
+        run: |
+          set -euo pipefail
+          uv sync --locked
+          uv run ruff check .
+          uv run mypy src tests
+          uv run pytest
+          # The tag is the version; pyproject.toml carries 0.0.0.
+          uv version --frozen "${TAG#v}"
+          rm -rf dist
+          uv build
+          gh release upload "$TAG" dist/truvity_cnpg_client-*.whl dist/truvity_cnpg_client-*.tar.gz --clobber
