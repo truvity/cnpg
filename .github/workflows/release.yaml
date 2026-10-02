@@ -37,9 +37,45 @@ jobs:
     uses: truvity/ci-workflows/.github/workflows/release-public.yaml@822f94031ee2c91b76da8d5071bfb3d1b6af27b7 # v3.19.0
     with:
       # One job: goreleaser builds and archives cnpgctl and cuts the
-      # GitHub release + changelog, then the charts (five) are pushed as
+      # GitHub release + changelog, then the charts (four) are pushed as
       # oci://ghcr.io/truvity/charts/<name> at the same tag.
-      charts: '["cnpg-cluster","cnpg-database","cnpg-platform","cnpg-client","barman-cloud-crds"]'
+      charts: '["cnpg-cluster","cnpg-database","cnpg-platform","cnpg-client"]'
+
+  # The CRD mirror charts (barman-cloud-crds) are NOT in the `charts` list above: the
+  # shared workflow stamps the tag onto every chart it is given, and these
+  # carry the version of the upstream they mirror. Each is pushed only if
+  # that version is not in the registry yet, never overwritten, so a release
+  # that does not move an upstream pin publishes nothing here. Starts after
+  # the release job, like the other follow-on jobs.
+  crd-charts:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: truvity/ci-actions/setup-devbox@3bc59e38c759738677ed02ea2faa216377559fa3 # v1.6.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the CRD charts that are not yet published
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CRD_CHARTS: barman-cloud-crds
+          # renovate: datasource=github-releases depName=truvity/ocictl
+          HELMCTL_VERSION: "0.6.1"
+        run: |
+          set -euo pipefail
+          arch="$(uname -m)"
+          case "$arch" in x86_64) arch=amd64 ;; aarch64) arch=arm64 ;; esac
+          mkdir -p "$RUNNER_TEMP/helmctl"
+          gh release download "v${HELMCTL_VERSION}" --repo truvity/ocictl \
+            --pattern "helmctl_${HELMCTL_VERSION}_linux_${arch}.tar.gz" \
+            --output - | tar -xz -C "$RUNNER_TEMP/helmctl" helmctl
+          # helmctl package shells out to helm, which lives in the devbox.
+          HELMCTL="$RUNNER_TEMP/helmctl/helmctl" devbox run -- hack/release-crd-charts.sh
 
   # The TypeScript client (clients/ts, @truvity/cnpg-client) to GitHub
   # Packages, at the tag's version. Built and tested here, so the registry
