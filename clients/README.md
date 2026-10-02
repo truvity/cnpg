@@ -12,7 +12,7 @@ language.
 | Go | [`go/`](go/README.md), `github.com/truvity/cnpg/v2/clients/go/pgclient` | pgx/v5 | available |
 | TypeScript | [`ts/`](ts/README.md), `@truvity/cnpg-client` | node-postgres (`pg`) | available |
 | Python | `python/` | psycopg 3 | planned |
-| Kotlin | `kotlin/` | pgjdbc + HikariCP | planned |
+| Kotlin | [`kotlin/`](kotlin/README.md), `com.truvity.cnpg:cnpg-client` | pgjdbc + HikariCP | available |
 
 ## The contract
 
@@ -119,7 +119,9 @@ that and runs them against a real PostgreSQL that serves TLS:
 ```
 just clients-go-conformance
 just clients-ts-conformance
+just clients-kotlin-conformance
 just clients-ts            # lint, types, unit tests, build; no Postgres
+just clients-kotlin        # build, unit tests, release dry run; no Postgres
 ```
 
 The conformance tests skip without `CNPG_CLIENTS_PG_HOST` so that
@@ -134,6 +136,11 @@ The TypeScript package is published to GitHub Packages by a second job in
 `release.yaml` (after the release job succeeds), at the tag without its `v`;
 CI prints `npm pack --dry-run` so a PR shows what would ship. Public registries
 (npmjs, PyPI, Maven Central) come later.
+
+The Kotlin artifact `com.truvity.cnpg:cnpg-client` is published to GitHub
+Packages (Maven, `https://maven.pkg.github.com/truvity/cnpg`) by a third job
+in `release.yaml`, at the tag without its `v`; CI runs the same build as a dry
+run (`mvn -DskipTests package`) so a PR shows what would ship.
 
 ### Installing from GitHub Packages
 
@@ -155,3 +162,11 @@ then `npm install @truvity/cnpg-client`. Locally, `GITHUB_PACKAGES_TOKEN` can be
 it is `${{ github.token }}` with `packages: read`. For yarn 4 use
 `npmScopes.truvity` with `npmRegistryServer` and `npmAuthToken` in
 `.yarnrc.yml`.
+
+```
+<!-- ~/.m2/settings.xml: GitHub Packages wants a token even for public packages -->
+<server><id>github-truvity-cnpg</id><username>YOUR_LOGIN</username><password>${env.GITHUB_TOKEN}</password></server>
+```
+
+and the repository `https://maven.pkg.github.com/truvity/cnpg` (same id) in the
+`pom.xml`; see [`kotlin/README.md`](kotlin/README.md).
