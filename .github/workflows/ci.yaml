@@ -40,7 +40,7 @@ jobs:
       # `just check` only as far as it stays free of docker: the conformance
       # recipes are CI-only. Each fails unless every case in
       # clients/conformance/cases.txt ran and passed.
-      recipes: '["test","lint","chart-lint","leak-canary","rulecheck","clients-ts","clients-kotlin","clients-python","clients-go-conformance","clients-ts-conformance","clients-kotlin-conformance","clients-python-conformance"]'
+      recipes: '["test","lint","chart-lint","crd-charts-lint","crds-check","leak-canary","rulecheck","clients-ts","clients-kotlin","clients-python","clients-go-conformance","clients-ts-conformance","clients-kotlin-conformance","clients-python-conformance"]'
 
   # A stable context name for branch protection. The matrix jobs report as
   # "recipes / build" and so on, so a required context naming them would

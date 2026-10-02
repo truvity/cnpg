@@ -37,9 +37,9 @@ jobs:
     uses: truvity/ci-workflows/.github/workflows/release-public.yaml@822f94031ee2c91b76da8d5071bfb3d1b6af27b7 # v3.19.0
     with:
       # One job: goreleaser builds and archives cnpgctl and cuts the
-      # GitHub release + changelog, then the charts (four) are pushed as
+      # GitHub release + changelog, then the charts (five) are pushed as
       # oci://ghcr.io/truvity/charts/<name> at the same tag.
-      charts: '["cnpg-cluster","cnpg-database","cnpg-platform","cnpg-client"]'
+      charts: '["cnpg-cluster","cnpg-database","cnpg-platform","cnpg-client","barman-cloud-crds"]'
 
   # The TypeScript client (clients/ts, @truvity/cnpg-client) to GitHub
   # Packages, at the tag's version. Built and tested here, so the registry

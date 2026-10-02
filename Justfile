@@ -1,5 +1,7 @@
 # Development commands for cnpg (charts, cnpgctl and the client adapters)
 
+crd-charts := "barman-cloud-crds"
+
 # Disable go.work (parent workspace interferes with standalone module builds)
 export GOWORK := "off"
 
@@ -94,6 +96,50 @@ charts:
       fi
     done
     echo "charts: schema-validated lint and render OK"
+
+# The CRD mirror charts ({{ crd-charts }}): upstream CRDs vendored verbatim
+# as charts/<chart>/templates/crds.yaml, generated from charts/<chart>/crdctl.yaml
+# by crdctl (truvity/ocictl, pinned below). The release workflow packages
+# the chart directory as it stands, so the generated file is COMMITTED;
+# nothing is fetched at release time. `just crds` regenerates it after a
+# pinned_version bump; review the diff before committing.
+crdctl := "github.com/truvity/ocictl/cmd/crdctl@v0.7.1"
+
+crds:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export GOWORK=off
+    # crdctl reads the upstream repository through the GitHub API; CI hands the
+    # job token over as GITHUB_PACKAGES_TOKEN, which lifts the anonymous rate limit.
+    export GITHUB_TOKEN="${GITHUB_TOKEN:-${GITHUB_PACKAGES_TOKEN:-}}"
+    for chart in {{ crd-charts }}; do
+      go run {{ crdctl }} build --config "charts/$chart/crdctl.yaml"
+    done
+
+# The vendored CRDs still equal what crdctl produces from the pinned upstream
+# version: a hand edit or a pin bumped without `just crds` fails here.
+crds-check: crds
+    git diff --exit-code -- 'charts/*/templates/crds.yaml'
+
+# Lint the CRD mirror charts: they take no values, so any key must be refused
+# (values.schema.json), and the render must contain CRDs only.
+crd-charts-lint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for chart in {{ crd-charts }}; do
+      helm lint "charts/$chart"
+      if helm template x "charts/$chart" --set bogusKey=1 >/dev/null 2>&1; then
+        echo "$chart: an unknown key rendered" >&2
+        exit 1
+      fi
+      kinds="$(helm template x "charts/$chart" | grep -E '^kind:' | sort -u)"
+      if [ "$kinds" != "kind: CustomResourceDefinition" ]; then
+        echo "$chart: renders more than CustomResourceDefinitions:" >&2
+        echo "$kinds" >&2
+        exit 1
+      fi
+      echo "$chart: lint, schema and CRD-only render OK"
+    done
 
 # DEPRECATED: alias for `charts`, kept for anyone with the old name
 # muscle-memoried in. Remove after the next tagged release.
@@ -217,7 +263,7 @@ clean:
 # — a standard-library advisory with no released fix must not turn
 # every PR red on a finding nobody can act on; security.yaml runs it
 # separately, daily and un-required.
-check: test lint charts leak-canary rulecheck clients-ts clients-kotlin clients-python
+check: test lint charts crd-charts-lint crds-check leak-canary rulecheck clients-ts clients-kotlin clients-python
 
 # Build a snapshot release locally (no push, no tag) — exercises
 # goreleaser's build, archive and changelog machinery (the cnpgctl archives).
@@ -231,6 +277,7 @@ package:
     helm package charts/cnpg-database --destination dist/
     helm package charts/cnpg-platform --destination dist/
     helm package charts/cnpg-client --destination dist/
+    for chart in {{ crd-charts }}; do helm package "charts/$chart" --destination dist/; done
 
 # DEPRECATED: alias for `package`. Remove after the next tagged release.
 helm-package: package

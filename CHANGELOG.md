@@ -4,6 +4,11 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Feature:** `charts/barman-cloud-crds`, the CustomResourceDefinitions of the barman-cloud plugin, moves here from `truvity/ocictl` and is released with the other charts at the tag's version (`oci://ghcr.io/truvity/charts/barman-cloud-crds`). The rendered CRDs are byte-identical to the chart published from `truvity/ocictl` at plugin 0.13.0 (`0.13.0` there); only the chart version scheme changes, from the upstream version to this repository's. The CRDs are generated from `crdctl.yaml` by `just crds` (crdctl from a pinned `truvity/ocictl` release) and committed; `just crds-check` fails when they drift from the pinned upstream.
+- No other chart changes.
+
 ## v2.7.0
 
 - **Feature:** Kotlin/JVM adapter `clients/kotlin` (`com.truvity.cnpg:cnpg-client`, pgjdbc + HikariCP, Java 21 or later, built with Maven like the Keycloak providers). Same contract and the same 14 conformance cases as the Go and TypeScript adapters: `verify-full` only with the CA file as the sole trust root, no free-form JDBC URL, the CA, client certificate, key and password file read again for every new connection (`ReloadingDataSource`; pgjdbc reads the TLS files itself per connection), retry of connection-class errors only (the whole cause chain is read, because pgjdbc and HikariCP wrap), a health check bounded to 2s, and opt-in OpenTelemetry spans (API only) that carry the statement and never its arguments. Two things differ from the other languages and are documented in `clients/kotlin/README.md`: pgjdbc reads the client key as DER PKCS#8, so `PGSSLKEY` points at the `cnpg-client` chart's `key.der` (`keyDer: true`); and HikariCP will not retire a connection sooner than 30 seconds, so a shorter `CNPG_CLIENT_CONN_MAX_LIFETIME` is a configuration error instead of a silent 30 minutes.
