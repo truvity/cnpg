@@ -34,7 +34,7 @@ jobs:
     permissions:
       contents: write
       packages: write
-    uses: truvity/ci-workflows/.github/workflows/release-public.yaml@822f94031ee2c91b76da8d5071bfb3d1b6af27b7 # v3.19.0
+    uses: truvity/ci-workflows/.github/workflows/release-public.yaml@30b989fdd77b99af4be1a4b04e6353aa58aa3923 # v3.21.0
     with:
       # One job: goreleaser builds and archives cnpgctl and cuts the
       # GitHub release + changelog, then the charts (four) are pushed as
@@ -56,7 +56,7 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: truvity/ci-actions/setup-devbox@3bc59e38c759738677ed02ea2faa216377559fa3 # v1.6.1
+      - uses: truvity/ci-actions/setup-devbox@598251d570fd99ba403b99bfa65ae4472ed25e73 # v1.8.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish the CRD charts that are not yet published
