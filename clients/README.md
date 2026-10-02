@@ -11,7 +11,7 @@ language.
 |---|---|---|---|
 | Go | [`go/`](go/README.md), `github.com/truvity/cnpg/v2/clients/go/pgclient` | pgx/v5 | available |
 | TypeScript | [`ts/`](ts/README.md), `@truvity/cnpg-client` | node-postgres (`pg`) | available |
-| Python | `python/` | psycopg 3 | planned |
+| Python | [`python/`](python/README.md), `truvity-cnpg-client` | psycopg 3 + psycopg_pool | available |
 | Kotlin | [`kotlin/`](kotlin/README.md), `com.truvity.cnpg:cnpg-client` | pgjdbc + HikariCP | available |
 
 ## The contract
@@ -120,8 +120,10 @@ that and runs them against a real PostgreSQL that serves TLS:
 just clients-go-conformance
 just clients-ts-conformance
 just clients-kotlin-conformance
+just clients-python-conformance
 just clients-ts            # lint, types, unit tests, build; no Postgres
 just clients-kotlin        # build, unit tests, release dry run; no Postgres
+just clients-python        # lint, types, unit tests, build; no Postgres
 ```
 
 The conformance tests skip without `CNPG_CLIENTS_PG_HOST` so that
@@ -141,6 +143,11 @@ The Kotlin artifact `com.truvity.cnpg:cnpg-client` is published to GitHub
 Packages (Maven, `https://maven.pkg.github.com/truvity/cnpg`) by a third job
 in `release.yaml`, at the tag without its `v`; CI runs the same build as a dry
 run (`mvn -DskipTests package`) so a PR shows what would ship.
+
+The Python package `truvity-cnpg-client` has no registry yet: GitHub Packages
+does not host Python, so a `python` job in `release.yaml` attaches the wheel and
+sdist to the GitHub release of the tag (anonymous download, no token). Public
+PyPI (trusted publishing) is the later move; CI builds both files on every PR.
 
 ### Installing from GitHub Packages
 
@@ -170,3 +177,9 @@ it is `${{ github.token }}` with `packages: read`. For yarn 4 use
 
 and the repository `https://maven.pkg.github.com/truvity/cnpg` (same id) in the
 `pom.xml`; see [`kotlin/README.md`](kotlin/README.md).
+
+Python, from the release assets (no token needed):
+
+```
+pip install "truvity-cnpg-client[binary] @ https://github.com/truvity/cnpg/releases/download/v2.7.0/truvity_cnpg_client-2.7.0-py3-none-any.whl"
+```

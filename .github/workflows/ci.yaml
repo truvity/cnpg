@@ -33,14 +33,14 @@ jobs:
       policy-conformance-strict: true
       #
       # The clients-* recipes are the client adapters (clients/): the
-      # TypeScript lint/types/unit/build, the Kotlin build/unit tests/release
-      # dry run, and each language's conformance suite against a TLS
+      # TypeScript lint/types/unit/build, the Kotlin and Python build/unit
+      # tests/release dry runs, and each language's conformance suite against a TLS
       # PostgreSQL started by the recipe itself (hosted runner, docker,
       # digest-pinned image, certificates generated per run). They are in
       # `just check` only as far as it stays free of docker: the conformance
       # recipes are CI-only. Each fails unless every case in
       # clients/conformance/cases.txt ran and passed.
-      recipes: '["test","lint","chart-lint","leak-canary","rulecheck","clients-ts","clients-kotlin","clients-go-conformance","clients-ts-conformance","clients-kotlin-conformance"]'
+      recipes: '["test","lint","chart-lint","leak-canary","rulecheck","clients-ts","clients-kotlin","clients-python","clients-go-conformance","clients-ts-conformance","clients-kotlin-conformance","clients-python-conformance"]'
 
   # A stable context name for branch protection. The matrix jobs report as
   # "recipes / build" and so on, so a required context naming them would

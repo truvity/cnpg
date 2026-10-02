@@ -141,6 +141,22 @@ clients-kotlin:
     grep -q 'com/truvity/cnpg/CnpgPool.class' <<<"$listing"
     ls target/cnpg-client-*-sources.jar >/dev/null
 
+# The Python client adapter (clients/python): lint, types, unit tests, then the
+# dry run of what a release attaches to the GitHub release (wheel and sdist).
+# No Postgres needed; the conformance cases skip here.
+clients-python:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd clients/python
+    uv sync --locked
+    uv run ruff check .
+    uv run ruff format --check .
+    uv run mypy src tests
+    uv run pytest
+    rm -rf dist
+    uv build
+    ls dist/truvity_cnpg_client-*-py3-none-any.whl dist/truvity_cnpg_client-*.tar.gz >/dev/null
+
 # The Go client adapter against a real TLS PostgreSQL (digest-pinned image,
 # certificates generated per run; clients/conformance/). Needs docker. The
 # guard fails the recipe unless every case in clients/conformance/cases.txt
@@ -164,6 +180,16 @@ clients-kotlin-conformance:
     eval "$(clients/conformance/pg-tls.sh up)"
     (cd clients/kotlin && CNPG_CLIENTS_PG=required mvn -B -ntp clean test -Dtest=ConformanceTest -Dsurefire.failIfNoSpecifiedTests=true)
     clients/conformance/guard.sh kotlin clients/kotlin/target/surefire-reports/TEST-com.truvity.cnpg.ConformanceTest.xml
+
+# The Python client adapter against the same TLS PostgreSQL and case list.
+clients-python-conformance:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trap 'clients/conformance/pg-tls.sh down' EXIT
+    eval "$(clients/conformance/pg-tls.sh up)"
+    out="$(mktemp)"
+    (cd clients/python && uv sync --locked && CNPG_CLIENTS_PG=required uv run pytest tests/test_conformance.py -q --junitxml="$out") || { cat "$out" >&2; exit 1; }
+    clients/conformance/guard.sh python "$out"
 
 # The TypeScript client adapter against the same TLS PostgreSQL and case list.
 clients-ts-conformance:
@@ -191,7 +217,7 @@ clean:
 # — a standard-library advisory with no released fix must not turn
 # every PR red on a finding nobody can act on; security.yaml runs it
 # separately, daily and un-required.
-check: test lint charts leak-canary rulecheck clients-ts clients-kotlin
+check: test lint charts leak-canary rulecheck clients-ts clients-kotlin clients-python
 
 # Build a snapshot release locally (no push, no tag) — exercises
 # goreleaser's build, archive and changelog machinery (the cnpgctl archives).
