@@ -6,11 +6,13 @@
 #
 #   guard.sh go <go test -json output>
 #   guard.sh ts <vitest --reporter=json output>
+#   guard.sh kotlin <surefire TEST-*.xml report>
+#   guard.sh python <pytest --junitxml report>
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-lang="${1:?usage: guard.sh go|ts <results file>}"
-results="${2:?usage: guard.sh go|ts <results file>}"
+lang="${1:?usage: guard.sh go|ts|kotlin|python <results file>}"
+results="${2:?usage: guard.sh go|ts|kotlin|python <results file>}"
 [ -s "$results" ] || { echo "guard: $results is empty: the suite did not run" >&2; exit 1; }
 
 missing=0
@@ -30,6 +32,24 @@ while IFS= read -r case_name; do
         const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
         const ok = r.testResults.some((f) =>
           f.assertionResults.some((a) => a.title === process.argv[2] && a.status === "passed"));
+        process.exit(ok ? 0 : 1);
+      ' "$results" "$case_name" || {
+        echo "guard: case not run or not passed: $case_name" >&2
+        missing=$((missing + 1))
+      }
+      ;;
+    kotlin|python)
+      # JUnit XML (surefire, pytest --junitxml): a <testcase> named exactly the case, with no
+      # <skipped>, <failure> or <error> inside it.
+      node -e '
+        const xml = require("fs").readFileSync(process.argv[1], "utf8");
+        const want = process.argv[2];
+        const cases = xml.split("<testcase ").slice(1).map((c) => c.split("</testcase>")[0]);
+        const ok = cases.some((c) => {
+          const name = /^[^>]*?\bname="([^"]*)"/.exec(c);
+          if (!name || name[1] !== want) return false;
+          return !/<(skipped|failure|error)\b/.test(c);
+        });
         process.exit(ok ? 0 : 1);
       ' "$results" "$case_name" || {
         echo "guard: case not run or not passed: $case_name" >&2

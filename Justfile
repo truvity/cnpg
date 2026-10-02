@@ -126,6 +126,21 @@ clients-ts:
     # (The version is stamped from the tag at release time.)
     npm pack --dry-run
 
+# The Kotlin client adapter (clients/kotlin): compile and unit tests, then the
+# dry run of what a release publishes (the jar and the sources jar, no deploy).
+# No Postgres needed; the conformance cases skip here.
+clients-kotlin:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd clients/kotlin
+    mvn -B -ntp clean verify
+    mvn -B -ntp -DskipTests package
+    # The version is stamped from the tag at release time.
+    jar=$(ls target/cnpg-client-*.jar | grep -v -- '-sources' | head -1)
+    listing="$(jar tf "$jar")"
+    grep -q 'com/truvity/cnpg/CnpgPool.class' <<<"$listing"
+    ls target/cnpg-client-*-sources.jar >/dev/null
+
 # The Go client adapter against a real TLS PostgreSQL (digest-pinned image,
 # certificates generated per run; clients/conformance/). Needs docker. The
 # guard fails the recipe unless every case in clients/conformance/cases.txt
@@ -139,6 +154,16 @@ clients-go-conformance:
     out="$(mktemp)"
     CNPG_CLIENTS_PG=required go test ./clients/go/... -run TestConformance -count=1 -json >"$out" || { grep -E '"Action":"(fail|output)"' "$out" | head -80 >&2; exit 1; }
     clients/conformance/guard.sh go "$out"
+
+# The Kotlin client adapter against the same TLS PostgreSQL and case list. Two
+# cases wait out HikariCP's 30 second minimum connection lifetime.
+clients-kotlin-conformance:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trap 'clients/conformance/pg-tls.sh down' EXIT
+    eval "$(clients/conformance/pg-tls.sh up)"
+    (cd clients/kotlin && CNPG_CLIENTS_PG=required mvn -B -ntp clean test -Dtest=ConformanceTest -Dsurefire.failIfNoSpecifiedTests=true)
+    clients/conformance/guard.sh kotlin clients/kotlin/target/surefire-reports/TEST-com.truvity.cnpg.ConformanceTest.xml
 
 # The TypeScript client adapter against the same TLS PostgreSQL and case list.
 clients-ts-conformance:
@@ -166,7 +191,7 @@ clean:
 # — a standard-library advisory with no released fix must not turn
 # every PR red on a finding nobody can act on; security.yaml runs it
 # separately, daily and un-required.
-check: test lint charts leak-canary rulecheck clients-ts
+check: test lint charts leak-canary rulecheck clients-ts clients-kotlin
 
 # Build a snapshot release locally (no push, no tag) — exercises
 # goreleaser's build, archive and changelog machinery (the cnpgctl archives).
