@@ -40,7 +40,9 @@ while IFS= read -r case_name; do
       ;;
     kotlin|python)
       # JUnit XML (surefire, pytest --junitxml): a <testcase> named exactly the case, with no
-      # <skipped>, <failure> or <error> inside it.
+      # <skipped>, <failure> or <error> inside it. The Python tests are test_<case with _ for ->.
+      want="$case_name"
+      [ "$lang" = python ] && want="test_${case_name//-/_}"
       node -e '
         const xml = require("fs").readFileSync(process.argv[1], "utf8");
         const want = process.argv[2];
@@ -51,7 +53,7 @@ while IFS= read -r case_name; do
           return !/<(skipped|failure|error)\b/.test(c);
         });
         process.exit(ok ? 0 : 1);
-      ' "$results" "$case_name" || {
+      ' "$results" "$want" || {
         echo "guard: case not run or not passed: $case_name" >&2
         missing=$((missing + 1))
       }

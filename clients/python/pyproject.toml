@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "truvity-cnpg-client"
+version = "0.0.0" # the release job stamps the tag: `uv version 2.7.0`
+description = "PostgreSQL client adapter for CloudNativePG clusters: verify-full, per-connection certificate reload, failover-aware retry."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Typing :: Typed",
+]
+dependencies = [
+  "psycopg>=3.2,<4",
+  "psycopg-pool>=3.2,<4",
+]
+
+[project.optional-dependencies]
+# libpq is bundled (OpenSSL included); without it psycopg needs a system libpq 13 or later.
+binary = ["psycopg[binary]>=3.2,<4"]
+# The API only: spans are opt-in (pass a tracer).
+otel = ["opentelemetry-api>=1.30,<2"]
+
+[project.urls]
+Repository = "https://github.com/truvity/cnpg/tree/master/clients/python"
+
+[dependency-groups]
+dev = [
+  "psycopg[binary]>=3.2,<4",
+  "opentelemetry-api>=1.30,<2",
+  "opentelemetry-sdk>=1.30,<2",
+  "pytest>=8",
+  "ruff>=0.12",
+  "mypy>=1.15",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/truvity_cnpg"]
+
+[tool.uv]
+# The interpreter is the one the toolchain (devbox) declares, never one uv fetches,
+# as in the policy repository.
+python-preference = "only-system"
+python-downloads = "never"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+junit_family = "xunit2"
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
