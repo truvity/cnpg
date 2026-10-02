@@ -13,8 +13,8 @@
     "nodejs@22",
     "temurin-bin-21@21.0.12",
     "maven@3.9.16",
-    "python@3.13",
-    "uv@0.12.17"
+    "uv@0.12.17",
+    "python@3.14.4"
   ],
   "env": {
     "GOEXPERIMENT": "jsonv2"
