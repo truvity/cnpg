@@ -122,6 +122,9 @@ clients-ts:
     npm run typecheck
     npm test
     npm run build
+    # What a release would publish: the built output and the README only.
+    # (The version is stamped from the tag at release time.)
+    npm pack --dry-run
 
 # The Go client adapter against a real TLS PostgreSQL (digest-pinned image,
 # certificates generated per run; clients/conformance/). Needs docker. The
