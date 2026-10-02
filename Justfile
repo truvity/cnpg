@@ -1,4 +1,4 @@
-# Development commands for cnpg (charts and, later, clients)
+# Development commands for cnpg (charts, cnpgctl and the client adapters)
 
 # Disable go.work (parent workspace interferes with standalone module builds)
 export GOWORK := "off"
@@ -111,6 +111,42 @@ rulecheck:
 leak-canary:
     hack/leak-canary.sh
 
+# The TypeScript client adapter (clients/ts): lint, type check, unit tests,
+# build. No Postgres needed; the conformance cases skip here.
+clients-ts:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd clients/ts
+    npm ci --no-audit --no-fund
+    npm run lint
+    npm run typecheck
+    npm test
+    npm run build
+
+# The Go client adapter against a real TLS PostgreSQL (digest-pinned image,
+# certificates generated per run; clients/conformance/). Needs docker. The
+# guard fails the recipe unless every case in clients/conformance/cases.txt
+# ran and passed: a skipped suite is not a green one. NOT part of `check`
+# (which stays free of docker); CI runs it as its own job.
+clients-go-conformance:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trap 'clients/conformance/pg-tls.sh down' EXIT
+    eval "$(clients/conformance/pg-tls.sh up)"
+    out="$(mktemp)"
+    CNPG_CLIENTS_PG=required go test ./clients/go/... -run TestConformance -count=1 -json >"$out" || { grep -E '"Action":"(fail|output)"' "$out" | head -80 >&2; exit 1; }
+    clients/conformance/guard.sh go "$out"
+
+# The TypeScript client adapter against the same TLS PostgreSQL and case list.
+clients-ts-conformance:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trap 'clients/conformance/pg-tls.sh down' EXIT
+    eval "$(clients/conformance/pg-tls.sh up)"
+    out="$(mktemp)"
+    (cd clients/ts && npm ci --no-audit --no-fund && CNPG_CLIENTS_PG=required npx vitest run test/conformance.test.ts --reporter=json --outputFile="$out") || { cat "$out" >&2; exit 1; }
+    clients/conformance/guard.sh ts "$out"
+
 # Run Go vulnerability check
 vuln:
     govulncheck ./...
@@ -127,7 +163,7 @@ clean:
 # — a standard-library advisory with no released fix must not turn
 # every PR red on a finding nobody can act on; security.yaml runs it
 # separately, daily and un-required.
-check: test lint charts leak-canary rulecheck
+check: test lint charts leak-canary rulecheck clients-ts
 
 # Build a snapshot release locally (no push, no tag) — exercises
 # goreleaser's build, archive and changelog machinery (the cnpgctl archives).

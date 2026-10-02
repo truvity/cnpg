@@ -1,0 +1,14 @@
+verify-full-connects
+rejects-unknown-ca
+rejects-hostname-mismatch
+refuses-weaker-sslmode
+password-role
+client-cert-role
+client-cert-rotation
+password-file-rotation
+reconnects-after-backend-termination
+survives-primary-switch
+statement-timeout-enforced
+permanent-error-not-retried
+health-check
+traces-statements-without-arguments

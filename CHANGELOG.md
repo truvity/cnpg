@@ -4,6 +4,14 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## v2.6.0
+
+- **Feature:** PostgreSQL client adapters under `clients/`: one contract (`clients/README.md`), one conformance case list, one implementation per language. They connect with `verify-full` only (a missing CA, or any weaker `sslmode`, is a configuration error), read the CA, client certificate, key and password file again for every new connection (so a cert-manager renewal needs no restart), retry only connection-class errors (what a CloudNativePG switchover looks like: `57P01`, `57P02`, `57P03`, `08xxx`, `25006`, `53300`, EOF, reset) with jittered backoff, expose a health check, and offer opt-in OpenTelemetry spans that carry the statement with its placeholders and never its arguments. Their inputs are the libpq environment the `cnpg-client` library chart already renders (`PGHOST`, `PGSSLROOTCERT`, `PGSSLCERT`, `PGSSLKEY`, ...) plus `CNPG_CLIENT_*` tuning variables. Python and Kotlin follow.
+- **Feature:** Go adapter `github.com/truvity/cnpg/v2/clients/go/pgclient` (pgx/v5) and `.../pgclient/otelpg` (OpenTelemetry API only). It is part of the existing module, so the new minor is all a consumer needs: `go get github.com/truvity/cnpg/v2@v2.6.0`. The module's dependency graph gains pgx and the OpenTelemetry API; the charts and `cnpgctl` are unchanged.
+- **Feature:** TypeScript adapter `clients/ts` (`@truvity/cnpg-client`, node-postgres). Built and tested in CI but **not published yet**: the registry and the release job are an open decision (`clients/README.md`, Releasing).
+- **Test:** `clients/conformance/` runs each adapter against a real PostgreSQL that serves TLS: certificates generated per run, an image pinned by digest, 14 cases (verify-full, unknown CA, host name mismatch, refused weaker modes, password and certificate roles, certificate and password rotation, backend termination, a primary switch, statement timeout, permanent errors not retried, health, tracing without arguments). A guard fails the CI job unless every case ran and passed, so a skipped suite cannot be green. New CI recipes `clients-ts`, `clients-go-conformance` and `clients-ts-conformance`; `devbox.json` gains `nodejs@22`.
+- No chart changes: every chart renders byte-identical to v2.5.0.
+
 ## v2.5.0
 
 - **Feature:** `cnpg-platform` baseline alerts gain `CnpgBackupNotConfigured` (warning, `for: 1h`): `cnpg_collector_up{cnpg_cluster_backup_expected!="false"} unless on (namespace, pod) barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`, because a cluster with no backups has no backup series and `CnpgBackupTooOld` read it as healthy. Values `alerts.backupNotConfigured.enabled` (`true`) and `.for` (`1h`), following `alerts.selector`. An install that renders the alerts gains one rule; set `enabled: false` to keep the old set.
