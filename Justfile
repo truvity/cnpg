@@ -102,7 +102,10 @@ charts:
 # by crdctl (truvity/ocictl, pinned below). The release workflow packages
 # the chart directory as it stands, so the generated file is COMMITTED;
 # nothing is fetched at release time. `just crds` regenerates it after a
-# pinned_version bump; review the diff before committing.
+# pinned_version bump and sets Chart.yaml's version and appVersion to that
+# upstream version (the chart's version IS the upstream version; the release
+# publishes it at that version, once, via hack/release-crd-charts.sh).
+# Review the diff before committing.
 crdctl := "github.com/truvity/ocictl/cmd/crdctl@v0.7.1"
 
 crds:
@@ -114,12 +117,14 @@ crds:
     export GITHUB_TOKEN="${GITHUB_TOKEN:-${GITHUB_PACKAGES_TOKEN:-}}"
     for chart in {{ crd-charts }}; do
       go run {{ crdctl }} build --config "charts/$chart/crdctl.yaml"
+      pinned="$(sed -n 's/^pinned_version: *"\{0,1\}v\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "charts/$chart/crdctl.yaml")"
+      sed -i "s/^version: .*/version: $pinned/; s/^appVersion: .*/appVersion: \"$pinned\"/" "charts/$chart/Chart.yaml"
     done
 
 # The vendored CRDs still equal what crdctl produces from the pinned upstream
 # version: a hand edit or a pin bumped without `just crds` fails here.
 crds-check: crds
-    git diff --exit-code -- 'charts/*/templates/crds.yaml'
+    git diff --exit-code -- 'charts/*/templates/crds.yaml' 'charts/*/Chart.yaml'
 
 # Lint the CRD mirror charts: they take no values, so any key must be refused
 # (values.schema.json; one negative fixture per chart under tests/invalid/), and
@@ -129,6 +134,14 @@ crd-charts-lint:
     set -euo pipefail
     for chart in {{ crd-charts }}; do
       helm lint "charts/$chart"
+      # The chart's version is the upstream version in crdctl.yaml.
+      pinned="$(sed -n 's/^pinned_version: *"\{0,1\}v\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "charts/$chart/crdctl.yaml")"
+      version="$(sed -n 's/^version: *\(.*\)$/\1/p' "charts/$chart/Chart.yaml")"
+      appversion="$(sed -n 's/^appVersion: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "charts/$chart/Chart.yaml")"
+      if [ -z "$pinned" ] || [ "$version" != "$pinned" ] || [ "$appversion" != "$pinned" ]; then
+        echo "$chart: Chart.yaml version '$version' / appVersion '$appversion' is not crdctl.yaml pinned_version '$pinned' (run just crds)" >&2
+        exit 1
+      fi
       if helm template x "charts/$chart" --set bogusKey=1 >/dev/null 2>&1; then
         echo "$chart: an unknown key rendered" >&2
         exit 1
