@@ -74,3 +74,40 @@ jobs:
           # The tag is the version; package.json carries 0.0.0.
           npm version "${TAG#v}" --no-git-tag-version --allow-same-version
           npm publish
+
+  # The Kotlin client (clients/kotlin, com.truvity.cnpg:cnpg-client) to GitHub
+  # Packages (Maven), at the tag's version. Same shape as the npm job: after
+  # the release job, built and unit-tested here, so the registry holds exactly
+  # what passed. The conformance cases already ran in CI on the tagged commit.
+  maven:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: clients/kotlin/pom.xml
+          # Writes ~/.m2/settings.xml with this server id; the pom's
+          # distributionManagement uses the same id.
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+      - name: Build, test and publish
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        working-directory: clients/kotlin
+        run: |
+          set -euo pipefail
+          # The tag is the version; pom.xml carries 0.0.0-SNAPSHOT.
+          mvn -B -ntp versions:set -DnewVersion="${TAG#v}" -DgenerateBackupPoms=false
+          mvn -B -ntp verify
+          mvn -B -ntp deploy -DskipTests
