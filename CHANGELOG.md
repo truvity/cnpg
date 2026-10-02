@@ -6,6 +6,8 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+## v2.8.0
+
 - **Feature:** `charts/barman-cloud-crds`, the CustomResourceDefinitions of the barman-cloud plugin, moves here from `truvity/ocictl` and is published from here (`oci://ghcr.io/truvity/charts/barman-cloud-crds`) at the UPSTREAM version it mirrors, as it was from `truvity/ocictl`: `0.13.0` today, already in the registry, so the first release here publishes nothing for it. A release publishes the chart only when its version is not in the registry yet, and never overwrites one. The rendered CRDs are byte-identical to the ocictl chart. The CRDs are generated from `crdctl.yaml` by `just crds` (crdctl from a pinned `truvity/ocictl` release) and committed; `just crds-check` fails when they drift from the pinned upstream.
 - No other chart changes.
 
