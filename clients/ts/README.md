@@ -2,7 +2,27 @@
 
 The TypeScript adapter of the [client contract](../README.md), on
 `pg` (node-postgres). ESM; on Node 22.12 or later `require()` works too.
-Not published yet; see `CHANGELOG.md` at the repository root.
+Published to GitHub Packages.
+
+## Install
+
+GitHub Packages answers 401 to anonymous installs even for a public package,
+so a token with `read:packages` is always needed. In `.npmrc`:
+
+```
+@truvity:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
+
+```
+npm install @truvity/cnpg-client
+```
+
+Locally the token can be `$(gh auth token)` (after
+`gh auth refresh -s read:packages`); in GitHub Actions use
+`${{ github.token }}` with `packages: read`. Yarn 4: set
+`npmScopes.truvity.npmRegistryServer` to `https://npm.pkg.github.com` and
+`npmAuthToken` in `.yarnrc.yml`.
 
 ```ts
 import { CnpgPool, configFromEnv } from "@truvity/cnpg-client";

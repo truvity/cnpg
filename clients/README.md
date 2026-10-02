@@ -130,4 +130,28 @@ The conformance tests skip without `CNPG_CLIENTS_PG_HOST` so that
 
 One `v*` tag stamps the charts, the Go module and the binaries. The Go adapter
 is part of the `github.com/truvity/cnpg/v2` module, so it needs nothing more.
-The npm package is not published yet; see `CHANGELOG.md`.
+The TypeScript package is published to GitHub Packages by a second job in
+`release.yaml` (after the release job succeeds), at the tag without its `v`;
+CI prints `npm pack --dry-run` so a PR shows what would ship. Public registries
+(npmjs, PyPI, Maven Central) come later.
+
+### Installing from GitHub Packages
+
+```
+go get github.com/truvity/cnpg/v2@v2.6.0     # Go: the tag is the module version
+```
+
+For `@truvity/cnpg-client`, point the scope at GitHub Packages in `.npmrc`.
+The registry answers 401 to anonymous requests **even for a public package**,
+so a token with `read:packages` is always required:
+
+```
+@truvity:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
+
+then `npm install @truvity/cnpg-client`. Locally, `GITHUB_PACKAGES_TOKEN` can be
+`$(gh auth token)` (after `gh auth refresh -s read:packages`); in GitHub Actions
+it is `${{ github.token }}` with `packages: read`. For yarn 4 use
+`npmScopes.truvity` with `npmRegistryServer` and `npmAuthToken` in
+`.yarnrc.yml`.
