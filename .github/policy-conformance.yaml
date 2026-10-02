@@ -4,3 +4,6 @@ exempt:
   C2:
     reason: library chart (type: library) included by an application chart; it renders no manifests and takes no values a consumer sets directly
     charts: [cnpg-client]
+  C1:
+    reason: mirror chart of a third-party project's CRDs; its version is the upstream version it mirrors (crdctl.yaml pinned_version, checked by crd-charts-lint), published once and never overwritten, not stamped from this repository's tag
+    charts: [barman-cloud-crds]
