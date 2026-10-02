@@ -6,8 +6,8 @@
 #
 # Everything is generated here, per run: a CA, a second unrelated CA, a server
 # certificate that carries ONLY the name `localhost`, two client certificates
-# for the certificate role, and a password role. Nothing is a secret and
-# nothing outlives the run.
+# for the certificate role (each key also as DER PKCS#8, which pgjdbc reads),
+# and a password role. Nothing is a secret and nothing outlives the run.
 #
 # The image is pinned by DIGEST. A GitHub `services:` container is not used
 # because it starts before any step can generate the certificates it needs;
@@ -49,8 +49,12 @@ up() {
   openssl ecparam -name prime256v1 -genkey -noout -out foreign.key 2>/dev/null
   openssl req -new -key foreign.key -subj "/CN=app_cert" -out foreign.csr 2>/dev/null
   openssl x509 -req -in foreign.csr -CA other-ca.crt -CAkey other-ca.key -CAcreateserial -days 2 -sha256 -extfile client.ext -out foreign.crt 2>/dev/null
+  # The same client keys as DER PKCS#8, the form pgjdbc reads (the chart's `key.der`).
+  for k in app_cert.1 app_cert.2 foreign; do
+    openssl pkcs8 -topk8 -nocrypt -inform PEM -in "$k.key" -outform DER -out "$k.key.der"
+  done
   chmod 644 ./*
-  chmod 600 ./*.key
+  chmod 600 ./*.key ./*.key.der
 
   cat >pg_hba.conf <<'HBA'
 local all all trust
