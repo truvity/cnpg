@@ -122,7 +122,8 @@ crds-check: crds
     git diff --exit-code -- 'charts/*/templates/crds.yaml'
 
 # Lint the CRD mirror charts: they take no values, so any key must be refused
-# (values.schema.json), and the render must contain CRDs only.
+# (values.schema.json; one negative fixture per chart under tests/invalid/), and
+# the render must contain CRDs only.
 crd-charts-lint:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -132,6 +133,12 @@ crd-charts-lint:
         echo "$chart: an unknown key rendered" >&2
         exit 1
       fi
+      for values in tests/invalid/"$chart"/*.yaml; do
+        if helm template invalid "charts/$chart" -f "$values" >/dev/null 2>&1; then
+          echo "RENDERED BUT SHOULD HAVE FAILED: $values" >&2
+          exit 1
+        fi
+      done
       kinds="$(helm template x "charts/$chart" | grep -E '^kind:' | sort -u)"
       if [ "$kinds" != "kind: CustomResourceDefinition" ]; then
         echo "$chart: renders more than CustomResourceDefinitions:" >&2
