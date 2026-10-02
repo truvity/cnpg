@@ -17,3 +17,6 @@ coverage.out
 
 # Go
 vendor/
+
+# CRD mirror cache (crdctl)
+.cache/
