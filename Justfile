@@ -119,6 +119,8 @@ crds:
       go run {{ crdctl }} build --config "charts/$chart/crdctl.yaml"
       pinned="$(sed -n 's/^pinned_version: *"\{0,1\}v\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "charts/$chart/crdctl.yaml")"
       sed -i "s/^version: .*/version: $pinned/; s/^appVersion: .*/appVersion: \"$pinned\"/" "charts/$chart/Chart.yaml"
+      upstream="$(sed -n 's/^repo: *//p' "charts/$chart/crdctl.yaml")"
+      sed -i "s|^  truvity.io/mirror: .*|  truvity.io/mirror: \"$upstream@$pinned\"|" "charts/$chart/Chart.yaml"
     done
 
 # The vendored CRDs still equal what crdctl produces from the pinned upstream
@@ -138,6 +140,12 @@ crd-charts-lint:
       pinned="$(sed -n 's/^pinned_version: *"\{0,1\}v\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "charts/$chart/crdctl.yaml")"
       version="$(sed -n 's/^version: *\(.*\)$/\1/p' "charts/$chart/Chart.yaml")"
       appversion="$(sed -n 's/^appVersion: *"\{0,1\}\([^"]*\)"\{0,1\} *$/\1/p' "charts/$chart/Chart.yaml")"
+      upstream="$(sed -n 's/^repo: *//p' "charts/$chart/crdctl.yaml")"
+      mirror="$(sed -n 's/^  truvity.io\/mirror: *"\(.*\)"$/\1/p' "charts/$chart/Chart.yaml")"
+      if [ "$mirror" != "$upstream@$pinned" ]; then
+        echo "$chart: Chart.yaml truvity.io/mirror '$mirror' is not '$upstream@$pinned' (run just crds)" >&2
+        exit 1
+      fi
       if [ -z "$pinned" ] || [ "$version" != "$pinned" ] || [ "$appversion" != "$pinned" ]; then
         echo "$chart: Chart.yaml version '$version' / appVersion '$appversion' is not crdctl.yaml pinned_version '$pinned' (run just crds)" >&2
         exit 1

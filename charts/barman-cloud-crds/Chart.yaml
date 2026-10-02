@@ -4,12 +4,15 @@ description: >-
   The upstream CustomResourceDefinitions of cloudnative-pg/plugin-barman-cloud at the version pinned in
   crdctl.yaml, mirrored verbatim. CRDs only; takes no values.
 type: application
-# The UPSTREAM version this chart mirrors, not this repository's release
-# version: `just crds` keeps both fields equal to crdctl.yaml's
-# pinned_version (checked by crd-charts-lint), and the release publishes
-# the chart at that version only if it is not already in the registry.
+# A MIRROR chart (component contract C1): the version is the UPSTREAM
+# version it mirrors, declared by the annotation below; `just crds` keeps
+# the annotation, version and appVersion equal to crdctl.yaml's repo and
+# pinned_version (checked by crd-charts-lint), and the release publishes the
+# chart at that version only if it is not already in the registry.
 version: 0.13.0
 appVersion: "0.13.0"
+annotations:
+  truvity.io/mirror: "cloudnative-pg/plugin-barman-cloud@0.13.0"
 home: https://github.com/truvity/cnpg
 sources:
   - https://github.com/truvity/cnpg
