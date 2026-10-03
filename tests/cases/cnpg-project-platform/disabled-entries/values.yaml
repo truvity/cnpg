@@ -1,0 +1,13 @@
+# A caller that decides per project passes the decision as `enabled`: a
+# disabled entry renders nothing and is not checked for duplicates.
+objectStores:
+  - {name: off-objectstore, namespace: skipped-ns, bucketName: example-bucket, prefix: skipped-ns/off-pg, enabled: false}
+  - {name: on-objectstore, namespace: rendered-ns, bucketName: example-bucket, prefix: rendered-ns/on-pg, enabled: true}
+scheduledBackups:
+  - {name: off-pg-scheduled-backup, namespace: skipped-ns, clusterName: off-pg, objectStoreName: off-objectstore, enabled: false}
+serverTLS:
+  - clusterName: off-pg
+    namespace: skipped-ns
+    issuerRef: {name: example-issuer}
+    caCertificates: ["-----BEGIN CERTIFICATE-----\nMIIBexample\n-----END CERTIFICATE-----"]
+    enabled: false

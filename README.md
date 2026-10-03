@@ -8,14 +8,23 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
 |---|---|---|
 | `cnpg-platform` | the platform | once per Kubernetes cluster |
 | `cnpg-cluster` | the platform | once per PostgreSQL cluster |
+| `cnpg-project-platform` | the platform | once per Kubernetes cluster, for the projects whose `Cluster` another chart renders |
 | `cnpg-database` | a product | once per product (its databases, roles, client certificates) |
 | `cnpg-client` | a product (library) | included by each application chart that connects |
 
 - **charts/cnpg-platform** — what a platform adds beside the upstream operator
-  charts: storage classes, a metrics network policy, baseline alert rules and
-  an admission guard against privileged database roles. The operator and
+  charts: storage classes, a metrics network policy, one `PodMonitor` for every
+  instance pod, baseline alert rules and an admission guard against privileged
+  database roles. The operator and
   barman-cloud plugin presets ship as values under
   [`examples/operator/`](examples/operator/).
+
+- **charts/cnpg-project-platform** — the per-project objects a platform owns
+  when a project's own chart renders its `Cluster` but not the archive or the
+  server certificate: the barman-cloud `ObjectStore`, the `ScheduledBackup`
+  into it, and the server `Certificate` with its CA `Secret`. Every name is an
+  entry's input and the chart decides nothing about which project gets which
+  object. See [docs/reference.md](docs/reference.md).
 
 - **charts/cnpg-cluster** — a CNPG `Cluster` with an opinionated two-posture
   profile model, plus roles, declared databases, backup `ObjectStore`s and
@@ -52,6 +61,7 @@ Published as OCI charts:
 
 ```
 oci://ghcr.io/truvity/charts/cnpg-platform
+oci://ghcr.io/truvity/charts/cnpg-project-platform
 oci://ghcr.io/truvity/charts/cnpg-cluster
 oci://ghcr.io/truvity/charts/cnpg-database
 oci://ghcr.io/truvity/charts/cnpg-client

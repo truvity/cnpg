@@ -1,0 +1,6 @@
+metricsNetworkPolicy:
+  enabled: true
+  namespaces:
+    - labels: {a: b}
+  from:
+    - namespaceSelector: {matchLabels: {a: b}}

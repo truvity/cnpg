@@ -15,7 +15,7 @@ Only the latest release is supported with security updates.
 
 This repository publishes:
 
-- The charts `cnpg-platform`, `cnpg-cluster`, `cnpg-database` and `cnpg-client`, as published to `oci://ghcr.io/truvity/charts`.
+- The charts `cnpg-platform`, `cnpg-project-platform`, `cnpg-cluster`, `cnpg-database` and `cnpg-client`, as published to `oci://ghcr.io/truvity/charts`.
 - The example operator and barman-cloud plugin values under `examples/operator/`.
 - The Go module (`github.com/truvity/cnpg/v2`) that tests and guards the charts.
 - The `cnpgctl` command (`cmd/cnpgctl`, `pkg/verify`) and its release archives. It only reads from the cluster it is pointed at; a report that it writes, or that it prints a Secret's contents, is in scope.

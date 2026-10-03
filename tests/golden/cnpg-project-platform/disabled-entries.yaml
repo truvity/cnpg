@@ -1,0 +1,23 @@
+---
+# Source: cnpg-project-platform/templates/objectstores.yaml
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: on-objectstore
+  namespace: rendered-ns
+spec:
+  configuration:
+    destinationPath: s3://example-bucket/rendered-ns/on-pg
+    s3Credentials:
+      inheritFromIAMRole: true # the pod's ambient identity
+    data:
+      compression: snappy
+      encryption: AES256
+      jobs: 2
+    wal:
+      compression: zstd
+      encryption: AES256
+      maxParallel: 4
+  # The FUNCTIONAL PITR window; a bucket lifecycle rule, if any, is only a
+  # backstop and must outlive it.
+  retentionPolicy: 30d

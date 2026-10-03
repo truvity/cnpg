@@ -1,0 +1,2 @@
+objectStores:
+  - {name: a, namespace: ns, bucketName: example-bucket}

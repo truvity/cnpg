@@ -1,0 +1,63 @@
+# cnpg-project-platform: the objects a platform owns for a project's
+# CloudNativePG Cluster when the project's own chart does not render them
+# (an interface where the platform names every address, instead of the
+# cnpg-cluster chart deriving them). Everything is a list and every list is
+# empty until asked for. The chart decides NOTHING about which project gets
+# which object, or whether a project has moved to this arrangement yet: the
+# caller computes that and passes the result as entries (and as `enabled`).
+# No name below is a default; each is an input. See docs/reference.md.
+
+# Stamped on every object. Per-entry labels and annotations are merged over
+# them (the entry wins).
+commonLabels: {}
+commonAnnotations: {}
+
+# barman-cloud ObjectStores (barmancloud.cnpg.io/v1). The S3 credentials are
+# the pod's own ambient identity (inheritFromIAMRole); a store that needs a
+# Secret is rendered by cnpg-cluster, not here.
+objectStores: []
+#  - name: example-objectstore         required
+#    namespace: example                required
+#    bucketName: example-bucket        required
+#    prefix: example/example-pg        required; the path under the bucket
+#    retentionDays: 30                 the functional PITR window (default 30)
+#    dataCompression: snappy           bzip2 | gzip | lz4 | snappy | "" (default snappy)
+#    walCompression: zstd              bzip2 | gzip | lz4 | snappy | xz | zstd | "" (default zstd)
+#    encryption: AES256                AES256 | aws:kms | "" (default AES256)
+#    dataJobs: 2                       parallel base-backup uploads (default 2)
+#    walMaxParallel: 4                 parallel WAL uploads (default 4)
+#    labels: {}
+#    annotations: {}
+#    enabled: true                     false renders nothing for this entry
+
+# ScheduledBackups (postgresql.cnpg.io/v1), method plugin, owned by
+# themselves, each naming the ObjectStore it writes to.
+scheduledBackups: []
+#  - name: example-pg-scheduled-backup required
+#    namespace: example                 required
+#    clusterName: example-pg            required: the CNPG Cluster
+#    objectStoreName: example-objectstore required
+#    schedule: "0 0 2 * * *"            six-field cron, seconds first (default "0 0 2 * * *")
+#    labels: {}
+#    annotations: {}
+#    enabled: true
+
+# Server TLS for a CNPG Cluster: a cert-manager Certificate for every
+# Service the operator creates for it ({clusterName}-{rw,ro,r}.{namespace}
+# .svc.cluster.local) and the CA Secret the operator, replicas and poolers
+# verify the server with. Both carry cnpg.io/reload so a renewal is served
+# without an instance restart.
+serverTLS: []
+#  - clusterName: example-pg            required
+#    namespace: example                 required
+#    certificateName: example-pg-server-tls   default {clusterName}-server-tls
+#    secretName: example-pg-server-tls        default {clusterName}-server-tls
+#    caSecretName: example-pg-server-ca       default {clusterName}-server-ca
+#    issuerRef: {name: example-issuer, kind: ClusterIssuer, group: cert-manager.io}   required
+#    caCertificates: ["-----BEGIN CERTIFICATE-----..."]   required: the PEM roots, each self-signed
+#    duration: 720h                     passed through when set
+#    renewBefore: 240h
+#    privateKey: {algorithm: ECDSA, size: 384}
+#    labels: {}
+#    annotations: {}
+#    enabled: true

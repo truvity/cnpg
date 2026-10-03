@@ -1,0 +1,4 @@
+serverTLS:
+  - clusterName: c
+    namespace: ns
+    caCertificates: ["-----BEGIN CERTIFICATE-----\nMIIBx\n-----END CERTIFICATE-----"]

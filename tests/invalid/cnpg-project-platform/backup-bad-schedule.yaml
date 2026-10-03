@@ -1,0 +1,2 @@
+scheduledBackups:
+  - {name: a, namespace: ns, clusterName: c, objectStoreName: o, schedule: "@daily"}

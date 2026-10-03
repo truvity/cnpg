@@ -1,0 +1,6 @@
+serverTLS:
+  - clusterName: c
+    namespace: ns
+    issuerRef: {name: i}
+    privateKey: {algorithm: DSA}
+    caCertificates: ["-----BEGIN CERTIFICATE-----\nMIIBx\n-----END CERTIFICATE-----"]

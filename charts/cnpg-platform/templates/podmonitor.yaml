@@ -1,0 +1,65 @@
+{{- /* ONE PodMonitor for every CloudNativePG instance pod the scraper can
+see. Instance pods carry cnpg.io/podRole=instance (set by the operator, and
+only on instance pods) and serve the exporter on the port named `metrics`.
+
+Relabelings, in order: (1) the pg_settings drop (podMonitor.dropPgSettings,
+with keepPgSettings spared), (2) the caller's metricRelabelings. The Postgres
+`cluster` label is NOT added: the exporter emits it on its own series, and a
+target label of the same name would push the exporter's value to
+exported_cluster. The same shape cnpg-cluster's own PodMonitor renders. */}}
+{{- $pm := .Values.podMonitor }}
+{{- if $pm.enabled }}
+{{- $relabelings := list }}
+{{- if $pm.dropPgSettings }}
+{{- if $pm.keepPgSettings }}
+{{- /* A relabel drop cannot say "all but these" in RE2, so mark the kept
+settings first and drop the unmarked rest. */}}
+{{- $names := list }}
+{{- range $pm.keepPgSettings }}{{ $names = append $names (regexQuoteMeta .) }}{{ end }}
+{{- $relabelings = append $relabelings (dict "action" "replace" "sourceLabels" (list "__name__" "name") "separator" ";" "regex" (printf "cnpg_pg_settings_setting;(%s)" (join "|" $names)) "targetLabel" "__tmp_keep_pg_setting" "replacement" "1") }}
+{{- $relabelings = append $relabelings (dict "action" "drop" "sourceLabels" (list "__name__" "__tmp_keep_pg_setting") "separator" ";" "regex" "cnpg_pg_settings_.*;") }}
+{{- $relabelings = append $relabelings (dict "action" "labeldrop" "regex" "__tmp_keep_pg_setting") }}
+{{- else }}
+{{- $relabelings = append $relabelings (dict "action" "drop" "sourceLabels" (list "__name__") "regex" "cnpg_pg_settings_.*") }}
+{{- end }}
+{{- end }}
+{{- $relabelings = concat $relabelings ($pm.metricRelabelings | default list) }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ $pm.name }}
+  namespace: {{ $pm.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "cnpg-platform.labels" . | nindent 4 }}
+    {{- with $pm.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with (include "cnpg-platform.annotations" (dict "root" . "own" $pm.annotations)) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+spec:
+  namespaceSelector:
+    {{- if $pm.namespaces }}
+    matchNames:
+      {{- toYaml $pm.namespaces | nindent 6 }}
+    {{- else }}
+    any: true
+    {{- end }}
+  selector:
+    matchLabels:
+      cnpg.io/podRole: instance
+  {{- with $pm.podTargetLabels }}
+  podTargetLabels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      {{- with $pm.interval }}
+      interval: {{ . | quote }}
+      {{- end }}
+      {{- with $relabelings }}
+      metricRelabelings:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,5 @@
+serverTLS:
+  - clusterName: c
+    namespace: ns
+    issuerRef: {name: i}
+    caCertificates: []

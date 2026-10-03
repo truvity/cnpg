@@ -37,9 +37,9 @@ jobs:
     uses: truvity/ci-workflows/.github/workflows/release-public.yaml@30b989fdd77b99af4be1a4b04e6353aa58aa3923 # v3.21.0
     with:
       # One job: goreleaser builds and archives cnpgctl and cuts the
-      # GitHub release + changelog, then the charts (four) are pushed as
+      # GitHub release + changelog, then the charts (five) are pushed as
       # oci://ghcr.io/truvity/charts/<name> at the same tag.
-      charts: '["cnpg-cluster","cnpg-database","cnpg-platform","cnpg-client"]'
+      charts: '["cnpg-cluster","cnpg-database","cnpg-platform","cnpg-project-platform","cnpg-client"]'
 
   # The CRD mirror charts (barman-cloud-crds) are NOT in the `charts` list above: the
   # shared workflow stamps the tag onto every chart it is given, and these

@@ -1,0 +1,16 @@
+# Every knob: another namespace and name, two scraped namespaces, an
+# interval, a copied pod label, a narrower settings list, an extra rule.
+podMonitor:
+  enabled: true
+  name: pg-instances
+  namespace: monitoring
+  namespaces: [pg-one, pg-two]
+  interval: 30s
+  podTargetLabels: [cnpg-cluster/backup-expected]
+  keepPgSettings: [max_connections, shared_buffers]
+  metricRelabelings:
+    - action: drop
+      sourceLabels: [__name__]
+      regex: cnpg_pg_stat_statements_.*
+  labels: {release: prom}
+  annotations: {example.com/why: scrape}

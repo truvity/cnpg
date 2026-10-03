@@ -1,0 +1,79 @@
+---
+# Source: cnpg-project-platform/templates/servertls.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example-pg-server-ca
+  namespace: example
+  labels:
+    cnpg.io/reload: "true"
+type: Opaque
+stringData:
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIBexample0example0example0example0example0example0example0exa
+    -----END CERTIFICATE-----
+
+---
+# Source: cnpg-project-platform/templates/servertls.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: example-pg-server-tls
+  namespace: example
+spec:
+  secretName: example-pg-server-tls
+  dnsNames:
+    - example-pg-rw.example.svc.cluster.local
+    - example-pg-ro.example.svc.cluster.local
+    - example-pg-r.example.svc.cluster.local
+  issuerRef:
+    name: example-issuer
+  # CloudNativePG reloads a user-provided server Secret only when it carries
+  # cnpg.io/reload: without it a renewal is not served until the instance
+  # restarts.
+  secretTemplate:
+    labels:
+      cnpg.io/reload: "true"
+
+---
+# Source: cnpg-project-platform/templates/objectstores.yaml
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: example-objectstore
+  namespace: example
+spec:
+  configuration:
+    destinationPath: s3://example-bucket/example/example-pg
+    s3Credentials:
+      inheritFromIAMRole: true # the pod's ambient identity
+    data:
+      compression: snappy
+      encryption: AES256
+      jobs: 2
+    wal:
+      compression: zstd
+      encryption: AES256
+      maxParallel: 4
+  # The FUNCTIONAL PITR window; a bucket lifecycle rule, if any, is only a
+  # backstop and must outlive it.
+  retentionPolicy: 30d
+
+---
+# Source: cnpg-project-platform/templates/scheduledbackups.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: example-pg-scheduled-backup
+  namespace: example
+spec:
+  schedule: "0 0 2 * * *"
+  backupOwnerReference: self
+  method: plugin
+  cluster:
+    name: example-pg
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: example-objectstore

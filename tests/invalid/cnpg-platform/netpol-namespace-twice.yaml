@@ -1,0 +1,8 @@
+metricsNetworkPolicy:
+  enabled: true
+  namespaces:
+    - pg-one
+    - name: pg-one
+      labels: {a: b}
+  from:
+    - namespaceSelector: {matchLabels: {a: b}}

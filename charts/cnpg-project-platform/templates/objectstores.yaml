@@ -1,0 +1,43 @@
+{{- /* One barman-cloud ObjectStore per entry. The destination is
+s3://<bucketName>/<prefix>; credentials are the pod's ambient identity. */}}
+{{- $seen := dict }}
+{{- range $i, $o := .Values.objectStores }}
+{{- if include "cnpg-project-platform.on" $o }}
+{{- $name := required (printf "objectStores[%d].name is required" $i) $o.name }}
+{{- $ns := required (printf "objectStores[%d].namespace is required" $i) $o.namespace }}
+{{- $key := printf "%s/%s" $ns $name }}
+{{- if hasKey $seen $key }}
+{{- fail (printf "objectStores: %q appears twice" $key) }}
+{{- end }}
+{{- $_ := set $seen $key true }}
+---
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  {{- include "cnpg-project-platform.metadata" (dict "root" $ "name" $name "namespace" $ns "labels" $o.labels "annotations" $o.annotations) | nindent 2 }}
+spec:
+  configuration:
+    destinationPath: s3://{{ required (printf "objectStores[%d].bucketName is required" $i) $o.bucketName }}/{{ required (printf "objectStores[%d].prefix is required" $i) $o.prefix }}
+    s3Credentials:
+      inheritFromIAMRole: true # the pod's ambient identity
+    data:
+      {{- with (hasKey $o "dataCompression" | ternary $o.dataCompression "snappy") }}
+      compression: {{ . }}
+      {{- end }}
+      {{- with (hasKey $o "encryption" | ternary $o.encryption "AES256") }}
+      encryption: {{ . }}
+      {{- end }}
+      jobs: {{ $o.dataJobs | default 2 }}
+    wal:
+      {{- with (hasKey $o "walCompression" | ternary $o.walCompression "zstd") }}
+      compression: {{ . }}
+      {{- end }}
+      {{- with (hasKey $o "encryption" | ternary $o.encryption "AES256") }}
+      encryption: {{ . }}
+      {{- end }}
+      maxParallel: {{ $o.walMaxParallel | default 4 }}
+  # The FUNCTIONAL PITR window; a bucket lifecycle rule, if any, is only a
+  # backstop and must outlive it.
+  retentionPolicy: {{ $o.retentionDays | default 30 }}d
+{{- end }}
+{{- end }}
