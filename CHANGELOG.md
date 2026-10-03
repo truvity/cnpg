@@ -6,6 +6,8 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+- **Feature:** `cnpg-project-platform` `serverTLS[].caSecretAnnotations`: annotations on the CA `Secret` only, merged over the entry's `annotations`, so the `Certificate` and the `Secret` can carry different metadata. Default none; a render without it is byte-identical to v2.9.0.
+
 ## v2.9.0
 
 - **Feature:** new chart `cnpg-project-platform` (published as `oci://ghcr.io/truvity/charts/cnpg-project-platform`): the per-project objects a platform owns beside a CloudNativePG `Cluster` that another chart renders. Three lists, each empty until asked for: `objectStores` (the barman-cloud `ObjectStore`, destination `s3://<bucketName>/<prefix>`, the pod's ambient identity for credentials), `scheduledBackups` (a `ScheduledBackup`, method `plugin`, naming the `ObjectStore` it writes to) and `serverTLS` (a cert-manager `Certificate` for the `-rw`, `-ro` and `-r` Services and the CA `Secret` carrying `ca.crt`, both marked `cnpg.io/reload`). Every name, namespace and address is an input and the chart decides nothing about which project gets which object; an entry can be switched off with `enabled: false`. The names of the three server-TLS objects can be set, so a platform can take over objects another renderer made under their own names. No `app.kubernetes.io` labels are added: an object keeps exactly the metadata its entry names. Defaults render nothing. Strict schema, goldens and refused fixtures under `tests/`.
