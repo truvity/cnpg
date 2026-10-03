@@ -4,9 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.10.0
 
 - **Feature:** `cnpg-project-platform` `serverTLS[].caSecretAnnotations`: annotations on the CA `Secret` only, merged over the entry's `annotations`, so the `Certificate` and the `Secret` can carry different metadata. Default none; a render without it is byte-identical to v2.9.0.
+- No other chart changes: every other render is byte-identical to v2.9.0.
 
 ## v2.9.0
 
