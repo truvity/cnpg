@@ -267,3 +267,32 @@ serverTLS:
 	require.Len(t, objs["ObjectStore"], 1)
 	assert.Equal(t, "s3://example-bucket/q", objs["ObjectStore"]["s"]["spec"].(map[string]any)["configuration"].(map[string]any)["destinationPath"])
 }
+
+// TestCASecretAnnotationsAreForTheSecretOnly: caSecretAnnotations lands on the
+// CA Secret alone (winning over the entry's annotations there); the
+// Certificate keeps only the entry's annotations. Absent, both carry the
+// entry's annotations as before.
+func TestCASecretAnnotationsAreForTheSecretOnly(t *testing.T) {
+	entry := func(extra string) map[string]map[string]map[string]any {
+		return render(t, `
+serverTLS:
+  - clusterName: app-pg
+    namespace: app
+    issuerRef: {name: example-issuer, kind: ClusterIssuer, group: cert-manager.io}
+    caCertificates:
+      - "`+strings.ReplaceAll(root, "\n", `\n`)+`"
+    annotations: {example.com/wave: "15", example.com/guard: entry}
+`+extra)
+	}
+
+	objs := entry(`    caSecretAnnotations: {example.com/guard: secret}
+`)
+	assert.Equal(t, map[string]any{"example.com/wave": "15", "example.com/guard": "entry"},
+		objs["Certificate"]["app-pg-server-tls"]["metadata"].(map[string]any)["annotations"])
+	assert.Equal(t, map[string]any{"example.com/wave": "15", "example.com/guard": "secret"},
+		objs["Secret"]["app-pg-server-ca"]["metadata"].(map[string]any)["annotations"])
+
+	objs = entry("")
+	assert.Equal(t, objs["Certificate"]["app-pg-server-tls"]["metadata"].(map[string]any)["annotations"],
+		objs["Secret"]["app-pg-server-ca"]["metadata"].(map[string]any)["annotations"])
+}

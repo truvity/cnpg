@@ -97,6 +97,7 @@ fail the render, whichever list they are in.
 | `serverTLS[].caCertificates` | []string (PEM) | required | The roots the issued chain verifies against, in order, each trimmed and joined on a new line into the CA Secret's `ca.crt` (what the operator, replicas and poolers verify the server with). The issued Secret's own `ca.crt` is not enough: an issuer below an intermediate puts the intermediate there, and libpq will not accept a trust anchor that is not self-signed. The Secret carries `ca.crt` as `stringData`. |
 | `serverTLS[].duration` / `.renewBefore` / `.privateKey` | duration / duration / object | unset | Passed to the `Certificate` when set; cert-manager's defaults otherwise. |
 | `*[].labels` / `.annotations` | map | `{}` | On the entry's object(s); the CA Secret also carries `cnpg.io/reload: "true"`, the `Certificate` sets it on its Secret through `secretTemplate`, so a renewal is served without a restart. |
+| `serverTLS[].caSecretAnnotations` | map | `{}` | Annotations on the CA Secret only, merged over the entry's `annotations` (this one wins). Lets the Certificate and the CA Secret differ, e.g. an Argo CD `sync-options` guard on the Secret alone. |
 | `*[].enabled` | bool | `true` | `false` renders nothing for the entry and exempts it from the duplicate check. |
 
 A namespace named `on`, `off`, `y` or `n` is read by YAML as a boolean and

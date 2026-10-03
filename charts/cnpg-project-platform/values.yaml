@@ -59,5 +59,6 @@ serverTLS: []
 #    renewBefore: 240h
 #    privateKey: {algorithm: ECDSA, size: 384}
 #    labels: {}
-#    annotations: {}
+#    annotations: {}                   on the Certificate AND the CA Secret
+#    caSecretAnnotations: {}           on the CA Secret only, merged over annotations (default none)
 #    enabled: true

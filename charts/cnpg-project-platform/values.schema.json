@@ -95,6 +95,7 @@
           },
           "labels": { "$ref": "#/definitions/stringMap" },
           "annotations": { "$ref": "#/definitions/stringMap" },
+          "caSecretAnnotations": { "$ref": "#/definitions/stringMap" },
           "enabled": { "type": "boolean" }
         }
       }

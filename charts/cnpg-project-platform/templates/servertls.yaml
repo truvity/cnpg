@@ -62,7 +62,7 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  {{- include "cnpg-project-platform.metadata" (dict "root" $ "name" $caName "namespace" $ns "labels" $t.labels "annotations" $t.annotations "fixedLabels" (dict "cnpg.io/reload" "true")) | nindent 2 }}
+  {{- include "cnpg-project-platform.metadata" (dict "root" $ "name" $caName "namespace" $ns "labels" $t.labels "annotations" (merge (dict) ($t.caSecretAnnotations | default dict) ($t.annotations | default dict)) "fixedLabels" (dict "cnpg.io/reload" "true")) | nindent 2 }}
 type: Opaque
 stringData:
   ca.crt: |
