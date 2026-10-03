@@ -1,0 +1,18 @@
+# The shape of a platform taking over objects a project's chart rendered
+# before: the existing names kept ({cluster}-server-tls for the Certificate),
+# and a sync option that stops the delivery tool pruning them while two
+# owners overlap.
+serverTLS:
+  - clusterName: example-pg
+    namespace: example
+    certificateName: example-pg-server-tls
+    issuerRef: {name: example-issuer, kind: ClusterIssuer, group: cert-manager.io}
+    caCertificates:
+      - |-
+        -----BEGIN CERTIFICATE-----
+        MIIBexample0example0example0example0example0example0example0exa
+        -----END CERTIFICATE-----
+    duration: 2160h
+    renewBefore: 720h
+    privateKey: {algorithm: ECDSA, size: 384}
+    annotations: {example.com/sync-options: "Prune=false,Delete=false"}

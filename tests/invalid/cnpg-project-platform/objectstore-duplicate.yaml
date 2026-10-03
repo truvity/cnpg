@@ -1,0 +1,3 @@
+objectStores:
+  - {name: a, namespace: ns, bucketName: example-bucket, prefix: p}
+  - {name: a, namespace: ns, bucketName: example-bucket, prefix: q}

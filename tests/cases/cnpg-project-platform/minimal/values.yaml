@@ -1,0 +1,20 @@
+# One of each, only the required keys: the defaults a stranger gets.
+objectStores:
+  - name: example-objectstore
+    namespace: example
+    bucketName: example-bucket
+    prefix: example/example-pg
+scheduledBackups:
+  - name: example-pg-scheduled-backup
+    namespace: example
+    clusterName: example-pg
+    objectStoreName: example-objectstore
+serverTLS:
+  - clusterName: example-pg
+    namespace: example
+    issuerRef: {name: example-issuer}
+    caCertificates:
+      - |-
+        -----BEGIN CERTIFICATE-----
+        MIIBexample0example0example0example0example0example0example0exa
+        -----END CERTIFICATE-----

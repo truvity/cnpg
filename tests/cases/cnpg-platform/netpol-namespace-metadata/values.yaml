@@ -1,0 +1,16 @@
+# A namespace entry is a name or {name, labels, annotations}; the object form
+# is merged over the policy-wide metadata and the other entries do not
+# inherit it.
+metricsNetworkPolicy:
+  enabled: true
+  name: pg-metrics
+  namespaces:
+    - pg-plain
+    - name: pg-primary
+      labels: {example.com/tier: primary}
+      annotations: {example.com/sync-options: Prune=false}
+  from:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: monitoring}
+  labels: {example.com/layer: network}
+  annotations: {example.com/wave: "15"}

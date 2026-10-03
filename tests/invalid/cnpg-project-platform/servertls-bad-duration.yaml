@@ -1,0 +1,6 @@
+serverTLS:
+  - clusterName: c
+    namespace: ns
+    issuerRef: {name: i}
+    duration: 30d
+    caCertificates: ["-----BEGIN CERTIFICATE-----\nMIIBx\n-----END CERTIFICATE-----"]

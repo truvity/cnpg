@@ -6,7 +6,8 @@
   "additionalProperties": false,
   "definitions": {
     "stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
-    "duration": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h|d|w|y)$" }
+    "duration": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h|d|w|y)$" },
+    "durationOrEmpty": { "type": "string", "pattern": "^([0-9]+(ms|s|m|h|d|w|y))?$" }
   },
   "properties": {
     "global": { "type": "object", "description": "Admitted so the chart can be embedded; nothing reads it." },
@@ -46,8 +47,42 @@
         "enabled": { "type": "boolean" },
         "name": { "type": "string", "minLength": 1 },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "namespaces": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "namespaces": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 1 },
+                  "labels": { "$ref": "#/definitions/stringMap" },
+                  "annotations": { "$ref": "#/definitions/stringMap" }
+                }
+              }
+            ]
+          }
+        },
         "from": { "type": "array", "items": { "type": "object", "minProperties": 1 } },
+        "labels": { "$ref": "#/definitions/stringMap" },
+        "annotations": { "$ref": "#/definitions/stringMap" }
+      }
+    },
+    "podMonitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "name": { "type": "string", "minLength": 1 },
+        "namespace": { "type": "string" },
+        "namespaces": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "interval": { "$ref": "#/definitions/durationOrEmpty" },
+        "podTargetLabels": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "dropPgSettings": { "type": "boolean" },
+        "keepPgSettings": { "type": "array", "items": { "type": "string", "pattern": "^[A-Za-z0-9_.]+$" } },
+        "metricRelabelings": { "type": "array", "items": { "type": "object" } },
         "labels": { "$ref": "#/definitions/stringMap" },
         "annotations": { "$ref": "#/definitions/stringMap" }
       }

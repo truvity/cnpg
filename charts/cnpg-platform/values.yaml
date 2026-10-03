@@ -33,11 +33,61 @@ metricsNetworkPolicy:
   enabled: false
   name: cnpg-instance-metrics
   port: 9187
-  # Namespaces that host PostgreSQL clusters. Required when enabled.
+  # Namespaces that host PostgreSQL clusters. Required when enabled. Each
+  # entry is a namespace name, or an object {name, labels, annotations} when
+  # one namespace's policy needs metadata the others do not carry (merged
+  # over the labels and annotations above).
   namespaces: []
+  #  - example-one
+  #  - name: example-two
+  #    labels: {example.com/tier: primary}
+  #    annotations: {argocd.argoproj.io/sync-options: Prune=false}
   # NetworkPolicyPeer objects allowed to scrape (namespaceSelector and/or
   # podSelector). Required when enabled: there is no default scraper.
   from: []
+  labels: {}
+  annotations: {}
+
+# ONE PodMonitor that scrapes the exporter (port `metrics`, 9187) of every
+# CloudNativePG instance pod the scraper can see, selected by the label the
+# operator puts on instance pods and only there (cnpg.io/podRole=instance).
+# Needs the monitoring.coreos.com/v1 PodMonitor API (prometheus-operator, or
+# the VictoriaMetrics operator's converter); the chart does not probe for
+# it, so enable it only where it is served. A database that renders its own
+# PodMonitor (cnpg-cluster does, by default) is scraped twice beside this
+# one: turn the cluster's off (monitoring.podMonitor.enabled=false), or
+# leave this off. The scrape job is <namespace>/<name>.
+podMonitor:
+  enabled: false
+  name: cnpg-instances
+  # Namespace of the PodMonitor itself. Empty = the release namespace.
+  namespace: ""
+  # Namespaces whose instance pods are scraped. Empty = every namespace.
+  namespaces: []
+  # e.g. "30s". Empty = the scraper's own default.
+  interval: ""
+  # Pod labels copied onto every scraped series (the operator turns each
+  # non-alphanumeric character of the key into `_`), e.g.
+  # cnpg-cluster/backup-expected, which the cnpg-cluster chart sets on a
+  # database that is deliberately not backed up.
+  podTargetLabels: []
+  # Drop the cnpg_pg_settings_* family before it is stored (roughly 500-700
+  # series per instance), except the settings in keepPgSettings: the ones
+  # the upstream CloudNativePG Grafana dashboard reads. Same behaviour and
+  # same relabeling as cnpg-cluster's monitoring.podMonitor.
+  dropPgSettings: true
+  keepPgSettings:
+    - block_size
+    - effective_cache_size
+    - maintenance_work_mem
+    - max_connections
+    - random_page_cost
+    - seq_page_cost
+    - shared_buffers
+    - work_mem
+  # Appended after the drop above. Write `action` explicitly on every rule:
+  # only the prometheus-operator CRD defaults it.
+  metricRelabelings: []
   labels: {}
   annotations: {}
 

@@ -1,0 +1,3 @@
+scheduledBackups:
+  - {name: a, namespace: ns, clusterName: c, objectStoreName: o}
+  - {name: a, namespace: ns, clusterName: d, objectStoreName: o}

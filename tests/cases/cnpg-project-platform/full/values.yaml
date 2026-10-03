@@ -1,0 +1,66 @@
+# Every key, two namespaces, two roots, metadata at both levels.
+commonLabels: {example.com/team: data}
+commonAnnotations: {example.com/owner: platform}
+objectStores:
+  - name: one-objectstore
+    namespace: one
+    bucketName: example-bucket
+    prefix: one/one-pg
+    retentionDays: 14
+    dataCompression: gzip
+    walCompression: xz
+    encryption: aws:kms
+    dataJobs: 3
+    walMaxParallel: 8
+    labels: {example.com/tier: primary}
+    annotations: {example.com/wave: "20"}
+    enabled: true
+  - name: two-objectstore
+    namespace: two
+    bucketName: example-bucket
+    prefix: two/two-pg
+    # An empty encryption sends no header: stores that reject it.
+    encryption: ""
+    dataCompression: ""
+scheduledBackups:
+  - name: one-pg-scheduled-backup
+    namespace: one
+    clusterName: one-pg
+    objectStoreName: one-objectstore
+    schedule: "0 30 3 * * *"
+    labels: {example.com/tier: primary}
+    annotations: {example.com/wave: "25"}
+    enabled: true
+  - name: two-pg-scheduled-backup
+    namespace: two
+    clusterName: two-pg
+    objectStoreName: two-objectstore
+serverTLS:
+  - clusterName: one-pg
+    namespace: one
+    certificateName: one-pg-server
+    secretName: one-pg-tls
+    caSecretName: one-pg-ca
+    issuerRef: {name: example-issuer, kind: ClusterIssuer, group: cert-manager.io}
+    caCertificates:
+      - |-
+        -----BEGIN CERTIFICATE-----
+        MIIBexample0example0example0example0example0example0example0exa
+        -----END CERTIFICATE-----
+      - |
+        -----BEGIN CERTIFICATE-----
+        MIIBsecond0root0second0root0second0root0second0root0second0root
+        -----END CERTIFICATE-----
+    duration: 720h
+    renewBefore: 240h
+    privateKey: {algorithm: ECDSA, size: 384, rotationPolicy: Always}
+    labels: {example.com/tier: primary}
+    annotations: {example.com/wave: "15"}
+  - clusterName: two-pg
+    namespace: two
+    issuerRef: {name: example-issuer}
+    caCertificates:
+      - |-
+        -----BEGIN CERTIFICATE-----
+        MIIBexample0example0example0example0example0example0example0exa
+        -----END CERTIFICATE-----

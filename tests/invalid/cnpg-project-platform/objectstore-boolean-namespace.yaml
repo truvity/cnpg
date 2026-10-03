@@ -1,0 +1,2 @@
+objectStores:
+  - {name: a, namespace: on, bucketName: example-bucket, prefix: p}

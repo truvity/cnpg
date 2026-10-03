@@ -9,7 +9,23 @@ opens on database instances and nothing else in the namespace. */}}
 {{- if not $np.from }}
 {{- fail "metricsNetworkPolicy.enabled is true but metricsNetworkPolicy.from is empty: there is no default scraper, name one" }}
 {{- end }}
-{{- range $ns := $np.namespaces }}
+{{- $seenNs := dict }}
+{{- range $entry := $np.namespaces }}
+{{- /* An entry is a namespace name, or {name, labels, annotations}: the
+object form carries metadata only that namespace's policy needs, merged over
+the policy-wide labels and annotations. */}}
+{{- $ns := $entry }}
+{{- $nsLabels := dict }}
+{{- $nsAnnotations := dict }}
+{{- if kindIs "map" $entry }}
+{{- $ns = $entry.name }}
+{{- $nsLabels = $entry.labels | default dict }}
+{{- $nsAnnotations = $entry.annotations | default dict }}
+{{- end }}
+{{- if hasKey $seenNs $ns }}
+{{- fail (printf "metricsNetworkPolicy.namespaces: %q appears twice" $ns) }}
+{{- end }}
+{{- $_ := set $seenNs $ns true }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -18,10 +34,10 @@ metadata:
   namespace: {{ $ns }}
   labels:
     {{- include "cnpg-platform.labels" $ | nindent 4 }}
-    {{- with $np.labels }}
+    {{- with (merge (dict) $nsLabels ($np.labels | default dict)) }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-  {{- with (include "cnpg-platform.annotations" (dict "root" $ "own" $np.annotations)) }}
+  {{- with (include "cnpg-platform.annotations" (dict "root" $ "own" (merge (dict) $nsAnnotations ($np.annotations | default dict)))) }}
   {{- . | nindent 2 }}
   {{- end }}
 spec:

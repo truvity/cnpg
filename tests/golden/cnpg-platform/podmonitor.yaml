@@ -1,0 +1,37 @@
+---
+# Source: cnpg-platform/templates/podmonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cnpg-instances
+  namespace: cnpg-system
+  labels:
+    app.kubernetes.io/name: cnpg-platform
+    app.kubernetes.io/instance: cnpg-platform
+    app.kubernetes.io/managed-by: Helm
+spec:
+  namespaceSelector:
+    any: true
+  selector:
+    matchLabels:
+      cnpg.io/podRole: instance
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      metricRelabelings:
+        - action: replace
+          regex: cnpg_pg_settings_setting;(block_size|effective_cache_size|maintenance_work_mem|max_connections|random_page_cost|seq_page_cost|shared_buffers|work_mem)
+          replacement: "1"
+          separator: ;
+          sourceLabels:
+          - __name__
+          - name
+          targetLabel: __tmp_keep_pg_setting
+        - action: drop
+          regex: cnpg_pg_settings_.*;
+          separator: ;
+          sourceLabels:
+          - __name__
+          - __tmp_keep_pg_setting
+        - action: labeldrop
+          regex: __tmp_keep_pg_setting

@@ -1,0 +1,49 @@
+---
+# Source: cnpg-platform/templates/podmonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: pg-instances
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: cnpg-platform
+    app.kubernetes.io/instance: cnpg-platform
+    app.kubernetes.io/managed-by: Helm
+    release: prom
+  annotations:
+    example.com/why: scrape
+spec:
+  namespaceSelector:
+    matchNames:
+      - pg-one
+      - pg-two
+  selector:
+    matchLabels:
+      cnpg.io/podRole: instance
+  podTargetLabels:
+    - cnpg-cluster/backup-expected
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: "30s"
+      metricRelabelings:
+        - action: replace
+          regex: cnpg_pg_settings_setting;(max_connections|shared_buffers)
+          replacement: "1"
+          separator: ;
+          sourceLabels:
+          - __name__
+          - name
+          targetLabel: __tmp_keep_pg_setting
+        - action: drop
+          regex: cnpg_pg_settings_.*;
+          separator: ;
+          sourceLabels:
+          - __name__
+          - __tmp_keep_pg_setting
+        - action: labeldrop
+          regex: __tmp_keep_pg_setting
+        - action: drop
+          regex: cnpg_pg_stat_statements_.*
+          sourceLabels:
+          - __name__

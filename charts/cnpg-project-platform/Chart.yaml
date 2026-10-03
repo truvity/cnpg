@@ -1,0 +1,22 @@
+apiVersion: v2
+name: cnpg-project-platform
+description: >-
+  The per-project objects a platform owns beside a CloudNativePG Cluster it
+  does not render itself: the barman-cloud ObjectStore, the ScheduledBackup
+  that takes base backups into it, and the server certificate with its CA
+  Secret. Every name, namespace and address is an input; the chart decides
+  nothing about which project gets what.
+type: application
+# Placeholder: the git tag is the sole version authority. The release
+# workflow stamps both fields from the tag.
+version: 0.0.0
+appVersion: 0.0.0
+home: https://github.com/truvity/cnpg
+sources:
+  - https://github.com/truvity/cnpg
+keywords:
+  - cloudnative-pg
+  - postgresql
+maintainers:
+  - name: Truvity
+    url: https://github.com/truvity

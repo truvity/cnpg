@@ -1,0 +1,48 @@
+---
+# Source: cnpg-project-platform/templates/servertls.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example-pg-server-ca
+  namespace: example
+  labels:
+    cnpg.io/reload: "true"
+  annotations:
+    example.com/sync-options: Prune=false,Delete=false
+type: Opaque
+stringData:
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIBexample0example0example0example0example0example0example0exa
+    -----END CERTIFICATE-----
+
+---
+# Source: cnpg-project-platform/templates/servertls.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: example-pg-server-tls
+  namespace: example
+  annotations:
+    example.com/sync-options: Prune=false,Delete=false
+spec:
+  secretName: example-pg-server-tls
+  dnsNames:
+    - example-pg-rw.example.svc.cluster.local
+    - example-pg-ro.example.svc.cluster.local
+    - example-pg-r.example.svc.cluster.local
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 384
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: example-issuer
+  # CloudNativePG reloads a user-provided server Secret only when it carries
+  # cnpg.io/reload: without it a renewal is not served until the instance
+  # restarts.
+  secretTemplate:
+    labels:
+      cnpg.io/reload: "true"

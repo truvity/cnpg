@@ -172,3 +172,94 @@ func TestBackupNotConfigured(t *testing.T) {
 
 	assert.Nil(t, rule("alerts.backupNotConfigured.enabled=false"))
 }
+
+// TestPodMonitorSelectsInstancePodsInEveryNamespace: one PodMonitor, in the
+// release namespace unless told otherwise, selecting instance pods by the
+// label the operator sets, on the port named metrics, with the pg_settings
+// drop first and the caller's rules after it.
+func TestPodMonitorSelectsInstancePodsInEveryNamespace(t *testing.T) {
+	assert.Empty(t, render(t), "off by default")
+
+	docs := render(t, "podMonitor.enabled=true")
+	require.Len(t, docs, 1)
+
+	pm := docs[0]
+	assert.Equal(t, "PodMonitor", pm["kind"])
+
+	meta := pm["metadata"].(map[string]any)
+	assert.Equal(t, "cnpg-instances", meta["name"])
+	assert.Equal(t, "default", meta["namespace"])
+
+	spec := pm["spec"].(map[string]any)
+	assert.Equal(t, map[string]any{"any": true}, spec["namespaceSelector"])
+	assert.Equal(t, map[string]any{"matchLabels": map[string]any{"cnpg.io/podRole": "instance"}}, spec["selector"])
+	assert.NotContains(t, spec, "podTargetLabels")
+
+	ep := spec["podMetricsEndpoints"].([]any)[0].(map[string]any)
+	assert.Equal(t, "metrics", ep["port"])
+	assert.Equal(t, "/metrics", ep["path"])
+
+	rel := ep["metricRelabelings"].([]any)
+	require.Len(t, rel, 3)
+	assert.Equal(t, "replace", rel[0].(map[string]any)["action"])
+	assert.Equal(t, "cnpg_pg_settings_setting;(block_size|effective_cache_size|maintenance_work_mem|max_connections|random_page_cost|seq_page_cost|shared_buffers|work_mem)", rel[0].(map[string]any)["regex"])
+	assert.Equal(t, "drop", rel[1].(map[string]any)["action"])
+	assert.Equal(t, "labeldrop", rel[2].(map[string]any)["action"])
+}
+
+func TestPodMonitorKnobs(t *testing.T) {
+	docs := render(t, "podMonitor.enabled=true", "podMonitor.namespaces={pg-one,pg-two}",
+		"podMonitor.interval=30s", "podMonitor.namespace=monitoring",
+		"podMonitor.podTargetLabels={cnpg-cluster/backup-expected}",
+		"podMonitor.keepPgSettings=null")
+	require.Len(t, docs, 1)
+
+	assert.Equal(t, "monitoring", docs[0]["metadata"].(map[string]any)["namespace"])
+
+	spec := docs[0]["spec"].(map[string]any)
+	assert.Equal(t, map[string]any{"matchNames": []any{"pg-one", "pg-two"}}, spec["namespaceSelector"])
+	assert.Equal(t, []any{"cnpg-cluster/backup-expected"}, spec["podTargetLabels"])
+
+	ep := spec["podMetricsEndpoints"].([]any)[0].(map[string]any)
+	assert.Equal(t, "30s", ep["interval"])
+
+	// No settings spared: the whole family is dropped by one rule.
+	rel := ep["metricRelabelings"].([]any)
+	require.Len(t, rel, 1)
+	assert.Equal(t, "cnpg_pg_settings_.*", rel[0].(map[string]any)["regex"])
+
+	// dropPgSettings=false leaves only the caller's rules, in order.
+	docs = render(t, "podMonitor.enabled=true", "podMonitor.dropPgSettings=false")
+	ep = docs[0]["spec"].(map[string]any)["podMetricsEndpoints"].([]any)[0].(map[string]any)
+	assert.NotContains(t, ep, "metricRelabelings")
+}
+
+// TestMetricsPolicyNamespaceMetadata: an entry that is an object carries its
+// own labels and annotations over the policy-wide ones; a plain name
+// inherits only the policy-wide ones.
+func TestMetricsPolicyNamespaceMetadata(t *testing.T) {
+	docs := render(t, "metricsNetworkPolicy.enabled=true",
+		"metricsNetworkPolicy.labels.shared=yes",
+		"metricsNetworkPolicy.annotations.shared=yes",
+		"metricsNetworkPolicy.namespaces[0]=plain",
+		"metricsNetworkPolicy.namespaces[1].name=special",
+		"metricsNetworkPolicy.namespaces[1].labels.tier=primary",
+		"metricsNetworkPolicy.namespaces[1].annotations.shared=overridden",
+		"metricsNetworkPolicy.from[0].podSelector.matchLabels.app=s")
+	require.Len(t, docs, 2)
+
+	byNS := map[string]map[string]any{}
+	for _, d := range docs {
+		byNS[d["metadata"].(map[string]any)["namespace"].(string)] = d["metadata"].(map[string]any)
+	}
+
+	plain := byNS["plain"]
+	assert.Equal(t, "yes", plain["labels"].(map[string]any)["shared"])
+	assert.NotContains(t, plain["labels"], "tier")
+	assert.Equal(t, map[string]any{"shared": "yes"}, plain["annotations"])
+
+	special := byNS["special"]
+	assert.Equal(t, "primary", special["labels"].(map[string]any)["tier"])
+	assert.Equal(t, "yes", special["labels"].(map[string]any)["shared"])
+	assert.Equal(t, map[string]any{"shared": "overridden"}, special["annotations"])
+}

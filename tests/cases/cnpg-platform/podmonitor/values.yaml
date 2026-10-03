@@ -1,0 +1,3 @@
+# The cluster-wide PodMonitor with its defaults, in the release namespace.
+podMonitor:
+  enabled: true

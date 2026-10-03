@@ -25,8 +25,16 @@ chart renders nothing with its default values.
 | `metricsNetworkPolicy.enabled` | bool | `false` | One `NetworkPolicy` per listed namespace opening the metrics port on database instance pods. |
 | `metricsNetworkPolicy.name` | string | `cnpg-instance-metrics` | Policy name. |
 | `metricsNetworkPolicy.port` | int | `9187` | The instance exporter's port. |
-| `metricsNetworkPolicy.namespaces` | []string | `[]` | Required when enabled. |
+| `metricsNetworkPolicy.namespaces` | []string \| []object | `[]` | Required when enabled. Each entry is a namespace name, or `{name, labels, annotations}` when that namespace's policy needs metadata the others do not carry (merged over `metricsNetworkPolicy.labels` / `.annotations`, the entry winning). A namespace listed twice fails the render. |
 | `metricsNetworkPolicy.from` | []NetworkPolicyPeer | `[]` | Required when enabled; no default scraper. Each peer needs a selector. |
+| `podMonitor.enabled` | bool | `false` | Render ONE `PodMonitor` that scrapes every CloudNativePG instance pod the scraper can see: pods labelled `cnpg.io/podRole=instance` (the operator sets it on instance pods and only there), the port named `metrics`, path `/metrics`. The scrape job is `<namespace>/<name>`. Needs the `monitoring.coreos.com/v1` `PodMonitor` API (prometheus-operator, or the VictoriaMetrics operator's converter); the chart does not probe for it. A database that renders its own `PodMonitor` (`cnpg-cluster` does, by default) would be scraped twice: turn that one off (`monitoring.podMonitor.enabled=false`) or leave this off. |
+| `podMonitor.name` / `.namespace` | string | `cnpg-instances` / release namespace | The object's name and namespace. |
+| `podMonitor.namespaces` | []string | `[]` | Namespaces whose instance pods are scraped. Empty means every namespace (`namespaceSelector.any`). |
+| `podMonitor.interval` | duration | `""` | Scrape interval; empty is the scraper's own default. |
+| `podMonitor.podTargetLabels` | []string | `[]` | Pod labels copied onto every scraped series, e.g. `cnpg-cluster/backup-expected` (becomes `cnpg_cluster_backup_expected`), which `alerts.backupNotConfigured` reads. |
+| `podMonitor.dropPgSettings` / `.keepPgSettings` | bool / []string | `true` / the eight the upstream dashboard reads | Drops the `cnpg_pg_settings_*` family (roughly 500-700 series per instance) before storage, sparing the listed settings. The same relabeling `cnpg-cluster`'s own `PodMonitor` renders. An empty `keepPgSettings` drops the whole family. |
+| `podMonitor.metricRelabelings` | []object | `[]` | Appended after the drop. Write `action` explicitly on every rule. |
+| `podMonitor.labels` / `.annotations` | map | `{}` | On the object. |
 | `alerts.enabled` | bool | `false` | Render the rule object. Enabled with every rule off fails the render. |
 | `alerts.kind` | `PrometheusRule` \| `VMRule` | `PrometheusRule` | Which CRD. |
 | `alerts.name` | string | `cnpg-baseline` | Object and group name. |
@@ -52,6 +60,47 @@ chart renders nothing with its default values.
 
 The guard assumes the `DatabaseRole` spec fields `superuser`, `replication`,
 `bypassrls` and `createrole`; a spec that omits one is accepted.
+
+## charts/cnpg-project-platform
+
+The objects a platform owns for a project's CloudNativePG `Cluster` when the
+project's own chart does not render them: the barman-cloud `ObjectStore`, the
+`ScheduledBackup` that takes base backups into it, and the server
+certificate with its CA Secret. Every list is empty until asked for, so the
+chart renders nothing with its default values, and nothing in it names an
+estate: every name, namespace and address is an entry's input.
+
+The chart decides NOTHING about which project gets which object, or whether a
+project has moved to this arrangement yet. The caller computes that and
+passes the result as entries, and as `enabled` on an entry it wants to keep
+in its input but not render. It adds no `app.kubernetes.io` labels: an object
+that already exists under another renderer keeps its metadata exactly, and
+only `commonLabels`, `commonAnnotations` and the entry's own are rendered.
+Two entries that would render the same object (same kind, namespace and name)
+fail the render, whichever list they are in.
+
+| Key | Type | Default | What it does |
+|---|---|---|---|
+| `commonLabels` / `commonAnnotations` | map | `{}` | On every object. An entry's own keys win. |
+| `objectStores[].name` / `.namespace` | string | required | The `ObjectStore`'s name and namespace. |
+| `objectStores[].bucketName` / `.prefix` | string | required | The destination, `s3://<bucketName>/<prefix>`. The prefix has no leading or trailing slash. Credentials are the pod's ambient identity (`inheritFromIAMRole`); a store that needs a Secret is `cnpg-cluster`'s. |
+| `objectStores[].retentionDays` | int | `30` | The functional point-in-time window, rendered as `retentionPolicy: <n>d`. A bucket lifecycle rule is only a backstop and must outlive it. |
+| `objectStores[].dataCompression` | `bzip2` \| `gzip` \| `lz4` \| `snappy` \| `""` | `snappy` | Base-backup compression; empty sends none. |
+| `objectStores[].walCompression` | as above plus `xz`, `zstd` | `zstd` | WAL compression. |
+| `objectStores[].encryption` | `AES256` \| `aws:kms` \| `""` | `AES256` | Server-side encryption asked for on every upload, on data and WAL. Empty sends no header, for stores that reject it. |
+| `objectStores[].dataJobs` / `.walMaxParallel` | int | `2` / `4` | Parallel uploads. |
+| `scheduledBackups[].name` / `.namespace` / `.clusterName` / `.objectStoreName` | string | required | The `ScheduledBackup`, the CNPG `Cluster` it backs up and the `ObjectStore` it writes to. Method `plugin`, `backupOwnerReference: self`. |
+| `scheduledBackups[].schedule` | string | `0 0 2 * * *` | Six-field cron, seconds first. |
+| `serverTLS[].clusterName` / `.namespace` | string | required | The `Cluster`. The `Certificate` covers `<clusterName>-{rw,ro,r}.<namespace>.svc.cluster.local` and nothing shorter (a private CA constrained to `cluster.local` cannot sign the short forms). |
+| `serverTLS[].certificateName` / `.secretName` / `.caSecretName` | string | `<clusterName>-server-tls` / `<clusterName>-server-tls` / `<clusterName>-server-ca` | The names, so an object another renderer made can be taken over under its own name. The Certificate and its Secret may share a name; two Secrets or two Certificates may not. |
+| `serverTLS[].issuerRef` | `{name, kind, group}` | required | The cert-manager issuer. |
+| `serverTLS[].caCertificates` | []string (PEM) | required | The roots the issued chain verifies against, in order, each trimmed and joined on a new line into the CA Secret's `ca.crt` (what the operator, replicas and poolers verify the server with). The issued Secret's own `ca.crt` is not enough: an issuer below an intermediate puts the intermediate there, and libpq will not accept a trust anchor that is not self-signed. The Secret carries `ca.crt` as `stringData`. |
+| `serverTLS[].duration` / `.renewBefore` / `.privateKey` | duration / duration / object | unset | Passed to the `Certificate` when set; cert-manager's defaults otherwise. |
+| `*[].labels` / `.annotations` | map | `{}` | On the entry's object(s); the CA Secret also carries `cnpg.io/reload: "true"`, the `Certificate` sets it on its Secret through `secretTemplate`, so a renewal is served without a restart. |
+| `*[].enabled` | bool | `true` | `false` renders nothing for the entry and exempts it from the duplicate check. |
+
+A namespace named `on`, `off`, `y` or `n` is read by YAML as a boolean and
+refused by the schema; quote it.
 
 ## charts/cnpg-cluster
 

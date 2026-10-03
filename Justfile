@@ -11,7 +11,8 @@ fmt:
 
 # The chart render tests (chart_test.go et al. drive `helm template`; they
 # carry the golden and negative roles for cnpg-cluster and cnpg-database)
-# and the golden renders of the charts that use tests/cases: cnpg-platform.
+# and the golden renders of the charts that use tests/cases: cnpg-platform and
+# cnpg-project-platform.
 test:
     hack/golden.sh
     go test ./... -coverprofile=coverage.out
@@ -73,6 +74,18 @@ charts:
     fi
     for values in tests/invalid/cnpg-platform/*.yaml; do
       if helm template invalid charts/cnpg-platform -f "$values" >/dev/null 2>&1; then
+        echo "RENDERED BUT SHOULD HAVE FAILED: $values" >&2
+        exit 1
+      fi
+    done
+    # cnpg-project-platform: the same three checks.
+    helm lint charts/cnpg-project-platform
+    if helm template x charts/cnpg-project-platform --set bogusKey=1 >/dev/null 2>&1; then
+      echo "cnpg-project-platform: an unknown key rendered" >&2
+      exit 1
+    fi
+    for values in tests/invalid/cnpg-project-platform/*.yaml; do
+      if helm template invalid charts/cnpg-project-platform -f "$values" >/dev/null 2>&1; then
         echo "RENDERED BUT SHOULD HAVE FAILED: $values" >&2
         exit 1
       fi
@@ -304,6 +317,7 @@ package:
     helm package charts/cnpg-cluster --destination dist/
     helm package charts/cnpg-database --destination dist/
     helm package charts/cnpg-platform --destination dist/
+    helm package charts/cnpg-project-platform --destination dist/
     helm package charts/cnpg-client --destination dist/
     for chart in {{ crd-charts }}; do helm package "charts/$chart" --destination dist/; done
 
