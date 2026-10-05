@@ -196,6 +196,7 @@ package a chart's dependencies today; see
   shape older releases assumed and the plain-input shape at HEAD.
 - [`docs/authentication.md`](docs/authentication.md) — the per-database client trust model, hba ordering and the people mapping.
 - [`docs/cnpgctl.md`](docs/cnpgctl.md) — the `cnpgctl verify` assertions and flags.
+- [`docs/backupstore.md`](docs/backupstore.md) — the Pulumi backup bucket and KMS component (`pkg/aws/backupstore`).
 - [`docs/conformance.md`](docs/conformance.md) — the kind conformance suite:
   what the charts do with cert-manager, approver-policy, trust-manager and
   the CloudNativePG operator, asserted on a disposable cluster
