@@ -8,6 +8,10 @@ upgrade is expected to clear.
 
 - **Feature:** `github.com/truvity/cnpg/v2/pkg/aws/backupstore`, the cross-account CNPG backup bucket and its KMS key as a Pulumi component (`truvity:cnpg/aws:BackupStore`), moves here from `truvity/k8s` (`pkg/aws/backupbucket`, `truvity:k8s/aws:BackupBucket`). The code and every child's logical name are unchanged; the component aliases itself from the former type, so a stack that deployed `backupbucket` adopts it with no replace and a zero-change preview. It builds the versioned, KMS-encrypted bucket, the bucket and key policies that admit a writer-role glob and deny version deletion outside the backup account, the lifecycle backstop, optional Object Lock and an optional same-account cross-region replica. It builds no IAM role: the writer role and its Pod Identity belong to the cluster's cnpg-projects chart. The module's dependency graph gains the Pulumi SDK and the AWS provider; charts and `cnpgctl` are unchanged. See `docs/backupstore.md`.
 
+## v2.10.1
+
+- Dependency and CI pin updates only (ci-workflows v3.25.0, devbox packages, `uv`, lock-file maintenance). No chart, `cnpgctl` or client change: every render is byte-identical to v2.10.0.
+
 ## v2.10.0
 
 - **Feature:** `cnpg-project-platform` `serverTLS[].caSecretAnnotations`: annotations on the CA `Secret` only, merged over the entry's `annotations`, so the `Certificate` and the `Secret` can carry different metadata. Default none; a render without it is byte-identical to v2.9.0.
