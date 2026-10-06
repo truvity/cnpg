@@ -13,6 +13,11 @@ Identity association per ServiceAccount, through ACK.
 The objects sit in backupAccess.objectNamespace so the controller's own
 identity creates them: a project's namespace is bound to the project's
 own, narrower identity, which must not be able to mint these roles.
+
+Both kinds carry services.k8s.aws/adoption-policy: adopt-or-create (the ACK
+IAM and EKS controllers need the ResourceAdoption feature gate). The role is
+found by spec.name; the association by spec.clusterName + namespace +
+serviceAccount. backupAccess.annotations can override the policy.
 */ -}}
 {{- $v := .Values.backupAccess }}
 {{- if $v.roles }}
@@ -20,6 +25,11 @@ own, narrower identity, which must not be able to mint these roles.
 {{- $bucketARN := printf "arn:aws:s3:::%s" (required "backupAccess.bucketName is required" $v.bucketName) }}
 {{- $account := required "backupAccess.accountID is required" ($v.accountID | toString) }}
 {{- $clusterARN := printf "arn:aws:eks:%s:%s:cluster/%s" (required "backupAccess.region is required" $v.region) $account (required "backupAccess.clusterName is required" $v.clusterName) }}
+{{- /* adopt-or-create: a role or association that already exists under the
+same identity (role name; cluster + namespace + ServiceAccount) is adopted
+instead of failing with "already exists", so a cluster whose archive identity
+was minted by another tool hands it to ACK without a delete. */ -}}
+{{- $annotations := merge (deepCopy ($v.annotations | default dict)) (dict "services.k8s.aws/adoption-policy" "adopt-or-create") }}
 {{- range $r := $v.roles }}
 {{- $roleName := required "backupAccess.roles[].name is required" $r.name }}
 {{- $sa := ternary (index $r.serviceAccounts 0) $r.serviceAccounts (eq (len $r.serviceAccounts) 1) }}
@@ -57,10 +67,8 @@ kind: Role
 metadata:
   name: {{ $roleName }}
   namespace: {{ $ns }}
-  {{- with $v.annotations }}
   annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- toYaml $annotations | nindent 4 }}
 spec:
   name: {{ $roleName }}
   description: "{{ $r.project }}: CNPG archive and restore"
@@ -77,10 +85,8 @@ kind: PodIdentityAssociation
 metadata:
   name: {{ $roleName }}-{{ $name }}
   namespace: {{ $ns }}
-  {{- with $v.annotations }}
   annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- toYaml $annotations | nindent 4 }}
 spec:
   clusterName: {{ $v.clusterName }}
   namespace: {{ $r.namespace }}

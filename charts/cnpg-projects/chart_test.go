@@ -74,6 +74,7 @@ func TestArchiveRolesAreInTheControllersNamespace(t *testing.T) {
 	role := objs["Role/example-pg-backup-alpha"]
 	require.NotNil(t, role)
 	assert.Equal(t, "platform-system", role["metadata"].(map[string]any)["namespace"])
+	assert.Equal(t, "adopt-or-create", role["metadata"].(map[string]any)["annotations"].(map[string]any)["services.k8s.aws/adoption-policy"])
 
 	spec := role["spec"].(map[string]any)
 	assert.Contains(t, spec["assumeRolePolicyDocument"], "pods.eks.amazonaws.com")
@@ -85,5 +86,6 @@ func TestArchiveRolesAreInTheControllersNamespace(t *testing.T) {
 		require.NotNil(t, pia)
 		assert.Equal(t, "alpha", pia["spec"].(map[string]any)["namespace"], "the ServiceAccount is the project's")
 		assert.Equal(t, "platform-system", pia["metadata"].(map[string]any)["namespace"])
+		assert.Equal(t, "adopt-or-create", pia["metadata"].(map[string]any)["annotations"].(map[string]any)["services.k8s.aws/adoption-policy"])
 	}
 }
