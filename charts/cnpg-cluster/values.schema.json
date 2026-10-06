@@ -22,6 +22,11 @@
       "enum": ["", "devel", "prod"],
       "description": "Platform-injected posture: 'devel' (1 instance, no PDB) or 'prod' (3 instances, PDB, quorum failover, WAL volume). Required — an empty/unset value fails the render rather than silently choosing a posture."
     },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Annotations stamped on the Cluster CR and on the ObjectStore."
+    },
     "labels": {
       "type": "object",
       "additionalProperties": { "type": "string" },

@@ -4,6 +4,11 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Feature:** new chart `cnpg-projects`: every project's database on one Kubernetes cluster from a list of rows, so one Application or release carries them all. A `clusters[]` entry renders exactly what `cnpg-cluster` renders for the same values (the templates are carried over by `hack/sync-cnpg-projects.sh`, which CI checks, and a test compares the objects). It also takes the `cnpg-project-platform` inputs (`scheduledBackups`, `serverTLS`; Rule Z: the cluster chart renders the ObjectStore) and `backupAccess`: per project an IAM role and its Pod Identity associations through ACK (S3 write only on `{project}/{primaryCluster}/*`, read on `{project}/*`, the backup key), created in `backupAccess.objectNamespace` so the controller's own identity mints them and a project's narrower identity cannot. `cnpg-project-platform` stays for installs that use it.
+- **Feature:** `cnpg-cluster` takes `annotations`, stamped on the Cluster and on the ObjectStore (for example a deployment tool's never-prune markers on the two objects that hold data). Default empty: a default render is byte-identical.
+
 ## v2.11.0
 
 - **Feature:** `github.com/truvity/cnpg/v2/pkg/aws/backupstore`, the cross-account CNPG backup bucket and its KMS key as a Pulumi component (`truvity:cnpg/aws:BackupStore`), moves here from `truvity/k8s` (`pkg/aws/backupbucket`, `truvity:k8s/aws:BackupBucket`). The code and every child's logical name are unchanged; the component aliases itself from the former type, so a stack that deployed `backupbucket` adopts it with no replace and a zero-change preview. It builds the versioned, KMS-encrypted bucket, the bucket and key policies that admit a writer-role glob and deny version deletion outside the backup account, the lifecycle backstop, optional Object Lock and an optional same-account cross-region replica. It builds no IAM role: the writer role and its Pod Identity belong to the cluster's cnpg-projects chart. The module's dependency graph gains the Pulumi SDK and the AWS provider; charts and `cnpgctl` are unchanged. See `docs/backupstore.md`.

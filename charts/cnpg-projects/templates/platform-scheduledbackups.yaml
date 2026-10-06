@@ -1,0 +1,29 @@
+{{- /* One ScheduledBackup per entry: method plugin (barman-cloud), owned by
+itself, writing to the ObjectStore the entry names. */}}
+{{- $seen := dict }}
+{{- range $i, $b := .Values.scheduledBackups }}
+{{- if include "cnpg-projects.platform.on" $b }}
+{{- $name := required (printf "scheduledBackups[%d].name is required" $i) $b.name }}
+{{- $ns := required (printf "scheduledBackups[%d].namespace is required" $i) $b.namespace }}
+{{- $key := printf "%s/%s" $ns $name }}
+{{- if hasKey $seen $key }}
+{{- fail (printf "scheduledBackups: %q appears twice" $key) }}
+{{- end }}
+{{- $_ := set $seen $key true }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  {{- include "cnpg-projects.platform.metadata" (dict "root" $ "name" $name "namespace" $ns "labels" $b.labels "annotations" $b.annotations) | nindent 2 }}
+spec:
+  schedule: {{ $b.schedule | default "0 0 2 * * *" | quote }}
+  backupOwnerReference: self
+  method: plugin
+  cluster:
+    name: {{ required (printf "scheduledBackups[%d].clusterName is required" $i) $b.clusterName }}
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: {{ required (printf "scheduledBackups[%d].objectStoreName is required" $i) $b.objectStoreName }}
+{{- end }}
+{{- end }}

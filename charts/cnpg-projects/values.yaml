@@ -1,0 +1,44 @@
+# cnpg-projects: the databases of every project on one Kubernetes cluster.
+# Everything is a list and every list is empty until asked for. The caller
+# decides which project gets which object; no name below is a default.
+
+# Stamped on every platform object (ScheduledBackup, server TLS).
+commonLabels: {}
+commonAnnotations: {}
+
+# One cnpg-cluster per entry. `values` is that chart's values (charts/
+# cnpg-cluster/values.yaml lists them; its defaults are merged under yours).
+# `clusterName` and `namespace` are required there as in cnpg-cluster.
+clusters: []
+#  - values:
+#      clusterName: example-pg
+#      namespace: example
+#      profile: prod
+#      annotations: {}      # on the Cluster and its ObjectStore
+
+# The cnpg-project-platform inputs, unchanged: ScheduledBackups and server
+# TLS for the clusters above (Rule Z: the cnpg-cluster chart renders the
+# ObjectStore, these objects point at it).
+scheduledBackups: []
+serverTLS: []
+
+# The archive identity: an IAM role per project, with the same trust and the
+# same permissions each time, and a Pod Identity association per
+# ServiceAccount. Rendered when `roles` is not empty (the ACK objects live in
+# `objectNamespace`: where the controller's own identity applies, not in the
+# project's namespace).
+backupAccess:
+  clusterName: ""        # the Kubernetes cluster (EKS) the roles trust
+  accountID: ""
+  region: ""
+  bucketName: ""         # the backup bucket
+  kmsKeyArn: ""          # the bucket's key
+  permissionsBoundary: ""  # policy ARN, optional
+  objectNamespace: ""    # required when roles is not empty
+  annotations: {}        # on every ACK object
+  roles: []
+#  - name: example-pg-backup-example     the IAM role's name
+#    project: example                    the S3 key prefix owner: {project}/
+#    namespace: example                  where the ServiceAccounts live
+#    primaryCluster: example-pg          the Cluster CR: writes {project}/{cluster}/
+#    serviceAccounts: [example-pg, example-rehearsal-pg]   primary first

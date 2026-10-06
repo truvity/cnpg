@@ -1,0 +1,73 @@
+{{- /* Per entry, the server certificate of one CNPG Cluster and the CA
+Secret it is verified against.
+
+The Certificate names every Service the operator creates for the Cluster,
+fully qualified. Short names (<cluster>-rw, <cluster>-rw.<ns>) are left out
+on purpose: a private CA constrained to cluster.local cannot sign them.
+
+The CA Secret carries ca.crt only, built from the PEM roots the caller
+gives. The issued Secret's own ca.crt is not enough: an issuer below an
+intermediate puts the intermediate there, and libpq will not accept a trust
+anchor that is not self-signed. */}}
+{{- $seen := dict }}
+{{- range $i, $t := .Values.serverTLS }}
+{{- if include "cnpg-projects.platform.on" $t }}
+{{- $cluster := required (printf "serverTLS[%d].clusterName is required" $i) $t.clusterName }}
+{{- $ns := required (printf "serverTLS[%d].namespace is required" $i) $t.namespace }}
+{{- $certName := $t.certificateName | default (printf "%s-server-tls" $cluster) }}
+{{- $secretName := $t.secretName | default (printf "%s-server-tls" $cluster) }}
+{{- $caName := $t.caSecretName | default (printf "%s-server-ca" $cluster) }}
+{{- $issuer := required (printf "serverTLS[%d].issuerRef is required" $i) $t.issuerRef }}
+{{- $roots := required (printf "serverTLS[%d].caCertificates is required: it is the CA Secret's ca.crt, what the operator, replicas and poolers verify the server with" $i) $t.caCertificates }}
+{{- /* A Certificate and a Secret may share a name (the default does), two
+Secrets or two Certificates in one namespace may not: the CA Secret and the
+issued one are different objects, and a second entry naming the same ones
+would have the two fight over them. */}}
+{{- range $k := list (printf "Certificate/%s/%s" $ns $certName) (printf "Secret/%s/%s" $ns $secretName) (printf "Secret/%s/%s" $ns $caName) }}
+{{- if hasKey $seen $k }}
+{{- fail (printf "serverTLS: %q is named twice" $k) }}
+{{- end }}
+{{- $_ := set $seen $k true }}
+{{- end }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  {{- include "cnpg-projects.platform.metadata" (dict "root" $ "name" $certName "namespace" $ns "labels" $t.labels "annotations" $t.annotations) | nindent 2 }}
+spec:
+  secretName: {{ $secretName }}
+  dnsNames:
+    {{- range list "rw" "ro" "r" }}
+    - {{ printf "%s-%s.%s.svc.cluster.local" $cluster . $ns }}
+    {{- end }}
+  {{- with $t.duration }}
+  duration: {{ . }}
+  {{- end }}
+  {{- with $t.renewBefore }}
+  renewBefore: {{ . }}
+  {{- end }}
+  {{- with $t.privateKey }}
+  privateKey:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  issuerRef:
+    {{- toYaml $issuer | nindent 4 }}
+  # CloudNativePG reloads a user-provided server Secret only when it carries
+  # cnpg.io/reload: without it a renewal is not served until the instance
+  # restarts.
+  secretTemplate:
+    labels:
+      cnpg.io/reload: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  {{- include "cnpg-projects.platform.metadata" (dict "root" $ "name" $caName "namespace" $ns "labels" $t.labels "annotations" (merge (dict) ($t.caSecretAnnotations | default dict) ($t.annotations | default dict)) "fixedLabels" (dict "cnpg.io/reload" "true")) | nindent 2 }}
+type: Opaque
+stringData:
+  ca.crt: |
+    {{- range $roots }}
+    {{- . | trim | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- end }}

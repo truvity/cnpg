@@ -1,0 +1,47 @@
+clusters:
+  - values:
+      clusterName: alpha-pg
+      namespace: alpha
+      profile: prod
+      annotations: {example.com/keep: "true"}
+      bootstrap:
+        initdb: {database: alpha, owner: alpha_owner}
+      backup:
+        enabled: true
+        bucketName: example-backups
+        serverName: alpha-pg-g1
+        schedule: ""
+  - values:
+      clusterName: beta-pg
+      namespace: beta
+      profile: devel
+      bootstrap:
+        initdb: {database: beta, owner: beta_owner}
+scheduledBackups:
+  - name: alpha-pg-scheduled-backup
+    namespace: alpha
+    clusterName: alpha-pg
+    objectStoreName: alpha-pg-objectstore
+serverTLS:
+  - clusterName: alpha-pg
+    namespace: alpha
+    issuerRef: {name: example-issuer, kind: ClusterIssuer}
+    caCertificates:
+      - |
+        -----BEGIN CERTIFICATE-----
+        MIIB
+        -----END CERTIFICATE-----
+backupAccess:
+  clusterName: example
+  accountID: "123456789012"
+  region: eu-central-1
+  bucketName: example-backups
+  kmsKeyArn: arn:aws:kms:eu-central-1:123456789012:key/example
+  permissionsBoundary: arn:aws:iam::123456789012:policy/example-boundary
+  objectNamespace: platform-system
+  roles:
+    - name: example-pg-backup-alpha
+      project: alpha
+      namespace: alpha
+      primaryCluster: alpha-pg
+      serviceAccounts: [alpha-pg, alpha-rehearsal-pg]

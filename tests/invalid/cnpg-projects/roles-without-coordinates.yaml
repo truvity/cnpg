@@ -1,0 +1,3 @@
+backupAccess:
+  roles:
+    - {name: r, project: a, namespace: a, primaryCluster: a-pg, serviceAccounts: [a-pg]}

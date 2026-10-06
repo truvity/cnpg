@@ -1,0 +1,9 @@
+clusterName: pg
+namespace: app
+profile: prod
+annotations: {example.com/keep: "true"}
+bootstrap:
+  initdb: {database: app, owner: app-owner}
+backup:
+  enabled: true
+  bucketName: example-backups
