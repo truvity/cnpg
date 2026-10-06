@@ -21,6 +21,8 @@ kind: Role
 metadata:
   name: example-pg-backup-alpha
   namespace: platform-system
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
 spec:
   name: example-pg-backup-alpha
   description: "alpha: CNPG archive and restore"
@@ -251,6 +253,8 @@ kind: PodIdentityAssociation
 metadata:
   name: example-pg-backup-alpha-alpha-pg
   namespace: platform-system
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
 spec:
   clusterName: example
   namespace: alpha
@@ -264,6 +268,8 @@ kind: PodIdentityAssociation
 metadata:
   name: example-pg-backup-alpha-alpha-rehearsal-pg
   namespace: platform-system
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
 spec:
   clusterName: example
   namespace: alpha
