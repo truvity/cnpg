@@ -90,6 +90,19 @@ charts:
         exit 1
       fi
     done
+    # cnpg-projects: carries cnpg-cluster's templates (generated), and the same checks.
+    hack/sync-cnpg-projects.sh check
+    helm lint charts/cnpg-projects
+    if helm template x charts/cnpg-projects --set bogusKey=1 >/dev/null 2>&1; then
+      echo "cnpg-projects: an unknown key rendered" >&2
+      exit 1
+    fi
+    for values in tests/invalid/cnpg-projects/*.yaml; do
+      if helm template invalid charts/cnpg-projects -f "$values" >/dev/null 2>&1; then
+        echo "RENDERED BUT SHOULD HAVE FAILED: $values" >&2
+        exit 1
+      fi
+    done
     # cnpg-cluster: every negative fixture (each a refusal: schema or render-time).
     for values in tests/invalid/cnpg-cluster/*.yaml; do
       if helm template invalid charts/cnpg-cluster -f "$values" >/dev/null 2>&1; then

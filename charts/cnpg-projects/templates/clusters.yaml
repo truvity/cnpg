@@ -1,0 +1,18 @@
+{{- /* One cnpg-cluster per entry. The templates are cnpg-cluster's own,
+carried here as named templates (hack/sync-cnpg-projects.sh); the entry's
+values are laid over that chart's defaults. */ -}}
+{{- $defaults := fromYaml (.Files.Get "files/cnpg-cluster-defaults.yaml") }}
+{{- $seen := dict }}
+{{- range $i, $c := .Values.clusters }}
+{{- $values := mergeOverwrite (deepCopy $defaults) (deepCopy (required (printf "clusters[%d].values is required" $i) $c.values)) }}
+{{- $key := printf "%s/%s" (required (printf "clusters[%d].values.namespace is required" $i) $values.namespace) (required (printf "clusters[%d].values.clusterName is required" $i) $values.clusterName) }}
+{{- if hasKey $seen $key }}
+{{- fail (printf "clusters: %q appears twice" $key) }}
+{{- end }}
+{{- $_ := set $seen $key true }}
+{{- $ctx := dict "Values" $values "Capabilities" $.Capabilities "Release" $.Release "Chart" $.Chart }}
+{{- range $f := list "cluster" "databases" "metrics-networkpolicy" "objectstore-source" "objectstore" "podmonitor" "roles" "scheduled-backup" "server-tls" "trust" }}
+---
+{{ include (printf "cnpg-projects.cluster.%s" $f) $ctx }}
+{{- end }}
+{{- end }}

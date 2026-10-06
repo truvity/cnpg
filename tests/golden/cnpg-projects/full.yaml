@@ -1,0 +1,289 @@
+---
+# Source: cnpg-projects/templates/platform-servertls.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alpha-pg-server-ca
+  namespace: alpha
+  labels:
+    cnpg.io/reload: "true"
+type: Opaque
+stringData:
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIB
+    -----END CERTIFICATE-----
+
+---
+# Source: cnpg-projects/templates/backup-access.yaml
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: example-pg-backup-alpha
+  namespace: platform-system
+spec:
+  name: example-pg-backup-alpha
+  description: "alpha: CNPG archive and restore"
+  permissionsBoundary: arn:aws:iam::123456789012:policy/example-boundary
+  assumeRolePolicyDocument: "{\"Statement\":[{\"Action\":[\"sts:AssumeRole\",\"sts:TagSession\"],\"Condition\":{\"ArnEquals\":{\"aws:SourceArn\":\"arn:aws:eks:eu-central-1:123456789012:cluster/example\"},\"StringEquals\":{\"aws:RequestTag/kubernetes-namespace\":\"alpha\",\"aws:RequestTag/kubernetes-service-account\":[\"alpha-pg\",\"alpha-rehearsal-pg\"],\"aws:SourceAccount\":\"123456789012\"}},\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"pods.eks.amazonaws.com\"}}],\"Version\":\"2012-10-17\"}"
+  inlinePolicies:
+    cnpg-backup: "{\"Statement\":[{\"Action\":[\"s3:PutObject\",\"s3:GetObject\",\"s3:DeleteObject\",\"s3:AbortMultipartUpload\",\"s3:ListMultipartUploadParts\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backups/alpha/alpha-pg/*\",\"Sid\":\"WriteOwnSubtree\"},{\"Action\":[\"s3:GetObject\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backups/alpha/*\",\"Sid\":\"ReadProjectPrefix\"},{\"Action\":[\"s3:ListBucket\",\"s3:ListBucketMultipartUploads\"],\"Condition\":{\"StringLikeIfExists\":{\"s3:prefix\":\"alpha/*\"}},\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backups\",\"Sid\":\"ListProjectPrefix\"},{\"Action\":[\"kms:Encrypt\",\"kms:Decrypt\",\"kms:ReEncrypt*\",\"kms:GenerateDataKey*\",\"kms:DescribeKey\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:kms:eu-central-1:123456789012:key/example\",\"Sid\":\"UseBackupKey\"}],\"Version\":\"2012-10-17\"}"
+
+---
+# Source: cnpg-projects/templates/platform-servertls.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: alpha-pg-server-tls
+  namespace: alpha
+spec:
+  secretName: alpha-pg-server-tls
+  dnsNames:
+    - alpha-pg-rw.alpha.svc.cluster.local
+    - alpha-pg-ro.alpha.svc.cluster.local
+    - alpha-pg-r.alpha.svc.cluster.local
+  issuerRef:
+    kind: ClusterIssuer
+    name: example-issuer
+  # CloudNativePG reloads a user-provided server Secret only when it carries
+  # cnpg.io/reload: without it a renewal is not served until the instance
+  # restarts.
+  secretTemplate:
+    labels:
+      cnpg.io/reload: "true"
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: alpha-pg
+  namespace: alpha
+  annotations:
+    # Quorum-based failover protection is 1.30 ALPHA — enabled via
+    # annotation, not spec (pkg/utils FailoverQuorumAnnotationName;
+    # there is no spec.failoverQuorum field in the CRD).
+    alpha.cnpg.io/failoverQuorum: "true"
+    example.com/keep: "true"
+spec:
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  # Explicit on both postures: CNPG defaults enablePDB to true, so a
+  # devel single-instance cluster would otherwise get a primary PDB
+  # with 0 allowed disruptions and block node drains until the node
+  # pool's force-drain deadline (devel = no PDB).
+  enablePDB: true
+  inheritedMetadata:
+    annotations:
+      # Instance pods must never be consolidation victims — Karpenter
+      # moves stateless workloads around them instead.
+      karpenter.sh/do-not-disrupt: "true"
+  postgresql:
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+    parameters:
+      max_slot_wal_keep_size: "2GB"
+    pg_hba:
+      - hostssl all alpha_owner all scram-sha-256
+      - hostssl all all all cert
+
+  storage:
+    size: 10Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  walStorage:
+    size: 5Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  resources:
+    limits:
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  affinity:
+    podAntiAffinityType: required
+  probes:
+    liveness:
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6 # ~60s — the 30s default self-fences on AWS blips
+      isolationCheck:
+        enabled: true
+        # Integers per CRD schema (strings fail structured-merge diff).
+        requestTimeout: 2000
+        connectionTimeout: 2000
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: alpha-pg
+  bootstrap:
+    initdb:
+      database: alpha
+      owner: alpha_owner
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      enabled: true
+      # v2: TRUE — continuous WAL archiving is the point; false only ever
+      # made sense while nothing consumed the archive.
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: alpha-pg-objectstore
+        serverName: alpha-pg-g1
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: beta-pg
+  namespace: beta
+spec:
+  instances: 1
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  # Explicit on both postures: CNPG defaults enablePDB to true, so a
+  # devel single-instance cluster would otherwise get a primary PDB
+  # with 0 allowed disruptions and block node drains until the node
+  # pool's force-drain deadline (devel = no PDB).
+  enablePDB: false
+  postgresql:
+    parameters:
+      synchronous_commit: "off" # devel: fsync stays ON; test suites fly
+      shared_buffers: "64MB"
+    pg_hba:
+      - hostssl all beta_owner all scram-sha-256
+      - hostssl all all all cert
+
+  storage:
+    size: 2Gi
+    storageClass: cnpg-gp3-delete
+    resizeInUseVolumes: true
+  resources:
+    limits:
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  affinity:
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: beta-pg
+  bootstrap:
+    initdb:
+      database: beta
+      owner: beta_owner
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: alpha-pg-alpha
+  namespace: alpha
+spec:
+  name: alpha
+  owner: alpha_owner
+  ensure: present
+  cluster:
+    name: alpha-pg
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: beta-pg-beta
+  namespace: beta
+spec:
+  name: beta
+  owner: beta_owner
+  ensure: present
+  cluster:
+    name: beta-pg
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: alpha-pg-objectstore
+  namespace: alpha
+  annotations:
+    example.com/keep: "true"
+spec:
+  configuration:
+    destinationPath: s3://example-backups/alpha/alpha-pg
+    s3Credentials:
+      inheritFromIAMRole: true # the pod's ambient identity, bound by the platform
+    data:
+      # Base backups: the CRD enum here is narrower than WAL's (no
+      # zstd/xz — found by a server-side dry-run against the plugin).
+      compression: snappy
+      encryption: AES256
+      jobs: 2
+    wal:
+      compression: zstd
+      encryption: AES256
+      maxParallel: 4
+  # The FUNCTIONAL PITR window; a bucket lifecycle rule, if any, is
+  # the platform's backstop and must outlive it.
+  retentionPolicy: 30d
+
+---
+# Source: cnpg-projects/templates/backup-access.yaml
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: example-pg-backup-alpha-alpha-pg
+  namespace: platform-system
+spec:
+  clusterName: example
+  namespace: alpha
+  serviceAccount: alpha-pg
+  roleARN: arn:aws:iam::123456789012:role/example-pg-backup-alpha
+
+---
+# Source: cnpg-projects/templates/backup-access.yaml
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: example-pg-backup-alpha-alpha-rehearsal-pg
+  namespace: platform-system
+spec:
+  clusterName: example
+  namespace: alpha
+  serviceAccount: alpha-rehearsal-pg
+  roleARN: arn:aws:iam::123456789012:role/example-pg-backup-alpha
+
+---
+# Source: cnpg-projects/templates/platform-scheduledbackups.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: alpha-pg-scheduled-backup
+  namespace: alpha
+spec:
+  schedule: "0 0 2 * * *"
+  backupOwnerReference: self
+  method: plugin
+  cluster:
+    name: alpha-pg
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: alpha-pg-objectstore

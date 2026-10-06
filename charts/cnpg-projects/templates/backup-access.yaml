@@ -1,0 +1,91 @@
+{{- /*
+The per-project archive identity, one IAM role per entry and one Pod
+Identity association per ServiceAccount, through ACK.
+
+  - WRITE (Put/Get/Delete/multipart) only on {project}/{primaryCluster}/*,
+    the archiver's own subtree. DeleteObject is the plugin's retentionPolicy
+    pruning and only creates version markers (a bucket that denies
+    DeleteObjectVersion keeps the noncurrent versions as the recovery pool).
+  - READ (Get/List) on {project}/*: a restore is a DIFFERENT cluster reading
+    an old cluster's prefix.
+  - KMS on the backup key.
+
+The objects sit in backupAccess.objectNamespace so the controller's own
+identity creates them: a project's namespace is bound to the project's
+own, narrower identity, which must not be able to mint these roles.
+*/ -}}
+{{- $v := .Values.backupAccess }}
+{{- if $v.roles }}
+{{- $ns := required "backupAccess.objectNamespace is required" $v.objectNamespace }}
+{{- $bucketARN := printf "arn:aws:s3:::%s" (required "backupAccess.bucketName is required" $v.bucketName) }}
+{{- $account := required "backupAccess.accountID is required" ($v.accountID | toString) }}
+{{- $clusterARN := printf "arn:aws:eks:%s:%s:cluster/%s" (required "backupAccess.region is required" $v.region) $account (required "backupAccess.clusterName is required" $v.clusterName) }}
+{{- range $r := $v.roles }}
+{{- $roleName := required "backupAccess.roles[].name is required" $r.name }}
+{{- $sa := ternary (index $r.serviceAccounts 0) $r.serviceAccounts (eq (len $r.serviceAccounts) 1) }}
+{{- $trust := dict
+      "Version" "2012-10-17"
+      "Statement" (list (dict
+        "Effect" "Allow"
+        "Principal" (dict "Service" "pods.eks.amazonaws.com")
+        "Action" (list "sts:AssumeRole" "sts:TagSession")
+        "Condition" (dict
+          "StringEquals" (dict
+            "aws:SourceAccount" $account
+            "aws:RequestTag/kubernetes-namespace" $r.namespace
+            "aws:RequestTag/kubernetes-service-account" $sa)
+          "ArnEquals" (dict "aws:SourceArn" $clusterARN)))) }}
+{{- $policy := dict
+      "Version" "2012-10-17"
+      "Statement" (list
+        (dict "Sid" "WriteOwnSubtree" "Effect" "Allow"
+          "Action" (list "s3:PutObject" "s3:GetObject" "s3:DeleteObject" "s3:AbortMultipartUpload" "s3:ListMultipartUploadParts")
+          "Resource" (printf "%s/%s/%s/*" $bucketARN $r.project $r.primaryCluster))
+        (dict "Sid" "ReadProjectPrefix" "Effect" "Allow"
+          "Action" (list "s3:GetObject")
+          "Resource" (printf "%s/%s/*" $bucketARN $r.project))
+        (dict "Sid" "ListProjectPrefix" "Effect" "Allow"
+          "Action" (list "s3:ListBucket" "s3:ListBucketMultipartUploads")
+          "Resource" $bucketARN
+          "Condition" (dict "StringLikeIfExists" (dict "s3:prefix" (printf "%s/*" $r.project))))
+        (dict "Sid" "UseBackupKey" "Effect" "Allow"
+          "Action" (list "kms:Encrypt" "kms:Decrypt" "kms:ReEncrypt*" "kms:GenerateDataKey*" "kms:DescribeKey")
+          "Resource" (required "backupAccess.kmsKeyArn is required" $v.kmsKeyArn))) }}
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: {{ $roleName }}
+  namespace: {{ $ns }}
+  {{- with $v.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  name: {{ $roleName }}
+  description: "{{ $r.project }}: CNPG archive and restore"
+  {{- with $v.permissionsBoundary }}
+  permissionsBoundary: {{ . }}
+  {{- end }}
+  assumeRolePolicyDocument: {{ toJson $trust | quote }}
+  inlinePolicies:
+    cnpg-backup: {{ toJson $policy | quote }}
+{{- range $name := $r.serviceAccounts }}
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: {{ $roleName }}-{{ $name }}
+  namespace: {{ $ns }}
+  {{- with $v.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  clusterName: {{ $v.clusterName }}
+  namespace: {{ $r.namespace }}
+  serviceAccount: {{ $name }}
+  roleARN: arn:aws:iam::{{ $account }}:role/{{ $roleName }}
+{{- end }}
+{{- end }}
+{{- end }}

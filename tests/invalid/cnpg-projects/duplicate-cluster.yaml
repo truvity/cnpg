@@ -1,0 +1,9 @@
+clusters:
+  - values:
+      clusterName: a-pg
+      namespace: a
+      profile: devel
+  - values:
+      clusterName: a-pg
+      namespace: a
+      profile: devel

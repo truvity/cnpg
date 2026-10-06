@@ -1,0 +1,146 @@
+---
+# Source: cnpg-cluster/templates/cluster.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg
+  namespace: app
+  annotations:
+    # Quorum-based failover protection is 1.30 ALPHA — enabled via
+    # annotation, not spec (pkg/utils FailoverQuorumAnnotationName;
+    # there is no spec.failoverQuorum field in the CRD).
+    alpha.cnpg.io/failoverQuorum: "true"
+    example.com/keep: "true"
+spec:
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  # Explicit on both postures: CNPG defaults enablePDB to true, so a
+  # devel single-instance cluster would otherwise get a primary PDB
+  # with 0 allowed disruptions and block node drains until the node
+  # pool's force-drain deadline (devel = no PDB).
+  enablePDB: true
+  inheritedMetadata:
+    annotations:
+      # Instance pods must never be consolidation victims — Karpenter
+      # moves stateless workloads around them instead.
+      karpenter.sh/do-not-disrupt: "true"
+  postgresql:
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+    parameters:
+      max_slot_wal_keep_size: "2GB"
+    pg_hba:
+      - hostssl all app-owner all scram-sha-256
+      - hostssl all all all cert
+
+  storage:
+    size: 10Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  walStorage:
+    size: 5Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  resources:
+    limits:
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  affinity:
+    podAntiAffinityType: required
+  probes:
+    liveness:
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6 # ~60s — the 30s default self-fences on AWS blips
+      isolationCheck:
+        enabled: true
+        # Integers per CRD schema (strings fail structured-merge diff).
+        requestTimeout: 2000
+        connectionTimeout: 2000
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: pg
+  bootstrap:
+    initdb:
+      database: app
+      owner: app-owner
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      enabled: true
+      # v2: TRUE — continuous WAL archiving is the point; false only ever
+      # made sense while nothing consumed the archive.
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: pg-objectstore
+        serverName: pg
+
+---
+# Source: cnpg-cluster/templates/databases.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: pg-app
+  namespace: app
+spec:
+  name: app
+  owner: app-owner
+  ensure: present
+  cluster:
+    name: pg
+
+---
+# Source: cnpg-cluster/templates/objectstore.yaml
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: pg-objectstore
+  namespace: app
+  annotations:
+    example.com/keep: "true"
+spec:
+  configuration:
+    destinationPath: s3://example-backups/app/pg
+    s3Credentials:
+      inheritFromIAMRole: true # the pod's ambient identity, bound by the platform
+    data:
+      # Base backups: the CRD enum here is narrower than WAL's (no
+      # zstd/xz — found by a server-side dry-run against the plugin).
+      compression: snappy
+      encryption: AES256
+      jobs: 2
+    wal:
+      compression: zstd
+      encryption: AES256
+      maxParallel: 4
+  # The FUNCTIONAL PITR window; a bucket lifecycle rule, if any, is
+  # the platform's backstop and must outlive it.
+  retentionPolicy: 30d
+
+---
+# Source: cnpg-cluster/templates/scheduled-backup.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: pg-scheduled-backup
+  namespace: app
+spec:
+  schedule: "0 0 2 * * *"
+  backupOwnerReference: self
+  cluster:
+    name: pg
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: pg-objectstore
