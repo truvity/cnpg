@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## v2.14.0
+
+- **Feature:** `github.com/truvity/cnpg/v2/pkg/servertls`, the check of a catalogue's per-environment list of where a project's CNPG server takes its certificate from a workload issuer: the project has the postgres capability, and every listed environment is known, listed once, and has a primary install. It moves here from a consuming repository's own catalogue code. No chart, `cnpgctl` or client change: every render is byte-identical to v2.13.0.
+
 ## v2.13.0
 
 - **Feature:** `cnpg-projects` stamps `services.k8s.aws/adoption-policy: adopt-or-create` on its ACK Roles and PodIdentityAssociations, so an archive role or association that already exists under the same identity (role name; cluster, namespace and ServiceAccount) is adopted instead of failing with "already exists". Needs the ResourceAdoption feature gate on the ACK IAM and EKS controllers. Nothing is deleted or recreated; `backupAccess.annotations` can override the policy.
