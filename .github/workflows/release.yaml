@@ -56,7 +56,7 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: truvity/ci-actions/setup-devbox@fbd89c3cb282ac906414235d5c6455cd83d254a8 # v1.12.0
+      - uses: truvity/ci-actions/setup-devbox@d6beff8461642ddb082e218875fe9a8759dbacc2 # v1.13.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish the CRD charts that are not yet published
