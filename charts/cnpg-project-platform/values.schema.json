@@ -1,38 +1,103 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "cnpg-project-platform values",
   "description": "An unknown key is an error, not a silent no-op. What a schema cannot express (a name used twice) is refused by the chart's own render-time validation; every rule has a fixture under tests/invalid/cnpg-project-platform/.",
   "type": "object",
   "additionalProperties": false,
-  "definitions": {
-    "stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
-    "k8sName": { "type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$" },
-    "duration": { "type": "string", "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$" }
-  },
   "properties": {
-    "global": { "type": "object", "description": "Admitted so the chart can be embedded; nothing reads it." },
-    "commonLabels": { "$ref": "#/definitions/stringMap" },
-    "commonAnnotations": { "$ref": "#/definitions/stringMap" },
+    "global": {
+      "type": "object",
+      "description": "Admitted so the chart can be embedded; nothing reads it."
+    },
+    "commonLabels": {
+      "$ref": "#/$defs/stringMap"
+    },
+    "commonAnnotations": {
+      "$ref": "#/$defs/stringMap"
+    },
     "objectStores": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "namespace", "bucketName", "prefix"],
+        "required": [
+          "name",
+          "namespace",
+          "bucketName",
+          "prefix"
+        ],
         "properties": {
-          "name": { "$ref": "#/definitions/k8sName" },
-          "namespace": { "$ref": "#/definitions/k8sName" },
-          "bucketName": { "type": "string", "minLength": 3, "maxLength": 63, "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$" },
-          "prefix": { "type": "string", "minLength": 1, "pattern": "^[^/].*[^/]$|^[^/]$" },
-          "retentionDays": { "type": "integer", "minimum": 1 },
-          "dataCompression": { "type": "string", "enum": ["", "bzip2", "gzip", "lz4", "snappy"] },
-          "walCompression": { "type": "string", "enum": ["", "bzip2", "gzip", "lz4", "snappy", "xz", "zstd"] },
-          "encryption": { "type": "string", "enum": ["", "AES256", "aws:kms"] },
-          "dataJobs": { "type": "integer", "minimum": 1 },
-          "walMaxParallel": { "type": "integer", "minimum": 1 },
-          "labels": { "$ref": "#/definitions/stringMap" },
-          "annotations": { "$ref": "#/definitions/stringMap" },
-          "enabled": { "type": "boolean" }
+          "name": {
+            "$ref": "#/$defs/k8sName"
+          },
+          "namespace": {
+            "$ref": "#/$defs/k8sName"
+          },
+          "bucketName": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 63,
+            "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "prefix": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^/].*[^/]$|^[^/]$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          },
+          "retentionDays": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "dataCompression": {
+            "enum": [
+              "",
+              "bzip2",
+              "gzip",
+              "lz4",
+              "snappy"
+            ]
+          },
+          "walCompression": {
+            "enum": [
+              "",
+              "bzip2",
+              "gzip",
+              "lz4",
+              "snappy",
+              "xz",
+              "zstd"
+            ]
+          },
+          "encryption": {
+            "enum": [
+              "",
+              "AES256",
+              "aws:kms"
+            ]
+          },
+          "dataJobs": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "walMaxParallel": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "labels": {
+            "$ref": "#/$defs/stringMap"
+          },
+          "annotations": {
+            "$ref": "#/$defs/stringMap"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
         }
       }
     },
@@ -41,17 +106,46 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "namespace", "clusterName", "objectStoreName"],
+        "required": [
+          "name",
+          "namespace",
+          "clusterName",
+          "objectStoreName"
+        ],
         "properties": {
-          "name": { "$ref": "#/definitions/k8sName" },
-          "namespace": { "$ref": "#/definitions/k8sName" },
-          "clusterName": { "$ref": "#/definitions/k8sName" },
-          "objectStoreName": { "$ref": "#/definitions/k8sName" },
-          "schedule": { "type": "string", "description": "Six-field cron, seconds first.", "pattern": "^\\S+( \\S+){5}$" },
-          "immediate": { "type": "boolean", "description": "Take the first base backup on creation (default true)." },
-          "labels": { "$ref": "#/definitions/stringMap" },
-          "annotations": { "$ref": "#/definitions/stringMap" },
-          "enabled": { "type": "boolean" }
+          "name": {
+            "$ref": "#/$defs/k8sName"
+          },
+          "namespace": {
+            "$ref": "#/$defs/k8sName"
+          },
+          "clusterName": {
+            "$ref": "#/$defs/k8sName"
+          },
+          "objectStoreName": {
+            "$ref": "#/$defs/k8sName"
+          },
+          "schedule": {
+            "type": "string",
+            "pattern": "^\\S+( \\S+){5}$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            },
+            "description": "Six-field cron, seconds first."
+          },
+          "immediate": {
+            "type": "boolean",
+            "description": "Take the first base backup on creation (default true)."
+          },
+          "labels": {
+            "$ref": "#/$defs/stringMap"
+          },
+          "annotations": {
+            "$ref": "#/$defs/stringMap"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
         }
       }
     },
@@ -60,45 +154,131 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["clusterName", "namespace", "issuerRef", "caCertificates"],
+        "required": [
+          "clusterName",
+          "namespace",
+          "issuerRef",
+          "caCertificates"
+        ],
         "properties": {
-          "clusterName": { "$ref": "#/definitions/k8sName" },
-          "namespace": { "$ref": "#/definitions/k8sName" },
-          "certificateName": { "$ref": "#/definitions/k8sName" },
-          "secretName": { "$ref": "#/definitions/k8sName" },
-          "caSecretName": { "$ref": "#/definitions/k8sName" },
+          "clusterName": {
+            "$ref": "#/$defs/k8sName"
+          },
+          "namespace": {
+            "$ref": "#/$defs/k8sName"
+          },
+          "certificateName": {
+            "$ref": "#/$defs/k8sName"
+          },
+          "secretName": {
+            "$ref": "#/$defs/k8sName"
+          },
+          "caSecretName": {
+            "$ref": "#/$defs/k8sName"
+          },
           "issuerRef": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name"],
+            "required": [
+              "name"
+            ],
             "properties": {
-              "name": { "type": "string", "minLength": 1 },
-              "kind": { "type": "string", "enum": ["Issuer", "ClusterIssuer"] },
-              "group": { "type": "string", "minLength": 1 }
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "enum": [
+                  "Issuer",
+                  "ClusterIssuer"
+                ]
+              },
+              "group": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
           "caCertificates": {
             "type": "array",
-            "minItems": 1,
-            "items": { "type": "string", "pattern": "-----BEGIN CERTIFICATE-----" }
+            "items": {
+              "type": "string",
+              "pattern": "-----BEGIN CERTIFICATE-----"
+            },
+            "minItems": 1
           },
-          "duration": { "$ref": "#/definitions/duration" },
-          "renewBefore": { "$ref": "#/definitions/duration" },
+          "duration": {
+            "$ref": "#/$defs/duration"
+          },
+          "renewBefore": {
+            "$ref": "#/$defs/duration"
+          },
           "privateKey": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "algorithm": { "type": "string", "enum": ["RSA", "ECDSA", "Ed25519"] },
-              "size": { "type": "integer", "minimum": 1 },
-              "encoding": { "type": "string", "enum": ["PKCS1", "PKCS8"] },
-              "rotationPolicy": { "type": "string", "enum": ["Never", "Always"] }
+              "algorithm": {
+                "enum": [
+                  "RSA",
+                  "ECDSA",
+                  "Ed25519"
+                ]
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "encoding": {
+                "enum": [
+                  "PKCS1",
+                  "PKCS8"
+                ]
+              },
+              "rotationPolicy": {
+                "enum": [
+                  "Never",
+                  "Always"
+                ]
+              }
             }
           },
-          "labels": { "$ref": "#/definitions/stringMap" },
-          "annotations": { "$ref": "#/definitions/stringMap" },
-          "caSecretAnnotations": { "$ref": "#/definitions/stringMap" },
-          "enabled": { "type": "boolean" }
+          "labels": {
+            "$ref": "#/$defs/stringMap"
+          },
+          "annotations": {
+            "$ref": "#/$defs/stringMap"
+          },
+          "caSecretAnnotations": {
+            "$ref": "#/$defs/stringMap"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
         }
+      }
+    }
+  },
+  "$defs": {
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "k8sName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+      }
+    },
+    "duration": {
+      "type": "string",
+      "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
       }
     }
   }

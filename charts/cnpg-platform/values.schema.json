@@ -1,40 +1,78 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "cnpg-platform values",
   "description": "An unknown key is an error, not a silent no-op. Everything a schema cannot express (an enabled feature with nothing to act on) is refused by the chart's own render-time validation; every rule has a fixture under tests/invalid/cnpg-platform/.",
   "type": "object",
   "additionalProperties": false,
-  "definitions": {
-    "stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
-    "duration": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h|d|w|y)$" },
-    "durationOrEmpty": { "type": "string", "pattern": "^([0-9]+(ms|s|m|h|d|w|y))?$" }
-  },
   "properties": {
-    "global": { "type": "object", "description": "Admitted so the chart can be embedded; nothing reads it." },
-    "commonLabels": { "$ref": "#/definitions/stringMap" },
-    "commonAnnotations": { "$ref": "#/definitions/stringMap" },
+    "global": {
+      "type": "object",
+      "description": "Admitted so the chart can be embedded; nothing reads it."
+    },
+    "commonLabels": {
+      "$ref": "#/$defs/stringMap"
+    },
+    "commonAnnotations": {
+      "$ref": "#/$defs/stringMap"
+    },
     "storageClasses": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
+        "enabled": {
+          "type": "boolean"
+        },
         "classes": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["name", "provisioner"],
+            "required": [
+              "name",
+              "provisioner"
+            ],
             "properties": {
-              "name": { "type": "string", "minLength": 1 },
-              "provisioner": { "type": "string", "minLength": 1 },
-              "parameters": { "$ref": "#/definitions/stringMap" },
-              "reclaimPolicy": { "type": "string", "enum": ["Retain", "Delete"] },
-              "volumeBindingMode": { "type": "string", "enum": ["WaitForFirstConsumer", "Immediate"] },
-              "allowVolumeExpansion": { "type": "boolean" },
-              "isDefault": { "type": "boolean" },
-              "mountOptions": { "type": "array", "items": { "type": "string" } },
-              "labels": { "$ref": "#/definitions/stringMap" },
-              "annotations": { "$ref": "#/definitions/stringMap" }
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "provisioner": {
+                "type": "string",
+                "minLength": 1
+              },
+              "parameters": {
+                "$ref": "#/$defs/stringMap"
+              },
+              "reclaimPolicy": {
+                "enum": [
+                  "Retain",
+                  "Delete"
+                ]
+              },
+              "volumeBindingMode": {
+                "enum": [
+                  "WaitForFirstConsumer",
+                  "Immediate"
+                ]
+              },
+              "allowVolumeExpansion": {
+                "type": "boolean"
+              },
+              "isDefault": {
+                "type": "boolean"
+              },
+              "mountOptions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "labels": {
+                "$ref": "#/$defs/stringMap"
+              },
+              "annotations": {
+                "$ref": "#/$defs/stringMap"
+              }
             }
           }
         }
@@ -44,138 +82,290 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
-        "name": { "type": "string", "minLength": 1 },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
         "namespaces": {
           "type": "array",
           "items": {
-            "oneOf": [
-              { "type": "string", "minLength": 1 },
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
               {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["name"],
+                "required": [
+                  "name"
+                ],
                 "properties": {
-                  "name": { "type": "string", "minLength": 1 },
-                  "labels": { "$ref": "#/definitions/stringMap" },
-                  "annotations": { "$ref": "#/definitions/stringMap" }
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "labels": {
+                    "$ref": "#/$defs/stringMap"
+                  },
+                  "annotations": {
+                    "$ref": "#/$defs/stringMap"
+                  }
                 }
               }
             ]
           }
         },
-        "from": { "type": "array", "items": { "type": "object", "minProperties": 1 } },
-        "labels": { "$ref": "#/definitions/stringMap" },
-        "annotations": { "$ref": "#/definitions/stringMap" }
+        "from": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "minProperties": 1
+          }
+        },
+        "labels": {
+          "$ref": "#/$defs/stringMap"
+        },
+        "annotations": {
+          "$ref": "#/$defs/stringMap"
+        }
       }
     },
     "podMonitor": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
-        "name": { "type": "string", "minLength": 1 },
-        "namespace": { "type": "string" },
-        "namespaces": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "interval": { "$ref": "#/definitions/durationOrEmpty" },
-        "podTargetLabels": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "dropPgSettings": { "type": "boolean" },
-        "keepPgSettings": { "type": "array", "items": { "type": "string", "pattern": "^[A-Za-z0-9_.]+$" } },
-        "metricRelabelings": { "type": "array", "items": { "type": "object" } },
-        "labels": { "$ref": "#/definitions/stringMap" },
-        "annotations": { "$ref": "#/definitions/stringMap" }
+        "enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "namespaces": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "interval": {
+          "$ref": "#/$defs/durationOrEmpty"
+        },
+        "podTargetLabels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "dropPgSettings": {
+          "type": "boolean"
+        },
+        "keepPgSettings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.]+$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
+          }
+        },
+        "metricRelabelings": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "labels": {
+          "$ref": "#/$defs/stringMap"
+        },
+        "annotations": {
+          "$ref": "#/$defs/stringMap"
+        }
       }
     },
     "alerts": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
-        "kind": { "type": "string", "enum": ["PrometheusRule", "VMRule"] },
-        "name": { "type": "string", "minLength": 1 },
-        "labels": { "$ref": "#/definitions/stringMap" },
-        "annotations": { "$ref": "#/definitions/stringMap" },
-        "ruleLabels": { "$ref": "#/definitions/stringMap" },
-        "selector": { "type": "string" },
+        "enabled": {
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": [
+            "PrometheusRule",
+            "VMRule"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "labels": {
+          "$ref": "#/$defs/stringMap"
+        },
+        "annotations": {
+          "$ref": "#/$defs/stringMap"
+        },
+        "ruleLabels": {
+          "$ref": "#/$defs/stringMap"
+        },
+        "selector": {
+          "type": "string"
+        },
         "severity": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "warning": { "type": "string", "minLength": 1 },
-            "critical": { "type": "string", "minLength": 1 }
+            "warning": {
+              "type": "string",
+              "minLength": 1
+            },
+            "critical": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         },
         "exporterDown": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "for": { "$ref": "#/definitions/duration" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "for": {
+              "$ref": "#/$defs/duration"
+            }
           }
         },
         "backupNotConfigured": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "for": { "$ref": "#/definitions/duration" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "for": {
+              "$ref": "#/$defs/duration"
+            }
           }
         },
         "scrapeDown": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "jobRegex": { "type": "string", "minLength": 1 },
-            "for": { "$ref": "#/definitions/duration" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "jobRegex": {
+              "type": "string",
+              "minLength": 1
+            },
+            "for": {
+              "$ref": "#/$defs/duration"
+            }
           }
         },
         "archiving": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "for": { "$ref": "#/definitions/duration" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "for": {
+              "$ref": "#/$defs/duration"
+            }
           }
         },
         "backupAge": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "maxAgeSeconds": { "type": "integer", "minimum": 1 },
-            "for": { "$ref": "#/definitions/duration" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "maxAgeSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "for": {
+              "$ref": "#/$defs/duration"
+            }
           }
         },
         "replicationLag": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "maxLagSeconds": { "type": "integer", "minimum": 1 },
-            "for": { "$ref": "#/definitions/duration" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "maxLagSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "for": {
+              "$ref": "#/$defs/duration"
+            }
           }
         },
         "certExpiry": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "nameRegex": { "type": "string" },
-            "warnDays": { "type": "integer", "minimum": 1 },
-            "criticalDays": { "type": "integer", "minimum": 1 },
-            "for": { "$ref": "#/definitions/duration" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "nameRegex": {
+              "type": "string"
+            },
+            "warnDays": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "criticalDays": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "for": {
+              "$ref": "#/$defs/duration"
+            }
           }
         },
         "walDisk": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "pvcRegex": { "type": "string", "minLength": 1 },
-            "minFreeFraction": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
-            "for": { "$ref": "#/definitions/duration" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "pvcRegex": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minFreeFraction": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "exclusiveMaximum": 1
+            },
+            "for": {
+              "$ref": "#/$defs/duration"
+            }
           }
         }
       }
@@ -188,24 +378,71 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
-            "name": { "type": "string", "minLength": 1 },
-            "namespaceSelector": { "type": "object" },
+            "enabled": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "namespaceSelector": {
+              "type": "object"
+            },
             "validationActions": {
               "type": "array",
+              "items": {
+                "enum": [
+                  "Deny",
+                  "Warn",
+                  "Audit"
+                ]
+              },
               "minItems": 1,
-              "uniqueItems": true,
-              "items": { "type": "string", "enum": ["Deny", "Warn", "Audit"] }
+              "uniqueItems": true
             },
-            "failurePolicy": { "type": "string", "enum": ["Fail", "Ignore"] },
+            "failurePolicy": {
+              "enum": [
+                "Fail",
+                "Ignore"
+              ]
+            },
             "forbid": {
               "type": "array",
+              "items": {
+                "enum": [
+                  "superuser",
+                  "replication",
+                  "bypassrls",
+                  "createrole"
+                ]
+              },
               "minItems": 1,
-              "uniqueItems": true,
-              "items": { "type": "string", "enum": ["superuser", "replication", "bypassrls", "createrole"] }
+              "uniqueItems": true
             }
           }
         }
+      }
+    }
+  },
+  "$defs": {
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "durationOrEmpty": {
+      "type": "string",
+      "pattern": "^([0-9]+(ms|s|m|h|d|w|y))?$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+      }
+    },
+    "duration": {
+      "type": "string",
+      "pattern": "^[0-9]+(ms|s|m|h|d|w|y)$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
       }
     }
   }

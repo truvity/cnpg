@@ -1,0 +1,194 @@
+/// An unknown key is an error, not a silent no-op. Everything a schema cannot express (an enabled feature with nothing to act on) is refused by the chart's own render-time validation; every rule has a fixture under tests/invalid/cnpg-platform/.
+@A.Chart { title = "cnpg-platform values" }
+module cnpg.contracts.Platform
+
+import "@vocab/Annotations.pkl" as A
+import "@vocab/Vocab.pkl" as V
+
+import "../Common.pkl"
+
+/// Admitted so the chart can be embedded; nothing reads it.
+global: Dynamic?
+
+commonLabels: Common.StringMap?
+commonAnnotations: Common.StringMap?
+storageClasses: StorageClasses?
+metricsNetworkPolicy: MetricsNetworkPolicy?
+podMonitor: PodMonitor?
+alerts: Alerts?
+admission: Admission?
+
+local const durationRe = #"^[0-9]+(ms|s|m|h|d|w|y)$"#
+local const durationOrEmptyRe = #"^([0-9]+(ms|s|m|h|d|w|y))?$"#
+
+/// A duration of one `<digits><unit>` part, units `ms s m h d w y`. Narrower than
+/// the vocabulary's `PromDuration`, which allows several parts (`1h30m`): today's
+/// rule is kept, and moving to `PromDuration` is a follow-up.
+@A.Def { name = "duration" }
+@A.Pattern {
+  regex = durationRe
+  valid { "5m"; "1d" }
+  invalid { ""; "5"; "1h30m" }
+}
+typealias Duration = String(contains(Regex(durationRe)))
+
+/// The same, or empty.
+@A.Def { name = "durationOrEmpty" }
+@A.Pattern {
+  regex = durationOrEmptyRe
+  valid { ""; "30s" }
+  invalid { "5"; "1h30m" }
+}
+typealias DurationOrEmpty = String(contains(Regex(durationOrEmptyRe)))
+
+typealias ReclaimPolicy = "Retain" | "Delete"
+
+typealias VolumeBindingMode = "WaitForFirstConsumer" | "Immediate"
+
+typealias AlertKind = "PrometheusRule" | "VMRule"
+
+typealias ValidationAction = "Deny" | "Warn" | "Audit"
+
+typealias FailurePolicy = "Fail" | "Ignore"
+
+typealias Forbidden = "superuser" | "replication" | "bypassrls" | "createrole"
+
+class StorageClasses {
+  enabled: Boolean?
+  classes: Listing<StorageClass>?
+}
+
+class StorageClass {
+  name: V.NonEmptyString
+  provisioner: V.NonEmptyString
+  parameters: Common.StringMap?
+  reclaimPolicy: ReclaimPolicy?
+  volumeBindingMode: VolumeBindingMode?
+  allowVolumeExpansion: Boolean?
+  isDefault: Boolean?
+  mountOptions: Listing<String>?
+  labels: Common.StringMap?
+  annotations: Common.StringMap?
+}
+
+class MetricsNetworkPolicy {
+  enabled: Boolean?
+  name: V.NonEmptyString?
+  port: V.Port?
+
+  namespaces: Listing<V.NonEmptyString | Namespace>?
+
+  from: Listing<V.NonEmptyObject>?
+  labels: Common.StringMap?
+  annotations: Common.StringMap?
+}
+
+class Namespace {
+  name: V.NonEmptyString
+  labels: Common.StringMap?
+  annotations: Common.StringMap?
+}
+
+class PodMonitor {
+  enabled: Boolean?
+  name: V.NonEmptyString?
+  namespace: String?
+  namespaces: Listing<V.NonEmptyString>?
+  interval: DurationOrEmpty?
+  podTargetLabels: Listing<V.NonEmptyString>?
+  dropPgSettings: Boolean?
+  keepPgSettings: Listing<Common.PgSetting>?
+  metricRelabelings: Listing<V.OpenObject>?
+  labels: Common.StringMap?
+  annotations: Common.StringMap?
+}
+
+class Alerts {
+  enabled: Boolean?
+  kind: AlertKind?
+  name: V.NonEmptyString?
+  labels: Common.StringMap?
+  annotations: Common.StringMap?
+  ruleLabels: Common.StringMap?
+  selector: String?
+  severity: Severity?
+  exporterDown: ExporterDown?
+  backupNotConfigured: BackupNotConfigured?
+  scrapeDown: ScrapeDown?
+  archiving: Archiving?
+  backupAge: BackupAge?
+  replicationLag: ReplicationLag?
+  certExpiry: CertExpiry?
+  walDisk: WalDisk?
+}
+
+class Severity {
+  warning: V.NonEmptyString?
+  critical: V.NonEmptyString?
+}
+
+class ExporterDown {
+  enabled: Boolean?
+  `for`: Duration?
+}
+
+class BackupNotConfigured {
+  enabled: Boolean?
+  `for`: Duration?
+}
+
+class ScrapeDown {
+  enabled: Boolean?
+  jobRegex: V.NonEmptyString?
+  `for`: Duration?
+}
+
+class Archiving {
+  enabled: Boolean?
+  `for`: Duration?
+}
+
+class BackupAge {
+  enabled: Boolean?
+  maxAgeSeconds: V.PositiveInt?
+  `for`: Duration?
+}
+
+class ReplicationLag {
+  enabled: Boolean?
+  maxLagSeconds: V.PositiveInt?
+  `for`: Duration?
+}
+
+class CertExpiry {
+  enabled: Boolean?
+  nameRegex: String?
+  warnDays: V.PositiveInt?
+  criticalDays: V.PositiveInt?
+  `for`: Duration?
+}
+
+class WalDisk {
+  enabled: Boolean?
+  pvcRegex: V.NonEmptyString?
+  minFreeFraction: V.OpenRatio?
+  `for`: Duration?
+}
+
+class Admission {
+  databaseRoleGuard: DatabaseRoleGuard?
+}
+
+class DatabaseRoleGuard {
+  enabled: Boolean?
+  name: V.NonEmptyString?
+  namespaceSelector: V.OpenObject?
+
+  @A.Items { min = 1; unique = true }
+  validationActions: Listing<ValidationAction>?
+
+  failurePolicy: FailurePolicy?
+
+  @A.Items { min = 1; unique = true }
+  forbid: Listing<Forbidden>?
+}

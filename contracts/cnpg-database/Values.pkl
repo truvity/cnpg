@@ -1,0 +1,145 @@
+/// What a product installs against the CNPG cluster the platform gave it: Databases, unprivileged DatabaseRoles and per-role client Certificates, in the release namespace. See docs/reference.md.
+@A.Chart { title = "cnpg-database" }
+module cnpg.contracts.Database
+
+import "@vocab/Annotations.pkl" as A
+
+/// Helm injects `global` into every subchart's values, so a strict schema must admit it or the chart cannot be embedded as a dependency. The chart reads nothing from it.
+global: Dynamic?
+
+/// Name of the platform's CNPG Cluster (a DNS label). Required.
+clusterName: String
+
+/// Optional; must equal the release namespace when set.
+namespace: String?
+
+/// The primary database (spec.name). Empty renders none.
+databaseName: String?
+
+/// Owner of the primary database and default owner of databases[]. Defaults to 'app'.
+owner: String?
+
+databases: Listing<Database>?
+roles: Listing<Role>?
+clientCertificate: ClientCertificate?
+clientCertificateIssuerRef: IssuerRef?
+
+/// Optional exact-match assertions; a mismatch fails the render.
+expect: Expect?
+
+/// RETIRED: no-op, kept for values compatibility.
+allowedConsumers: Listing<String>?
+
+local const databaseNameRe = #"^[a-z][a-z0-9_]{0,62}$"#
+local const roleNameRe = #"^[a-z][a-z0-9_-]{0,62}$"#
+
+/// A PostgreSQL database name.
+@A.Pattern {
+  regex = databaseNameRe
+  valid { "app"; "a_1" }
+  invalid { ""; "1a"; "A"; "a-b" }
+}
+typealias DatabaseName = String(contains(Regex(databaseNameRe)))
+
+/// A PostgreSQL role name.
+@A.Pattern {
+  regex = roleNameRe
+  valid { "app"; "a-1" }
+  invalid { ""; "1a"; "A" }
+}
+typealias RoleName = String(contains(Regex(roleNameRe)))
+
+typealias Ensure = "present" | "absent"
+
+typealias ReclaimPolicy = "retain" | "delete"
+
+typealias Algorithm = "ECDSA" | "RSA"
+
+typealias IssuerKind = "ClusterIssuer" | "Issuer"
+
+typealias OutputFormat = "DER"
+
+class Database {
+  /// PostgreSQL database name.
+  name: DatabaseName
+
+  owner: RoleName?
+  ensure: Ensure?
+  databaseReclaimPolicy: ReclaimPolicy?
+  schemas: Listing<String>?
+}
+
+class Role {
+  /// Role name; never pg_*. Also the certificate commonName.
+  name: RoleName
+
+  ensure: Ensure?
+  login: Boolean?
+  inherit: Boolean?
+  inRoles: Listing<String>?
+
+  @A.Range { min = -1 }
+  connectionLimit: Int?
+
+  passwordSecret: String?
+  disablePassword: Boolean?
+  validUntil: String?
+  comment: String?
+  databaseRoleReclaimPolicy: ReclaimPolicy?
+  clientCertificate: RoleClientCertificate?
+
+  /// Refused at render time: a product manages unprivileged roles only.
+  superuser: Any?
+
+  /// Refused at render time: a product manages unprivileged roles only.
+  replication: Any?
+
+  /// Refused at render time: a product manages unprivileged roles only.
+  bypassrls: Any?
+
+  /// Refused at render time: a product manages unprivileged roles only.
+  createrole: Any?
+
+  /// Refused at render time: a product manages unprivileged roles only.
+  createdb: Any?
+}
+
+class RoleClientCertificate {
+  enabled: Boolean?
+  algorithm: Algorithm?
+
+  // Null is the issuer's default.
+  @A.Nullable
+  @A.OneOfValues { values = List(256, 384, 521, 2048, 3072, 4096) }
+  size: Int?
+
+  duration: String?
+  renewBefore: String?
+  issuerRef: IssuerRef?
+  additionalOutputFormats: Listing<OutputFormat>?
+}
+
+class ClientCertificate {
+  algorithm: Algorithm?
+
+  // Null is the issuer's default.
+  @A.Nullable
+  @A.OneOfValues { values = List(256, 384, 521, 2048, 3072, 4096) }
+  size: Int?
+
+  duration: String?
+  renewBefore: String?
+  additionalOutputFormats: Listing<OutputFormat>?
+}
+
+class IssuerRef {
+  name: String?
+  kind: IssuerKind?
+  group: String?
+}
+
+class Expect {
+  clusterName: String?
+  databaseName: String?
+  owner: String?
+}

@@ -154,6 +154,37 @@ crds:
 crds-check: crds
     git diff --exit-code -- 'charts/*/templates/crds.yaml' 'charts/*/Chart.yaml'
 
+# The value contracts (contracts/, Pkl) are the single source of each chart's
+# values.schema.json: `just contract` regenerates the five committed schemas
+# from them, and `contract-check` (CI) regenerates into a temporary directory
+# and fails when a committed schema differs, or a contract is not formatted.
+# barman-cloud-crds is not here: its schema is not ours (upstream CRDs).
+# Pkl comes from hack/pkl (a pinned wrapper, until nixpkgs ships Pkl 0.32).
+contract-charts := "cnpg-cluster cnpg-database cnpg-platform cnpg-project-platform cnpg-projects"
+
+contract:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for chart in {{ contract-charts }}; do
+      hack/pkl run --project-dir contracts contracts/Generate.pkl -- --dir "charts/$chart" "contracts/$chart/Values.pkl" >/dev/null
+    done
+    echo "contract: wrote the values.schema.json of {{ contract-charts }}"
+
+contract-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    hack/pkl format --diff-name-only contracts
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    for chart in {{ contract-charts }}; do
+      hack/pkl run --project-dir contracts contracts/Generate.pkl -- --dir "$tmp/$chart" "contracts/$chart/Values.pkl" >/dev/null
+      if ! diff -u "charts/$chart/values.schema.json" "$tmp/$chart/values.schema.json"; then
+        echo "$chart: values.schema.json is not what contracts/$chart/Values.pkl generates (run just contract)" >&2
+        exit 1
+      fi
+    done
+    echo "contract-check: the five values.schema.json are what the contracts generate"
+
 # Lint the CRD mirror charts: they take no values, so any key must be refused
 # (values.schema.json; one negative fixture per chart under tests/invalid/), and
 # the render must contain CRDs only.
@@ -317,7 +348,7 @@ clean:
 # — a standard-library advisory with no released fix must not turn
 # every PR red on a finding nobody can act on; security.yaml runs it
 # separately, daily and un-required.
-check: test lint charts crd-charts-lint crds-check leak-canary rulecheck clients-ts clients-kotlin clients-python
+check: test lint charts contract-check crd-charts-lint crds-check leak-canary rulecheck clients-ts clients-kotlin clients-python
 
 # Build a snapshot release locally (no push, no tag) — exercises
 # goreleaser's build, archive and changelog machinery (the cnpgctl archives).

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "resolvedDependencies": {
+    "package://github.com/truvity/pkl-contracts/releases/download/v0.6.0/contracts.vocab@0": {
+      "type": "remote",
+      "uri": "projectpackage://github.com/truvity/pkl-contracts/releases/download/v0.6.0/contracts.vocab@0.6.0",
+      "checksums": {
+        "sha256": "6c80143ec0ec3675f46e64dbd2782a51898be5c92fad4ef2f41b329dace95c6e"
+      }
+    },
+    "package://github.com/truvity/pkl-contracts/releases/download/v0.6.0/contracts.model@0": {
+      "type": "remote",
+      "uri": "projectpackage://github.com/truvity/pkl-contracts/releases/download/v0.6.0/contracts.model@0.6.0",
+      "checksums": {
+        "sha256": "bd75b277aebec165f560dc21cb64c0f22ace313fc8ce84d43a5f0e9ce45ffaf4"
+      }
+    },
+    "package://github.com/truvity/pkl-contracts/releases/download/v0.6.0/contracts.jsonschema@0": {
+      "type": "remote",
+      "uri": "projectpackage://github.com/truvity/pkl-contracts/releases/download/v0.6.0/contracts.jsonschema@0.6.0",
+      "checksums": {
+        "sha256": "789e11b9a1ac69f078e5a8afa191407e63f88d0a3fe9e3d92034215a3103f621"
+      }
+    },
+    "package://github.com/truvity/pkl-contracts/releases/download/v0.6.0/contracts.helm@0": {
+      "type": "remote",
+      "uri": "projectpackage://github.com/truvity/pkl-contracts/releases/download/v0.6.0/contracts.helm@0.6.0",
+      "checksums": {
+        "sha256": "ae808a18d0615418b19c3bae434ad8564cb926ab47356e80aa1b223f1f8fe182"
+      }
+    }
+  }
+}

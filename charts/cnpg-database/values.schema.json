@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "cnpg-database",
   "description": "What a product installs against the CNPG cluster the platform gave it: Databases, unprivileged DatabaseRoles and per-role client Certificates, in the release namespace. See docs/reference.md.",
   "type": "object",
@@ -40,21 +40,25 @@
           "name": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,62}$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            },
             "description": "PostgreSQL database name."
           },
           "owner": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9_-]{0,62}$"
+            "pattern": "^[a-z][a-z0-9_-]{0,62}$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
           },
           "ensure": {
-            "type": "string",
             "enum": [
               "present",
               "absent"
             ]
           },
           "databaseReclaimPolicy": {
-            "type": "string",
             "enum": [
               "retain",
               "delete"
@@ -81,10 +85,12 @@
           "name": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_-]{0,62}$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            },
             "description": "Role name; never pg_*. Also the certificate commonName."
           },
           "ensure": {
-            "type": "string",
             "enum": [
               "present",
               "absent"
@@ -119,7 +125,6 @@
             "type": "string"
           },
           "databaseRoleReclaimPolicy": {
-            "type": "string",
             "enum": [
               "retain",
               "delete"
@@ -133,7 +138,6 @@
                 "type": "boolean"
               },
               "algorithm": {
-                "type": "string",
                 "enum": [
                   "ECDSA",
                   "RSA"
@@ -168,7 +172,6 @@
                     "type": "string"
                   },
                   "kind": {
-                    "type": "string",
                     "enum": [
                       "ClusterIssuer",
                       "Issuer"
@@ -182,7 +185,6 @@
               "additionalOutputFormats": {
                 "type": "array",
                 "items": {
-                  "type": "string",
                   "enum": [
                     "DER"
                   ]
@@ -213,7 +215,6 @@
       "additionalProperties": false,
       "properties": {
         "algorithm": {
-          "type": "string",
           "enum": [
             "ECDSA",
             "RSA"
@@ -243,7 +244,6 @@
         "additionalOutputFormats": {
           "type": "array",
           "items": {
-            "type": "string",
             "enum": [
               "DER"
             ]
@@ -259,7 +259,6 @@
           "type": "string"
         },
         "kind": {
-          "type": "string",
           "enum": [
             "ClusterIssuer",
             "Issuer"

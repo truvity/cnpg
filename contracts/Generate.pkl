@@ -1,0 +1,35 @@
+/// Generates a chart's `values.schema.json` from its values contract.
+///
+///     pkl run --project-dir contracts Generate.pkl -- --dir charts/cnpg-cluster cnpg-cluster/Values.pkl
+///
+/// It is `contracts.helm`'s generator (`Helm.valuesSchema`) on the chart's
+/// contract, with the schema alone written (no README, no values.yaml).
+extends "pkl:Command"
+
+import "@helm/Helm.pkl"
+import "@model/Model.pkl"
+
+options: Options
+
+class Options {
+  /// The directory to write into: the chart's.
+  @Flag { shortName = "d" }
+  dir: String = "."
+
+  /// The chart's contract.
+  @Argument { convert = (path) -> new Import { uri = path } }
+  chart: Module
+}
+
+local contract =
+  Model.chartOf(options.chart)
+    ?? throw("\(options.chart) is not a chart: no module in its chain is annotated @Chart")
+
+output {
+  files {
+    ["\(options.dir)/values.schema.json"] {
+      value = Helm.valuesSchema(contract)
+      renderer = new JsonRenderer { indent = "  " }
+    }
+  }
+}

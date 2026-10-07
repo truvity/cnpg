@@ -1,0 +1,131 @@
+/// Types two or more of the charts' value contracts share: the string map,
+/// Kubernetes resource names and the shapes the project-platform and projects
+/// charts both take (`scheduledBackups[]`, `serverTLS[]`). Every rule here is
+/// today's hand-written rule, word for word (the contract is a no-behaviour-change
+/// move of `values.schema.json`); where the vocabulary has a near type, the
+/// alias says how it differs.
+module cnpg.contracts.Common
+
+import "@vocab/Annotations.pkl" as A
+import "@vocab/Vocab.pkl" as V
+
+local const k8sNameRe = #"^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"#
+local const goDurationRe = #"^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"#
+local const cronRe = #"^\S+( \S+){5}$"#
+local const pgSettingRe = #"^[A-Za-z0-9_.]+$"#
+local const pemRe = "-----BEGIN CERTIFICATE-----"
+
+/// A map of strings (labels, annotations, parameters).
+@A.Def { name = "stringMap" }
+typealias StringMap = Mapping<String, String>
+
+/// A Kubernetes resource name, as the charts have always accepted it: the
+/// pattern of the vocabulary's `DnsName`, bounded to 1..253 characters (`DnsName`
+/// has no upper bound; `DnsSubdomain` is stricter and is a follow-up).
+@A.Def { name = "k8sName" }
+@A.Length { min = 1; max = 253 }
+@A.Pattern {
+  regex = k8sNameRe
+  valid { "a"; "a-b.c" }
+  invalid { ""; "-a"; "A"; "a_b" }
+}
+typealias K8sName = String(length >= 1 && length <= 253 && contains(Regex(k8sNameRe)))
+
+/// A duration written as one or more `<digits><unit>` parts, units `ns us ms s m
+/// h`. Narrower than the vocabulary's `Duration` (no decimals, no `µs`): today's
+/// rule is kept, and moving to `Duration` is a follow-up.
+@A.Def { name = "duration" }
+@A.Pattern {
+  regex = goDurationRe
+  valid { "1h"; "1h30m" }
+  invalid { ""; "1.5h"; "h"; "1d" }
+}
+typealias Duration = String(contains(Regex(goDurationRe)))
+
+/// A six-field cron schedule, seconds first.
+@A.Pattern {
+  regex = cronRe
+  valid { "0 0 2 * * *" }
+  invalid { "0 2 * * *"; "" }
+}
+typealias Cron = String(contains(Regex(cronRe)))
+
+/// A PostgreSQL setting name.
+@A.Pattern {
+  regex = pgSettingRe
+  valid { "max_connections"; "a.b" }
+  invalid { ""; "a b" }
+}
+typealias PgSetting = String(contains(Regex(pgSettingRe)))
+
+/// A PEM certificate; only the header is checked.
+@A.MultiLine
+@A.Pattern {
+  regex = pemRe
+  valid { "-----BEGIN CERTIFICATE-----" }
+  invalid { "not a certificate" }
+}
+typealias PemCertificate = String(contains(Regex(pemRe)))
+
+/// A ScheduledBackup the platform owns beside a Cluster another chart renders.
+class ScheduledBackup {
+  name: K8sName
+  namespace: K8sName
+  clusterName: K8sName
+  objectStoreName: K8sName
+
+  /// Six-field cron, seconds first.
+  schedule: Cron?
+
+  /// Take the first base backup on creation (default true).
+  immediate: Boolean?
+
+  labels: StringMap?
+  annotations: StringMap?
+  enabled: Boolean?
+}
+
+/// The issuer of a server certificate.
+class IssuerRef {
+  name: V.NonEmptyString
+  kind: IssuerKind?
+  group: V.NonEmptyString?
+}
+
+typealias IssuerKind = "Issuer" | "ClusterIssuer"
+
+typealias KeyAlgorithm = "RSA" | "ECDSA" | "Ed25519"
+
+typealias KeyEncoding = "PKCS1" | "PKCS8"
+
+typealias RotationPolicy = "Never" | "Always"
+
+/// The key of a server certificate.
+class PrivateKey {
+  algorithm: KeyAlgorithm?
+  size: V.PositiveInt?
+  encoding: KeyEncoding?
+  rotationPolicy: RotationPolicy?
+}
+
+/// A server certificate the platform issues for a cluster another chart renders.
+class ServerTls {
+  clusterName: K8sName
+  namespace: K8sName
+  certificateName: K8sName?
+  secretName: K8sName?
+  caSecretName: K8sName?
+  issuerRef: IssuerRef
+
+  @A.Items { min = 1 }
+  @A.Required
+  caCertificates: Listing<PemCertificate>?
+
+  duration: Duration?
+  renewBefore: Duration?
+  privateKey: PrivateKey?
+  labels: StringMap?
+  annotations: StringMap?
+  caSecretAnnotations: StringMap?
+  enabled: Boolean?
+}
