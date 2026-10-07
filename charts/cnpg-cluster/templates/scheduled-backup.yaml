@@ -6,6 +6,9 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   schedule: {{ .Values.backup.schedule | quote }}
+  {{- if .Values.backup.immediate }}
+  immediate: true
+  {{- end }}
   backupOwnerReference: self
   cluster:
     name: {{ .Values.clusterName }}
