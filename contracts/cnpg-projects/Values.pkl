@@ -1,0 +1,51 @@
+/// An unknown key is an error, not a silent no-op. Each clusters[].values is validated by the cnpg-cluster rules at render time; every rule has a fixture under tests/invalid/cnpg-projects/.
+@A.Chart { title = "cnpg-projects values" }
+module cnpg.contracts.Projects
+
+import "@vocab/Annotations.pkl" as A
+import "@vocab/Vocab.pkl" as V
+
+import "../Common.pkl"
+
+/// Admitted so the chart can be embedded; nothing reads it.
+global: Dynamic?
+
+commonLabels: Common.StringMap?
+commonAnnotations: Common.StringMap?
+clusters: Listing<Cluster>?
+scheduledBackups: Listing<Common.ScheduledBackup>?
+serverTLS: Listing<Common.ServerTls>?
+backupAccess: BackupAccess?
+
+/// One project row: the values of one cnpg-cluster. The values are open here (a
+/// follow-up closes them with the cnpg-cluster contract); the chart validates
+/// them with the cnpg-cluster rules at render time.
+class Cluster {
+  @A.SetAtInstall
+  values: Dynamic?
+}
+
+/// What the backup-access roles are minted from.
+class BackupAccess {
+  clusterName: String?
+  accountID: (String | Int)?
+  region: String?
+  bucketName: String?
+  kmsKeyArn: String?
+  permissionsBoundary: String?
+  objectNamespace: String?
+  annotations: Common.StringMap?
+  roles: Listing<BackupRole>?
+}
+
+/// One backup-access role.
+class BackupRole {
+  name: V.NonEmptyString
+  project: Common.K8sName
+  namespace: Common.K8sName
+  primaryCluster: Common.K8sName
+
+  @A.Items { min = 1 }
+  @A.SetAtInstall
+  serviceAccounts: Listing<Common.K8sName>?
+}

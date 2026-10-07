@@ -1,0 +1,61 @@
+/// An unknown key is an error, not a silent no-op. What a schema cannot express (a name used twice) is refused by the chart's own render-time validation; every rule has a fixture under tests/invalid/cnpg-project-platform/.
+@A.Chart { title = "cnpg-project-platform values" }
+module cnpg.contracts.ProjectPlatform
+
+import "@vocab/Annotations.pkl" as A
+import "@vocab/Vocab.pkl" as V
+
+import "../Common.pkl"
+
+/// Admitted so the chart can be embedded; nothing reads it.
+global: Dynamic?
+
+commonLabels: Common.StringMap?
+commonAnnotations: Common.StringMap?
+objectStores: Listing<ObjectStore>?
+scheduledBackups: Listing<Common.ScheduledBackup>?
+serverTLS: Listing<Common.ServerTls>?
+
+local const bucketRe = #"^[a-z0-9][a-z0-9.-]*[a-z0-9]$"#
+local const prefixRe = #"^[^/].*[^/]$|^[^/]$"#
+
+/// An S3 bucket name: 3..63 characters.
+@A.Length { min = 3; max = 63 }
+@A.Pattern {
+  regex = bucketRe
+  valid { "abc"; "a.b-c" }
+  invalid { "ab"; "-abc"; "ABC" }
+}
+typealias BucketName = String(length >= 3 && length <= 63 && contains(Regex(bucketRe)))
+
+/// A key prefix that neither starts nor ends with a slash.
+@A.Length { min = 1 }
+@A.Pattern {
+  regex = prefixRe
+  valid { "a"; "a/b" }
+  invalid { "/a"; "a/" }
+}
+typealias Prefix = String(length >= 1 && contains(Regex(prefixRe)))
+
+typealias DataCompression = "" | "bzip2" | "gzip" | "lz4" | "snappy"
+
+typealias WalCompression = "" | "bzip2" | "gzip" | "lz4" | "snappy" | "xz" | "zstd"
+
+typealias Encryption = "" | "AES256" | "aws:kms"
+
+/// An ObjectStore the platform owns.
+class ObjectStore {
+  name: Common.K8sName
+  namespace: Common.K8sName
+  bucketName: BucketName
+  prefix: Prefix
+  retentionDays: V.PositiveInt?
+  dataCompression: DataCompression?
+  walCompression: WalCompression?
+  encryption: Encryption?
+  dataJobs: V.PositiveInt?
+  walMaxParallel: V.PositiveInt?
+  labels: Common.StringMap?
+  annotations: Common.StringMap?
+  enabled: Boolean?
+}

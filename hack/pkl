@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# TEMPORARY. Pkl 0.32.1, fetched and verified here, outside devbox, because
+# nixpkgs ships 0.31.1 only. Same wrapper as truvity/pkl-contracts' bin/pkl
+# (the version the contract packages are tested on). Remove it and add `pkl`
+# at 0.32 or newer to devbox.json as soon as nixpkgs has it; every other tool
+# comes from devbox as usual. Lives in hack/ because bin/ is gitignored here.
+#
+# What it does: finds the pinned release asset of apple/pkl for this host,
+# downloads it once, refuses it unless its sha256 matches the pin below, keeps
+# it under ${XDG_CACHE_HOME:-$HOME/.cache}/pkl-contracts/pkl/<version>/, and
+# execs it. Bumping Pkl is a reviewed change: new version, four new sums.
+set -euo pipefail
+
+version="0.32.1"
+
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64)                  asset="pkl-linux-amd64";   sha256="3180b62da95c0cad1d904e9bb6c5f4a8f9032413c21e53194bb91ff1ee5f3211" ;;
+  Linux-aarch64 | Linux-arm64)   asset="pkl-linux-aarch64"; sha256="a76d2dd47da435a8f911b0347373f47c7e59ea54fb75ff846d20b8df10dba058" ;;
+  Darwin-arm64 | Darwin-aarch64) asset="pkl-macos-aarch64"; sha256="563eb51c9a20b16a3625464ed745c675ed9750381f2126722696a0d7cac1d9d3" ;;
+  Darwin-x86_64)                 asset="pkl-macos-amd64";   sha256="5b74b903234047960144f66f2cebdd12d267d9b98e8155ed91d2ae5ed27e2d1f" ;;
+  *) echo "bin/pkl: no pinned Pkl $version asset for $(uname -s)-$(uname -m)" >&2; exit 1 ;;
+esac
+
+dir="${XDG_CACHE_HOME:-$HOME/.cache}/pkl-contracts/pkl/$version"
+exe="$dir/$asset"
+
+sum() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
+  else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
+
+# A cached binary is trusted only if it still matches the pin.
+if [ -x "$exe" ] && [ "$(sum "$exe")" = "$sha256" ]; then
+  exec "$exe" "$@"
+fi
+
+mkdir -p "$dir"
+tmp="$(mktemp "$dir/$asset.XXXXXX")"
+trap 'rm -f "$tmp"' EXIT
+curl -fsSL --retry 3 -o "$tmp" "https://github.com/apple/pkl/releases/download/$version/$asset" >&2
+if [ "$(sum "$tmp")" != "$sha256" ]; then
+  echo "bin/pkl: sha256 of $asset $version does not match the pin; refusing to run it" >&2
+  exit 1
+fi
+chmod +x "$tmp"
+mv "$tmp" "$exe"
+trap - EXIT
+exec "$exe" "$@"

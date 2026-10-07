@@ -6,6 +6,8 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+- **Change:** the `values.schema.json` of `cnpg-cluster`, `cnpg-database`, `cnpg-platform`, `cnpg-project-platform` and `cnpg-projects` are now generated from Pkl contracts in `contracts/` (the first use of [truvity/pkl-contracts](https://github.com/truvity/pkl-contracts), v0.5.0), and `just contract-check` (a CI job) fails when a committed schema is not what its contract generates. No behaviour change: the schemas accept and refuse exactly what the hand-written ones did (every golden render is byte-identical, every negative fixture is still refused, and 1.09 million probe documents got the same verdict from both). What differs is the dialect and the spelling: draft 2020-12 instead of draft-07, `$defs` instead of `definitions`, `anyOf` for the one `oneOf`. Helm 4 validates against them as before. See `docs/contracts.md`. `barman-cloud-crds` is untouched.
+
 ## v2.15.1
 
 - **Fix:** v2.15.0 set `immediate: true` only on the ScheduledBackup that `cnpg-cluster` renders for itself. The `scheduledBackups[]` list of `cnpg-projects` and of `cnpg-project-platform`, which is what the estate renders, did not get it. Both now render `immediate: true` per entry by default; `immediate: false` on an entry leaves it out. The operator acts on the field only for a ScheduledBackup that has never been checked (`status.lastCheckTime` unset), so an existing, running ScheduledBackup takes no extra backup; one that has never run takes its first base backup once. The render diff is that one line on each ScheduledBackup.
