@@ -25,8 +25,7 @@
         ],
         "properties": {
           "values": {
-            "type": "object",
-            "x-set-at-install": true
+            "type": "object"
           }
         }
       }
@@ -58,6 +57,9 @@
           "schedule": {
             "type": "string",
             "pattern": "^\\S+( \\S+){5}$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            },
             "description": "Six-field cron, seconds first."
           },
           "immediate": {
@@ -132,8 +134,7 @@
               "type": "string",
               "pattern": "-----BEGIN CERTIFICATE-----"
             },
-            "minItems": 1,
-            "x-set-at-install": true
+            "minItems": 1
           },
           "duration": {
             "$ref": "#/$defs/duration"
@@ -247,8 +248,7 @@
                 "items": {
                   "$ref": "#/$defs/k8sName"
                 },
-                "minItems": 1,
-                "x-set-at-install": true
+                "minItems": 1
               }
             }
           }
@@ -267,11 +267,17 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 253,
-      "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+      "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+      }
     },
     "duration": {
       "type": "string",
-      "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$"
+      "pattern": "^[0-9]+(ns|us|ms|s|m|h)([0-9]+(ns|us|ms|s|m|h))*$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+      }
     }
   }
 }

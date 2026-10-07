@@ -40,11 +40,17 @@
           "name": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,62}$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            },
             "description": "PostgreSQL database name."
           },
           "owner": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9_-]{0,62}$"
+            "pattern": "^[a-z][a-z0-9_-]{0,62}$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
           },
           "ensure": {
             "enum": [
@@ -79,6 +85,9 @@
           "name": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_-]{0,62}$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            },
             "description": "Role name; never pg_*. Also the certificate commonName."
           },
           "ensure": {

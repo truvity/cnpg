@@ -41,7 +41,8 @@ customers: Listing<Customer>?
 roles: Listing<Role>?
 
 /// Instance count. Null = profile default (devel 1, prod 3). prod requires >= 3.
-// The schema also admits null (profile default): said in Gaps.pkl.
+// Null means the profile decides.
+@A.Nullable
 @A.Range { min = 1 }
 instances: Int?
 
@@ -436,6 +437,7 @@ typealias PolicyRole = String(contains(Regex(policyRoleRe)))
 typealias PersonRole = String(contains(Regex(personRoleRe)))
 
 /// An extra PEM root; only the words "BEGIN CERTIFICATE" are checked.
+@A.MultiLine
 @A.Pattern {
   regex = pemRootRe
   valid { "BEGIN CERTIFICATE" }

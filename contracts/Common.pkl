@@ -59,6 +59,7 @@ typealias Cron = String(contains(Regex(cronRe)))
 typealias PgSetting = String(contains(Regex(pgSettingRe)))
 
 /// A PEM certificate; only the header is checked.
+@A.MultiLine
 @A.Pattern {
   regex = pemRe
   valid { "-----BEGIN CERTIFICATE-----" }
@@ -117,7 +118,7 @@ class ServerTls {
   issuerRef: IssuerRef
 
   @A.Items { min = 1 }
-  @A.SetAtInstall
+  @A.Required
   caCertificates: Listing<PemCertificate>?
 
   duration: Duration?

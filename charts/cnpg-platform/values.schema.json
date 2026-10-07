@@ -177,7 +177,10 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_.]+$"
+            "pattern": "^[A-Za-z0-9_.]+$",
+            "not": {
+              "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+            }
           }
         },
         "metricRelabelings": {
@@ -430,11 +433,17 @@
     },
     "durationOrEmpty": {
       "type": "string",
-      "pattern": "^([0-9]+(ms|s|m|h|d|w|y))?$"
+      "pattern": "^([0-9]+(ms|s|m|h|d|w|y))?$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+      }
     },
     "duration": {
       "type": "string",
-      "pattern": "^[0-9]+(ms|s|m|h|d|w|y)$"
+      "pattern": "^[0-9]+(ms|s|m|h|d|w|y)$",
+      "not": {
+        "pattern": "[\\n\\r\\f\\x0B\\x85\u2028\u2029]"
+      }
     }
   }
 }

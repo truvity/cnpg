@@ -21,7 +21,7 @@ backupAccess: BackupAccess?
 /// follow-up closes them with the cnpg-cluster contract); the chart validates
 /// them with the cnpg-cluster rules at render time.
 class Cluster {
-  @A.SetAtInstall
+  @A.Required
   values: Dynamic?
 }
 
@@ -46,6 +46,6 @@ class BackupRole {
   primaryCluster: Common.K8sName
 
   @A.Items { min = 1 }
-  @A.SetAtInstall
+  @A.Required
   serviceAccounts: Listing<Common.K8sName>?
 }

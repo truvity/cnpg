@@ -108,7 +108,9 @@ class RoleClientCertificate {
   enabled: Boolean?
   algorithm: Algorithm?
 
-  // One of 256, 384, 521, 2048, 3072, 4096, or null: said in Gaps.pkl.
+  // Null is the issuer's default.
+  @A.Nullable
+  @A.OneOfValues { values = List(256, 384, 521, 2048, 3072, 4096) }
   size: Int?
 
   duration: String?
@@ -120,7 +122,9 @@ class RoleClientCertificate {
 class ClientCertificate {
   algorithm: Algorithm?
 
-  // One of 256, 384, 521, 2048, 3072, 4096, or null: said in Gaps.pkl.
+  // Null is the issuer's default.
+  @A.Nullable
+  @A.OneOfValues { values = List(256, 384, 521, 2048, 3072, 4096) }
   size: Int?
 
   duration: String?

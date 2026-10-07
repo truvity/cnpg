@@ -2,7 +2,7 @@
 
 Each chart's `values.schema.json` is generated from a Pkl contract in
 [`contracts/`](../contracts) with the generators of
-[truvity/pkl-contracts](https://github.com/truvity/pkl-contracts) v0.5.0. The
+[truvity/pkl-contracts](https://github.com/truvity/pkl-contracts) v0.6.0. The
 contract is the single source; the committed schema is its output, and CI fails
 when the two differ.
 
@@ -50,7 +50,6 @@ contracts/
   PklProject, PklProject.deps.json   the four pkl-contracts packages, pinned
   Common.pkl                         types shared between charts
   Generate.pkl                       the command: one chart's contract -> values.schema.json
-  Gaps.pkl                           what v0.5.0 cannot say yet (below)
   <chart>/Values.pkl                 the contract of one chart
 ```
 
@@ -62,24 +61,22 @@ a typealias a `definitions` entry reached by `$ref` (`stringMap`, `k8sName`,
 `duration`). Counts are annotations: `@A.Items { min; unique }`,
 `@A.Properties`, `@A.Range`.
 
-## What v0.5.0 cannot say, and `Gaps.pkl`
+## Declared, not patched
 
-The generated schema must accept and refuse exactly what the hand-written one
-did. Five things in today's schemas are outside what the generator can say, so
-`Gaps.pkl` applies them to its output; each goes away when the generator learns
-it.
+The hand-written schemas say five things the Pkl types cannot, and v0.6.0 has an
+annotation for each, so nothing is patched after generation:
 
-| Gap | Today's rule | What `Gaps.pkl` does |
-|---|---|---|
-| line-break guard | the generator pairs every `pattern` with `not: { pattern: <line breaks> }`; the hand-written patterns allow a line break (the `caCertificates` patterns are unanchored and match multi-line PEM) | removes the guard everywhere |
-| `$defs` of the chart itself | `definitions` + `$ref` | adds the `@Def` types to the root `$defs` (v0.5.0 emits `$defs` for `@Schema` documents only, so the refs would dangle) |
-| `instances` | `type: [integer, null]`, minimum 1 (null = profile default) | sets `type` to integer or null |
-| `size` of a client certificate (2 places) | `type: [integer, null]` and `enum: [256, 384, 521, 2048, 3072, 4096, null]` | sets both |
-| empty `$defs` | none | removed (the generator always writes one) |
+| Today's rule | Annotation |
+|---|---|
+| `caCertificates` patterns are unanchored and match multi-line PEM | `@A.MultiLine` on `PemCertificate` and `PemRoot` (lifts the line-break guard) |
+| `definitions` + `$ref` | `@A.Def` (the generator writes the chart's own `$defs`) |
+| `instances` is an integer from 1 or `null` | `@A.Nullable` |
+| client certificate `size` is one of 256, 384, 521, 2048, 3072, 4096 or `null` | `@A.Nullable` + `@A.OneOfValues` |
+| a list or open object that must be present, no default | `@A.Required` (no `x-set-at-install`) |
 
 ## Parity with the hand-written schemas
 
-This move changes no behaviour. How that was shown:
+This move changes no behaviour, except the one tightening below. How that was shown:
 
 1. **Structure.** Both schemas with every `$ref` inlined, `description`/`title`
    left out and compared apart: zero differences in all five charts, and zero
@@ -97,9 +94,10 @@ This move changes no behaviour. How that was shown:
    fixture merged over the chart's defaults, and each of those with every value
    replaced in turn by 140 probes (wrong types, `null`, empty, boundary
    numbers, pattern near-misses, line breaks, a multi-line PEM, lists with a
-   duplicate, an unknown key, the key removed). No verdict differed. The same run
-   flags a schema with the line-break guard left in (a multi-line PEM refused)
-   and one with `maxLength` off by one, so it can see a difference.
+   duplicate, an unknown key, the key removed). Exactly one kind of verdict
+   differed (below); everything else, 1,091,231 of 1,091,263 documents, got the
+   same verdict. The same run flags a schema with the line-break guard left on a
+   PEM and one with `maxLength` off by one, so it can see a difference.
 
 ### What changed in each file, and why it does not matter
 
@@ -109,11 +107,22 @@ This move changes no behaviour. How that was shown:
 | `definitions` to `$defs`, `#/definitions/x` to `#/$defs/x` | platform, project-platform, projects | the same three definitions each, resolved against the document root |
 | `oneOf` to `anyOf` | `cnpg-platform`: `metricsNetworkPolicy.namespaces[]` | the members are a non-empty string and an object; no value is both, so exactly-one and at-least-one accept the same documents |
 | a string `enum` loses `type: string` | cluster 5, database 10, platform 6, project-platform 7, projects 4 | every member is a string, so `enum` alone admits the same values |
-| `x-set-at-install: true` added | `serverTLS[].caCertificates` (project-platform, projects), `clusters[].values`, `backupAccess.roles[].serviceAccounts` (projects) | an unknown keyword, ignored by validators. The contract needs it to make a list or an open object that has no default `required`, which today's schemas already say |
+| a line-break guard (`not: { pattern: <line breaks> }`) beside 53 `pattern`s | every patterned string except the PEM ones | see "The one tightening" |
 | root `$defs` order, property order | all | JSON objects are unordered |
 | unused `definitions` | none dropped | |
 
 The `description` of every property and every schema is identical.
+
+### The one tightening
+
+The generator refuses a line break (CR, FF, VT, NEL, U+2028, U+2029, and LF) in
+every patterned string. The differential run found one field where the hand-written pattern admitted
+them: `cnpg-project-platform` `objectStores[].prefix`, with
+`^[^/].*[^/]$|^[^/]$`: `.` matches CR, NEL and U+2028, so `a\rb` was accepted
+before and is refused now. A line break in an S3 key prefix is invalid anyway;
+this is the only accepted change in behaviour (the differential run found no
+other). The PEM fields (`caCertificates`, `extraCertificates`) are declared
+`@A.MultiLine` and still accept multi-line PEM.
 
 ## Differences from the vocabulary, kept on purpose
 

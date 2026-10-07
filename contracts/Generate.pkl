@@ -2,14 +2,12 @@
 ///
 ///     pkl run --project-dir contracts Generate.pkl -- --dir charts/cnpg-cluster cnpg-cluster/Values.pkl
 ///
-/// It is `contracts.helm`'s generator (`Helm.valuesSchema`) plus the few things
-/// v0.5.0 of it cannot say yet, in `Gaps.pkl`, each named there with the rule
-/// it keeps.
+/// It is `contracts.helm`'s generator (`Helm.valuesSchema`) on the chart's
+/// contract, with the schema alone written (no README, no values.yaml).
 extends "pkl:Command"
 
+import "@helm/Helm.pkl"
 import "@model/Model.pkl"
-
-import "Gaps.pkl"
 
 options: Options
 
@@ -30,7 +28,7 @@ local contract =
 output {
   files {
     ["\(options.dir)/values.schema.json"] {
-      value = Gaps.schema(contract)
+      value = Helm.valuesSchema(contract)
       renderer = new JsonRenderer { indent = "  " }
     }
   }
