@@ -136,6 +136,7 @@ metadata:
   namespace: app
 spec:
   schedule: "0 0 2 * * *"
+  immediate: true
   backupOwnerReference: self
   cluster:
     name: pg

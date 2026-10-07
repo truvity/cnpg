@@ -44,6 +44,7 @@
         "s3Prefix": { "type": "string", "description": "Prefix under the bucket. Defaults to '{namespace}/{clusterName}/' when empty." },
         "serverName": { "type": "string", "description": "Barman server directory under the prefix. Defaults to clusterName. Bump on a recreated (fresh initdb) cluster so it does not reuse its predecessor's archive directory." },
         "schedule": { "type": "string", "description": "Cron schedule for the ScheduledBackup, e.g. '0 0 2 * * *'." },
+        "immediate": { "type": "boolean", "description": "Take the first base backup as soon as the ScheduledBackup is created rather than at the first cron tick. Ignored by the operator on a ScheduledBackup that has already run." },
         "retentionDays": { "type": "integer", "minimum": 0, "description": "Functional PITR window, enforced by the barman-cloud plugin's pruning." },
         "walCompression": { "type": "string", "description": "WAL segment compression algorithm passed to the barman-cloud plugin." },
         "dataCompression": { "type": "string", "description": "Base backup compression algorithm passed to the barman-cloud plugin (a narrower enum than WAL's)." },

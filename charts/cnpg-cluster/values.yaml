@@ -64,8 +64,20 @@ backup:
   # suffix on recreate ({clusterName}-g2, -g3, …); the old dir stays
   # readable for recovery until the S3 lifecycle expires it. A
   # recovery-bootstrapped cluster CONTINUES the old dir instead.
+  # After bumping it on a running cluster, take an on-demand Backup at
+  # once (see `immediate`): until then the new dir has no base backup.
   serverName: ""
   schedule: "0 0 2 * * *"
+  # immediate: the ScheduledBackup takes its first base backup as soon as
+  # it is created instead of waiting for the first cron tick. A new
+  # cluster otherwise has WAL in the archive and no base backup to replay
+  # it onto — nothing restorable — for up to a day. The operator reads it
+  # only on a ScheduledBackup that has never run, so turning it on for a
+  # running one does nothing. It does NOT fire when serverName is bumped
+  # on an existing ScheduledBackup: take an on-demand Backup (method
+  # plugin) right after such a bump, or the new server directory holds WAL
+  # with no base backup until the next scheduled run.
+  immediate: true
   # retentionDays is the FUNCTIONAL PITR window (plugin-pruned). A
   # bucket lifecycle rule, if the platform sets one, is only a backstop
   # for what the plugin fails to prune — it must outlive this window.
