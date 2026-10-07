@@ -77,6 +77,10 @@
             "description": "Six-field cron, seconds first.",
             "pattern": "^\\S+( \\S+){5}$"
           },
+          "immediate": {
+            "type": "boolean",
+            "description": "Take the first base backup on creation (default true)."
+          },
           "labels": {
             "$ref": "#/definitions/stringMap"
           },

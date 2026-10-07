@@ -173,6 +173,7 @@ metadata:
     example.com/wave: "25"
 spec:
   schedule: "0 30 3 * * *"
+  immediate: true
   backupOwnerReference: self
   method: plugin
   cluster:
@@ -195,6 +196,7 @@ metadata:
     example.com/owner: platform
 spec:
   schedule: "0 0 2 * * *"
+  immediate: true
   backupOwnerReference: self
   method: plugin
   cluster:

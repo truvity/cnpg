@@ -1,5 +1,7 @@
 {{- /* One ScheduledBackup per entry: method plugin (barman-cloud), owned by
-itself, writing to the ObjectStore the entry names. */}}
+itself, writing to the ObjectStore the entry names. `immediate` defaults to
+true (first base backup on creation; the operator ignores it once the
+ScheduledBackup has run); `immediate: false` on an entry leaves it out. */}}
 {{- $seen := dict }}
 {{- range $i, $b := .Values.scheduledBackups }}
 {{- if include "cnpg-projects.platform.on" $b }}
@@ -17,6 +19,9 @@ metadata:
   {{- include "cnpg-projects.platform.metadata" (dict "root" $ "name" $name "namespace" $ns "labels" $b.labels "annotations" $b.annotations) | nindent 2 }}
 spec:
   schedule: {{ $b.schedule | default "0 0 2 * * *" | quote }}
+  {{- if or (not (hasKey $b "immediate")) $b.immediate }}
+  immediate: true
+  {{- end }}
   backupOwnerReference: self
   method: plugin
   cluster:

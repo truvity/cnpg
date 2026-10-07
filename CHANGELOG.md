@@ -6,6 +6,10 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+## v2.15.1
+
+- **Fix:** v2.15.0 set `immediate: true` only on the ScheduledBackup that `cnpg-cluster` renders for itself. The `scheduledBackups[]` list of `cnpg-projects` and of `cnpg-project-platform`, which is what the estate renders, did not get it. Both now render `immediate: true` per entry by default; `immediate: false` on an entry leaves it out. The operator acts on the field only for a ScheduledBackup that has never been checked (`status.lastCheckTime` unset), so an existing, running ScheduledBackup takes no extra backup; one that has never run takes its first base backup once. The render diff is that one line on each ScheduledBackup.
+
 ## v2.15.0
 
 - **Feature:** `cnpg-cluster` (and `cnpg-projects`, which carries its templates) renders `immediate: true` on the `ScheduledBackup` by default (`backup.immediate`), so a new cluster takes its first base backup when the `ScheduledBackup` is created instead of at the first cron tick. Until then such a cluster archives WAL with no base backup under its server directory, nothing is restorable, and a "no recent backup" alert on the barman-cloud plugin's `last_available_backup_timestamp` fires for up to a day. The render diff is that one line on every `ScheduledBackup`; the operator reads the field only on a `ScheduledBackup` that has never run, so an existing one is unaffected. It does not fire on a `serverName` bump, so the values file and `docs/reference.md` now say to take an on-demand `Backup` (method `plugin`) right after one. `backup.immediate: false` restores the previous render.

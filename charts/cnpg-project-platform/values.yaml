@@ -38,6 +38,7 @@ scheduledBackups: []
 #    clusterName: example-pg            required: the CNPG Cluster
 #    objectStoreName: example-objectstore required
 #    schedule: "0 0 2 * * *"            six-field cron, seconds first (default "0 0 2 * * *")
+#    immediate: true                    first base backup on creation (default true; false leaves it out)
 #    labels: {}
 #    annotations: {}
 #    enabled: true

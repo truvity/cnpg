@@ -69,6 +69,7 @@ metadata:
   namespace: example
 spec:
   schedule: "0 0 2 * * *"
+  immediate: true
   backupOwnerReference: self
   method: plugin
   cluster:
