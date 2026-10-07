@@ -48,6 +48,7 @@
           "clusterName": { "$ref": "#/definitions/k8sName" },
           "objectStoreName": { "$ref": "#/definitions/k8sName" },
           "schedule": { "type": "string", "description": "Six-field cron, seconds first.", "pattern": "^\\S+( \\S+){5}$" },
+          "immediate": { "type": "boolean", "description": "Take the first base backup on creation (default true)." },
           "labels": { "$ref": "#/definitions/stringMap" },
           "annotations": { "$ref": "#/definitions/stringMap" },
           "enabled": { "type": "boolean" }

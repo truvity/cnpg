@@ -132,6 +132,7 @@ metadata:
   annotations: {example.com/wave: "25"}
 spec:
   schedule: "0 0 2 * * *"
+  immediate: true
   backupOwnerReference: self
   method: plugin
   cluster: {name: app-pg}
@@ -295,4 +296,18 @@ serverTLS:
 	objs = entry("")
 	assert.Equal(t, objs["Certificate"]["app-pg-server-tls"]["metadata"].(map[string]any)["annotations"],
 		objs["Secret"]["app-pg-server-ca"]["metadata"].(map[string]any)["annotations"])
+}
+
+// TestScheduledBackupImmediate: the first base backup is taken on creation
+// by default; the operator ignores the field once the ScheduledBackup has
+// run. `immediate: false` on an entry leaves it out.
+func TestScheduledBackupImmediate(t *testing.T) {
+	objs := render(t, `
+scheduledBackups:
+  - {name: a, namespace: app, clusterName: app-pg, objectStoreName: o}
+  - {name: b, namespace: app, clusterName: app-pg, objectStoreName: o, immediate: false}
+`)
+	spec := func(n string) map[string]any { return objs["ScheduledBackup"][n]["spec"].(map[string]any) }
+	assert.Equal(t, true, spec("a")["immediate"])
+	assert.NotContains(t, spec("b"), "immediate")
 }
