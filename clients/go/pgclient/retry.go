@@ -24,6 +24,11 @@ type RetryPolicy struct {
 	InitialDelay time.Duration // ceiling of the first sleep
 	MaxDelay     time.Duration // ceiling of any sleep
 	Budget       time.Duration // total time that may be spent waiting
+
+	// OnRetry, when set, is called before each sleep with the attempt that
+	// just failed (1-based), its error and the delay about to be slept. Use
+	// it to log. It is not part of the policy's validity.
+	OnRetry func(attempt int, err error, delay time.Duration)
 }
 
 // DefaultRetryPolicy is 5 tries, 200ms doubling to 5s, 30s of waiting.
@@ -59,6 +64,9 @@ func Retry(ctx context.Context, p RetryPolicy, fn func(context.Context) error) e
 		if time.Since(start)+delay > p.Budget {
 			return err
 		}
+		if p.OnRetry != nil {
+			p.OnRetry(attempt, err, delay)
+		}
 		t := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
@@ -89,6 +97,10 @@ func backoff(p RetryPolicy, attempt int) time.Duration {
 func IsRetryable(err error) bool {
 	if err == nil || errors.Is(err, context.Canceled) {
 		return false
+	}
+	var attemptTimeout *attemptTimeoutError
+	if errors.As(err, &attemptTimeout) {
+		return true
 	}
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {

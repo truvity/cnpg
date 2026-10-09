@@ -108,3 +108,42 @@ func TestBackoffIsBounded(t *testing.T) {
 		assert.LessOrEqual(t, d, p.MaxDelay)
 	}
 }
+
+// A try that ran out of its own time is retried; the first connection used to
+// fail on it because IsRetryable reads a deadline as the caller's.
+func TestStartupAttemptTimeoutIsRetried(t *testing.T) {
+	slow := fmt.Errorf("pgclient: health: %w", context.DeadlineExceeded)
+
+	// Parent live: the try's own timeout, retryable.
+	assert.True(t, IsRetryable(markAttemptTimeout(context.Background(), slow)))
+	// Other errors pass through untouched.
+	assert.NoError(t, markAttemptTimeout(context.Background(), nil))
+	assert.False(t, IsRetryable(markAttemptTimeout(context.Background(), errors.New("boom"))))
+	// Parent expired: the caller's own deadline, not retryable.
+	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	assert.False(t, IsRetryable(markAttemptTimeout(expired, slow)))
+
+	// Succeeds on the 2nd attempt and logs the retry.
+	var logged []int
+	p := fast()
+	p.OnRetry = func(attempt int, _ error, _ time.Duration) { logged = append(logged, attempt) }
+	n := 0
+	err := Retry(context.Background(), p, func(ctx context.Context) error {
+		n++
+		if n == 1 {
+			return markAttemptTimeout(ctx, slow)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 2, n)
+	assert.Equal(t, []int{1}, logged)
+
+	// Gives up at the attempt cap.
+	n = 0
+	err = Retry(context.Background(), fast(), func(ctx context.Context) error { n++; return markAttemptTimeout(ctx, slow) })
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Equal(t, 4, n)
+}

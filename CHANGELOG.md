@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Fix:** the Go client's first connection (`pgclient.New`) no longer fails on a slow first try. Each try was bounded by the 2s health timeout, and `IsRetryable` treats a deadline as the caller's own, so a cold start (DNS, TLS verify-full, authentication) that took over 2s ended `New` with `first connection ... health: context deadline exceeded` on the first try and the configured retry never ran. Each startup try now has its own 5s timeout (`StartupAttemptTimeout`), and a try that times out while the caller's context is live is retried under `cfg.Retry`. `Health` keeps its 2s bound. New `RetryPolicy.OnRetry` hook, called before each sleep, so a service can log every attempt.
+
 ## v2.18.1
 
 - **Fix:** the `people` pg_ident rule assumed the DN order of PostgreSQL 17 (`OU=..,CN=..`); PostgreSQL 18 presents `CN=..,OU=..` and no row matched (`no match in usermap "people"`). `peopleProject` now renders two rows, one per order, each with a single capture group, same anti-injection shape (exactly one OU, a CN without an unescaped comma, no other RDN).
