@@ -10,30 +10,33 @@ passwords (template-time randomness drifts under ArgoCD). Unknown auth
 values fail the render. */}}
 {{- range .Values.roles }}
 {{- $auth := .auth | default "cert" }}
-{{- if not (has $auth (list "cert" "password")) }}
-{{- fail (printf "role %s: auth must be cert|password (got %q)" .name $auth) }}
+{{- if not (has $auth (list "cert" "password" "none")) }}
+{{- fail (printf "role %s: auth must be cert|password|none (got %q)" .name $auth) }}
 {{- end }}
 {{- $isOwner := eq .name $.Values.bootstrap.initdb.owner }}
 {{- if and (eq $auth "password") (not $isOwner) (not .passwordSecret) }}
 {{- fail (printf "role %s: auth=password on a non-owner role requires passwordSecret (the chart never generates passwords)" .name) }}
+{{- end }}
+{{- if and $isOwner (eq $auth "none") }}
+{{- fail (printf "role %s: the bootstrap owner cannot be auth=none" .name) }}
 {{- end }}
 {{- if not $isOwner }}
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: {{ $.Values.clusterName }}-{{ .name }}
+  name: {{ $.Values.clusterName }}-{{ .name | replace "_" "-" }}
   namespace: {{ $.Values.namespace }}
 spec:
   cluster:
     name: {{ $.Values.clusterName }}
   name: {{ .name | replace "-" "_" }}
   ensure: present
-  login: true
+  login: {{ if hasKey . "login" }}{{ .login }}{{ else }}true{{ end }}
   {{- if eq $auth "cert" }}
   clientCertificate:
     enabled: true
-  {{- else }}
+  {{- else if eq $auth "password" }}
   passwordSecret:
     name: {{ .passwordSecret }}
   {{- end }}
