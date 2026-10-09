@@ -46,8 +46,8 @@ spec:
 {{- end }}
 {{- end }}
 
-{{- /* peopleProject: the four roles a person's certificate selects by its
-OU ({project}_admin|ddl|observer|read), by convention, in every project's
+{{- /* peopleProject: the three roles a person's certificate selects by its
+OU ({project}_admin|observer|read), by convention, in every project's
 database. They hold no credential (auth none): only the people map's OU
 rule reaches them, and a role must be LOGIN for PostgreSQL to admit the
 connection. admin is the database owner's, never superuser. */}}
@@ -55,7 +55,6 @@ connection. admin is the database owner's, never superuser. */}}
 {{- $project := . }}
 {{- range (list
   (dict "level" "admin" "in" (list $.Values.bootstrap.initdb.owner))
-  (dict "level" "ddl" "in" (list "pg_read_all_data" "pg_write_all_data"))
   (dict "level" "observer" "in" (list))
   (dict "level" "read" "in" (list "pg_read_all_data"))) }}
 ---
@@ -76,4 +75,24 @@ spec:
   {{- end }}
   databaseRoleReclaimPolicy: retain
 {{- end }}
+{{- end }}
+
+{{- /* Transitional (v2.18.0): the ddl level was dropped. A project that
+rendered {project}_ddl under v2.17.x keeps the PostgreSQL role (retain), so
+the chart asks the operator to drop it. Remove this block once every
+cluster has synced v2.18.0. A role that still owns objects makes the drop
+fail visibly on the DatabaseRole; nothing is lost. */}}
+{{- with .Values.peopleProject }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: {{ $.Values.clusterName }}-{{ . | replace "_" "-" }}-ddl
+  namespace: {{ $.Values.namespace }}
+spec:
+  cluster:
+    name: {{ $.Values.clusterName }}
+  name: {{ . }}_ddl
+  ensure: absent
+  databaseRoleReclaimPolicy: delete
 {{- end }}

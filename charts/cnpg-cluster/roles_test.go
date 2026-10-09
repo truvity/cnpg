@@ -55,27 +55,32 @@ func TestRoles_PeopleProjectConvention(t *testing.T) {
 		got[spec["name"].(string)] = spec
 	}
 
-	for _, n := range []string{"dms_admin", "dms_ddl", "dms_observer", "dms_read"} {
+	for _, n := range []string{"dms_admin", "dms_observer", "dms_read"} {
 		require.Contains(t, got, n)
 		assert.Equal(t, true, got[n]["login"], n)
 		assert.NotContains(t, got[n], "passwordSecret")
 	}
+
+	// The dropped ddl level: the retained v2.17.x role is asked to go.
+	require.Contains(t, got, "dms_ddl")
+	assert.Equal(t, "absent", got["dms_ddl"]["ensure"])
+	assert.Equal(t, "present", got["dms_read"]["ensure"])
 
 	assert.Equal(t, []any{"dms"}, got["dms_admin"]["inRoles"])
 	assert.Equal(t, []any{"pg_read_all_data"}, got["dms_read"]["inRoles"])
 
 	pg := docs["Cluster"][0]["spec"].(map[string]any)["postgresql"].(map[string]any)
 	hba := pg["pg_hba"].([]any)
-	people := "hostssl all dms_admin,dms_ddl,dms_observer,dms_read all cert clientname=DN map=people"
+	people := "hostssl all dms_admin,dms_observer,dms_read all cert clientname=DN map=people"
 	assert.Contains(t, hba, people)
 	assert.Less(t, indexOf(hba, people), indexOf(hba, "hostssl all all all cert"))
-	assert.Equal(t, []any{`people "/^OU=(dms_admin|dms_ddl|dms_observer|dms_read),CN=[^,\\]+$" \1`}, pg["pg_ident"])
+	assert.Equal(t, []any{`people "/^OU=(dms_admin|dms_observer|dms_read),CN=[^,\\]+$" \1`}, pg["pg_ident"])
 }
 
 // The incident of 2.17.0: the people line used a regex that matched dms_app
-// and sat before the caller's own line. It must name only the four roles and
+// and sat before the caller's own line. It must name only the three roles and
 // come after the caller's beforeCatchAll lines.
-func TestRoles_PeopleLineNamesFourRolesAfterCallerLines(t *testing.T) {
+func TestRoles_PeopleLineNamesThreeRolesAfterCallerLines(t *testing.T) {
 	docs, err := renderDocs(t, map[string]any{
 		"clusterName":   "dms-pg",
 		"profile":       "devel",
@@ -86,7 +91,7 @@ func TestRoles_PeopleLineNamesFourRolesAfterCallerLines(t *testing.T) {
 	})
 	require.NoError(t, err)
 	hba := docs["Cluster"][0]["spec"].(map[string]any)["postgresql"].(map[string]any)["pg_hba"].([]any)
-	people := "hostssl all dms_admin,dms_ddl,dms_observer,dms_read all cert clientname=DN map=people"
+	people := "hostssl all dms_admin,dms_observer,dms_read all cert clientname=DN map=people"
 	assert.Equal(t, []any{
 		"hostssl all dms all scram-sha-256",
 		"hostssl all dms_app all scram-sha-256",
@@ -114,9 +119,9 @@ func TestRoles_PeopleProjectRefusesCollidingRole(t *testing.T) {
 	require.ErrorContains(t, err, "dms_read")
 
 	v = base()
-	v["postgresql"] = map[string]any{"pgHba": map[string]any{"beforeCatchAll": []any{"hostssl all dms_ddl all scram-sha-256"}}}
+	v["postgresql"] = map[string]any{"pgHba": map[string]any{"beforeCatchAll": []any{"hostssl all dms_observer all scram-sha-256"}}}
 	_, err = renderDocs(t, v)
-	require.ErrorContains(t, err, "dms_ddl")
+	require.ErrorContains(t, err, "dms_observer")
 
 	v = base()
 	v["bootstrap"] = map[string]any{"initdb": map[string]any{"database": "dms", "owner": "dms_admin"}}

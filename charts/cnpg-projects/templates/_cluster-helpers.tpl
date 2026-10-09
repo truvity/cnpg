@@ -36,7 +36,7 @@ postgresql.extra_pg_hba, never replace.
 {{- end }}
 {{- with .Values.peopleProject }}
 {{- include "cnpg-cluster.peopleProjectCheck" $ }}
-- hostssl all {{ . }}_admin,{{ . }}_ddl,{{ . }}_observer,{{ . }}_read all cert clientname=DN map=people
+- hostssl all {{ . }}_admin,{{ . }}_observer,{{ . }}_read all cert clientname=DN map=people
 {{- end }}
 - hostssl all all all cert
 {{- range .Values.postgresql.extra_pg_hba }}
@@ -45,15 +45,15 @@ postgresql.extra_pg_hba, never replace.
 {{- end -}}
 
 {{/*
-peopleProject names four roles ({p}_admin, _ddl, _observer, _read). Fails
+peopleProject names three roles ({p}_admin, _observer, _read). Fails
 the render when any of them is also the owner, a roles[] entry or a user of a
 beforeCatchAll line: the people hba line (cert, clientname=DN) would then
 sit in front of, or in place of, that role's own login. The hba line itself
-names exactly these four roles, never a pattern, so no other role can match.
+names exactly these three roles, never a pattern, so no other role can match.
 */}}
 {{- define "cnpg-cluster.peopleProjectCheck" -}}
 {{- $p := .Values.peopleProject -}}
-{{- $mine := list (printf "%s_admin" $p) (printf "%s_ddl" $p) (printf "%s_observer" $p) (printf "%s_read" $p) -}}
+{{- $mine := list (printf "%s_admin" $p) (printf "%s_observer" $p) (printf "%s_read" $p) -}}
 {{- $taken := list (.Values.bootstrap.initdb.owner | default "") -}}
 {{- range (.Values.roles | default list) -}}
 {{- $taken = append $taken (.name | replace "-" "_") -}}
@@ -105,7 +105,7 @@ reject every connection that reaches it, silently, at connect time.
 {{/* pg_ident rows for the people map. */}}
 {{- define "cnpg-cluster.pgIdent" -}}
 {{- with .Values.peopleProject }}
-- people "/^OU=({{ . }}_admin|{{ . }}_ddl|{{ . }}_observer|{{ . }}_read),CN=[^,\\]+$" \1
+- people "/^OU=({{ . }}_admin|{{ . }}_observer|{{ . }}_read),CN=[^,\\]+$" \1
 {{- end }}
 {{- range (.Values.people | default list) }}
 - people {{ .email }} {{ .role }}
