@@ -6,6 +6,8 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+- **Fix:** `peopleProject` (v2.17.0) rendered the hba line `hostssl all /^{project}_.*$ all cert clientname=DN map=people` BEFORE the caller's `beforeCatchAll` lines. The pattern matched every role that starts with the project name, such as an application role `{project}_app`, and first match wins, so that role had to present a client certificate and its password login failed. The line now names exactly the four people roles (`{p}_admin,{p}_ddl,{p}_observer,{p}_read`) and sits AFTER the `beforeCatchAll` lines, still before the catch-all. The render also fails when one of the four names is the owner, a `roles[]` entry or a user of a `beforeCatchAll` line. A render without `peopleProject` is byte-identical.
+
 ## v2.17.0
 
 - **Feature:** `peopleProject` on `cnpg-cluster` (and `cnpg-projects`): a person's database role comes from the OU of their client certificate, by convention. Set to the project name, the chart renders the four roles `{project}_admin` (member of the database owner, never superuser), `{project}_ddl`, `{project}_observer` and `{project}_read` (no credential of their own), the hba line `hostssl all /^{project}_.*$ all cert clientname=DN map=people` before the catch-all, and one pg_ident rule mapping a certificate with `OU={project}_{level}` to that role. The person connects with `-U {project}_{level}`; a certificate with another project's OU, with no OU, or with a second OU does not map. Off by default: a render without it is byte-identical. The client CA must carry the issuing root of those certificates (`trust.bundle.extraCertificates`).

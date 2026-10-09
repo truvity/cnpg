@@ -1,0 +1,133 @@
+---
+# Source: cnpg-cluster/templates/cluster.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: dms-pg
+  namespace: dms
+spec:
+  instances: 1
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  # Explicit on both postures: CNPG defaults enablePDB to true, so a
+  # devel single-instance cluster would otherwise get a primary PDB
+  # with 0 allowed disruptions and block node drains until the node
+  # pool's force-drain deadline (devel = no PDB).
+  enablePDB: false
+  postgresql:
+    parameters:
+      synchronous_commit: "off" # devel: fsync stays ON; test suites fly
+      shared_buffers: "64MB"
+    pg_hba:
+      - hostssl all dms all scram-sha-256
+      - hostssl all dms_app all scram-sha-256
+      - hostssl all dms_admin,dms_ddl,dms_observer,dms_read all cert clientname=DN map=people
+      - hostssl all all all cert
+    pg_ident:
+      - people "/^OU=(dms_admin|dms_ddl|dms_observer|dms_read),CN=[^,\\]+$" \1
+
+  storage:
+    size: 2Gi
+    storageClass: cnpg-gp3-delete
+    resizeInUseVolumes: true
+  resources:
+    limits:
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  affinity:
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: dms-pg
+  bootstrap:
+    initdb:
+      database: dms
+      owner: dms
+
+---
+# Source: cnpg-cluster/templates/databases.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: dms-pg-dms
+  namespace: dms
+spec:
+  name: dms
+  owner: dms
+  ensure: present
+  cluster:
+    name: dms-pg
+
+---
+# Source: cnpg-cluster/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: dms-pg-dms-admin
+  namespace: dms
+spec:
+  cluster:
+    name: dms-pg
+  name: dms_admin
+  ensure: present
+  login: true
+  inRoles:
+    - dms
+  databaseRoleReclaimPolicy: retain
+
+---
+# Source: cnpg-cluster/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: dms-pg-dms-ddl
+  namespace: dms
+spec:
+  cluster:
+    name: dms-pg
+  name: dms_ddl
+  ensure: present
+  login: true
+  inRoles:
+    - pg_read_all_data
+    - pg_write_all_data
+  databaseRoleReclaimPolicy: retain
+
+---
+# Source: cnpg-cluster/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: dms-pg-dms-observer
+  namespace: dms
+spec:
+  cluster:
+    name: dms-pg
+  name: dms_observer
+  ensure: present
+  login: true
+  databaseRoleReclaimPolicy: retain
+
+---
+# Source: cnpg-cluster/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: dms-pg-dms-read
+  namespace: dms
+spec:
+  cluster:
+    name: dms-pg
+  name: dms_read
+  ensure: present
+  login: true
+  inRoles:
+    - pg_read_all_data
+  databaseRoleReclaimPolicy: retain

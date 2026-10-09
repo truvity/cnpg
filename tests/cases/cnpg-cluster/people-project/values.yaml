@@ -1,0 +1,12 @@
+# peopleProject next to an application role with its own scram line: the
+# people line names the four roles only and comes after the app line.
+clusterName: dms-pg
+namespace: dms
+profile: devel
+bootstrap:
+  initdb: {database: dms, owner: dms}
+peopleProject: dms
+postgresql:
+  pgHba:
+    beforeCatchAll:
+      - hostssl all dms_app all scram-sha-256
