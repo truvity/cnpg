@@ -6,6 +6,8 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+- **Feature:** `roles[]` of `cnpg-cluster` (and `cnpg-projects`) take `auth: none` and `login`. `auth: none` renders a `DatabaseRole` with neither a client certificate nor a password: the shape of the `people_*` roles (`people_cluster_admin`, `people_ddl`, `people_schema_observer`, `people_read_all`), which a person reaches only through the `people` pg_ident map, and which get their rights from `inRoles`. `login: false` renders a pure group role (default `true`, as before). The `DatabaseRole` object name now turns `_` into `-` (a role name with an underscore made an invalid Kubernetes name before; a name without one renders as it did). A render that sets neither field is byte-identical to v2.15.1.
+
 ## v2.15.1
 
 - **Fix:** v2.15.0 set `immediate: true` only on the ScheduledBackup that `cnpg-cluster` renders for itself. The `scheduledBackups[]` list of `cnpg-projects` and of `cnpg-project-platform`, which is what the estate renders, did not get it. Both now render `immediate: true` per entry by default; `immediate: false` on an entry leaves it out. The operator acts on the field only for a ScheduledBackup that has never been checked (`status.lastCheckTime` unset), so an existing, running ScheduledBackup takes no extra backup; one that has never run takes its first base backup once. The render diff is that one line on each ScheduledBackup.

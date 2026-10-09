@@ -171,7 +171,8 @@
         "required": ["name"],
         "properties": {
           "name": { "type": "string" },
-          "auth": { "type": "string", "enum": ["cert", "password"], "description": "cert = operator-issued mTLS client certificate; password = the compatibility path, which requires passwordSecret." },
+          "auth": { "type": "string", "enum": ["cert", "password", "none"], "description": "cert = operator-issued mTLS client certificate; password = the compatibility path, which requires passwordSecret; none = no credential of its own (the people_* roles, reached through the people pg_ident map)." },
+          "login": { "type": "boolean", "description": "LOGIN attribute of the role. Default true; false makes a group role reachable by membership only." },
           "inRoles": { "type": "array", "items": { "type": "string" } },
           "passwordSecret": { "type": "string", "description": "Existing kubernetes.io/basic-auth Secret. Required when auth=password on a non-owner role; the chart never generates passwords." }
         }

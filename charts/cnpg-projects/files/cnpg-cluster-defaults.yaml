@@ -191,6 +191,15 @@ roles: []
 #  - name: my-legacy
 #    auth: password
 #    passwordSecret: my-legacy-pg-credentials
+#  # A role people connect as through `people` (no credential of its own);
+#  # inRoles gives it its rights.
+#  - name: people_read_all
+#    auth: none
+#    inRoles: [pg_read_all_data]
+#  # login: false = a group role, reachable by membership only.
+#  - name: some_group
+#    auth: none
+#    login: false
 
 # ── Overridable knobs (profile provides defaults) ────────────────────
 instances: null          # devel 1 / prod 3 unless overridden
