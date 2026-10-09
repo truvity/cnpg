@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.17.1
 
 - **Fix:** `peopleProject` (v2.17.0) rendered the hba line `hostssl all /^{project}_.*$ all cert clientname=DN map=people` BEFORE the caller's `beforeCatchAll` lines. The pattern matched every role that starts with the project name, such as an application role `{project}_app`, and first match wins, so that role had to present a client certificate and its password login failed. The line now names exactly the four people roles (`{p}_admin,{p}_ddl,{p}_observer,{p}_read`) and sits AFTER the `beforeCatchAll` lines, still before the catch-all. The render also fails when one of the four names is the owner, a `roles[]` entry or a user of a `beforeCatchAll` line. A render without `peopleProject` is byte-identical.
 
