@@ -61,9 +61,11 @@ func TestRoles_PeopleProjectConvention(t *testing.T) {
 		assert.NotContains(t, got[n], "passwordSecret")
 	}
 
-	// The dropped ddl level: the retained v2.17.x role is asked to go.
+	// The dropped ddl level: the retained v2.17.x role is marked for the
+	// drop (reclaim policy delete); the operator refuses ensure: absent.
 	require.Contains(t, got, "dms_ddl")
-	assert.Equal(t, "absent", got["dms_ddl"]["ensure"])
+	assert.Equal(t, "present", got["dms_ddl"]["ensure"])
+	assert.Equal(t, "delete", got["dms_ddl"]["databaseRoleReclaimPolicy"])
 	assert.Equal(t, "present", got["dms_read"]["ensure"])
 
 	assert.Equal(t, []any{"dms"}, got["dms_admin"]["inRoles"])

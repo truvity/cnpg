@@ -4,9 +4,13 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## v2.18.1
+
+- **Fix:** v2.18.0 asked the operator to drop a retained `{project}_ddl` role with a `DatabaseRole` of `ensure: absent`; the operator rejects that (`ensure: absent is not supported for DatabaseRole; delete the resource with databaseRoleReclaimPolicy: delete instead`), so the sync of the existing `*-ddl` objects failed. The chart now re-declares that legacy object with `databaseRoleReclaimPolicy: delete` (everything else as in v2.17.x). Syncing it makes the policy live; the release after it removes the object, which prunes it and drops the role (check first that it owns nothing). Adopt v2.18.1 directly rather than v2.18.0 if the ddl objects exist.
+
 ## v2.18.0
 
-- **Feature (minor, a role is removed):** `peopleProject` drops the `ddl` level. It now renders three roles: `{project}_admin` (member of the database owner, never superuser), `{project}_observer` and `{project}_read`. The hba line names those three and the pg_ident rule accepts `OU={project}_(admin|observer|read)`. A certificate with `OU={project}_ddl` no longer maps. For a cluster that rendered `{project}_ddl` under v2.17.x (the PostgreSQL role was kept by `databaseRoleReclaimPolicy: retain`), the chart renders a transitional `DatabaseRole` with `ensure: absent` so the operator drops it. Check first that the role owns nothing (`select count(*) from pg_class c join pg_roles r on r.oid=c.relowner where r.rolname='{project}_ddl'`); a role that owns objects makes the drop fail visibly and nothing is lost. That transitional object goes in a later release. A render without `peopleProject` is byte-identical.
+- **Feature (minor, a role is removed):** `peopleProject` drops the `ddl` level. It now renders three roles: `{project}_admin` (member of the database owner, never superuser), `{project}_observer` and `{project}_read`. The hba line names those three and the pg_ident rule accepts `OU={project}_(admin|observer|read)`. A certificate with `OU={project}_ddl` no longer maps. For a cluster that rendered `{project}_ddl` under v2.17.x (the PostgreSQL role was kept by `databaseRoleReclaimPolicy: retain`), the chart renders a transitional `DatabaseRole` meant to drop it (it did not work, see v2.18.1). Check first that the role owns nothing (`select count(*) from pg_class c join pg_roles r on r.oid=c.relowner where r.rolname='{project}_ddl'`); a role that owns objects makes the drop fail visibly and nothing is lost. That transitional object goes in a later release. A render without `peopleProject` is byte-identical.
 
 ## v2.17.1
 
