@@ -76,30 +76,3 @@ spec:
   databaseRoleReclaimPolicy: retain
 {{- end }}
 {{- end }}
-
-{{- /* Transitional (v2.18.1): the ddl level was dropped in v2.18.0. A project
-that rendered {project}_ddl under v2.17.x keeps its DatabaseRole object and
-the PostgreSQL role (databaseRoleReclaimPolicy: retain). The operator refuses
-ensure: absent for a DatabaseRole; a role is dropped by deleting the object
-whose reclaim policy is delete. So this release re-declares the legacy object
-unchanged except for that policy, and the next release (v2.18.2) removes it,
-which prunes the object and drops the role. A role that still owns objects makes
-the drop fail visibly on the object; nothing is lost. */}}
-{{- with .Values.peopleProject }}
----
-apiVersion: postgresql.cnpg.io/v1
-kind: DatabaseRole
-metadata:
-  name: {{ $.Values.clusterName }}-{{ . | replace "_" "-" }}-ddl
-  namespace: {{ $.Values.namespace }}
-spec:
-  cluster:
-    name: {{ $.Values.clusterName }}
-  name: {{ . }}_ddl
-  ensure: present
-  login: true
-  inRoles:
-    - pg_read_all_data
-    - pg_write_all_data
-  databaseRoleReclaimPolicy: delete
-{{- end }}

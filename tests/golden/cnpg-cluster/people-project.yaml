@@ -114,21 +114,3 @@ spec:
   inRoles:
     - pg_read_all_data
   databaseRoleReclaimPolicy: retain
-
----
-# Source: cnpg-cluster/templates/roles.yaml
-apiVersion: postgresql.cnpg.io/v1
-kind: DatabaseRole
-metadata:
-  name: dms-pg-dms-ddl
-  namespace: dms
-spec:
-  cluster:
-    name: dms-pg
-  name: dms_ddl
-  ensure: present
-  login: true
-  inRoles:
-    - pg_read_all_data
-    - pg_write_all_data
-  databaseRoleReclaimPolicy: delete
