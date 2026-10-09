@@ -33,7 +33,7 @@ conformance:
 
 # Run linters
 lint:
-    golangci-lint run ./...
+    GOTOOLCHAIN=local golangci-lint run ./...
 
 # Lint + render the charts against a minimum values set. The schema is
 # part of the lint: an unknown top-level key must fail the render, not
