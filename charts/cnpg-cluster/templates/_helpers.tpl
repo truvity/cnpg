@@ -104,6 +104,8 @@ reject every connection that reaches it, silently, at connect time.
 {{/* pg_ident rows for the people map. */}}
 {{- define "cnpg-cluster.pgIdent" -}}
 {{- with .Values.peopleProject }}
+{{- /* PostgreSQL 17 presents the DN as OU=..,CN=.. and 18 as CN=..,OU=..; one row per order, each a single capture group. */}}
+- people "/^CN=[^,\\]+,OU=({{ . }}_admin|{{ . }}_observer|{{ . }}_read)$" \1
 - people "/^OU=({{ . }}_admin|{{ . }}_observer|{{ . }}_read),CN=[^,\\]+$" \1
 {{- end }}
 {{- range (.Values.people | default list) }}
