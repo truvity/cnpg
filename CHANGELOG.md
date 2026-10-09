@@ -6,6 +6,8 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+## v2.16.0
+
 - **Feature:** `roles[]` of `cnpg-cluster` (and `cnpg-projects`) take `auth: none` and `login`. `auth: none` renders a `DatabaseRole` with neither a client certificate nor a password: the shape of the `people_*` roles (`people_cluster_admin`, `people_ddl`, `people_schema_observer`, `people_read_all`), which a person reaches only through the `people` pg_ident map, and which get their rights from `inRoles`. `login: false` renders a pure group role (default `true`, as before). The `DatabaseRole` object name now turns `_` into `-` (a role name with an underscore made an invalid Kubernetes name before; a name without one renders as it did). A render that sets neither field is byte-identical to v2.15.1.
 
 ## v2.15.1
