@@ -76,7 +76,11 @@ func TestRoles_PeopleProjectConvention(t *testing.T) {
 	people := "hostssl all dms_admin,dms_observer,dms_read all cert clientname=DN map=people"
 	assert.Contains(t, hba, people)
 	assert.Less(t, indexOf(hba, people), indexOf(hba, "hostssl all all all cert"))
-	assert.Equal(t, []any{`people "/^OU=(dms_admin|dms_observer|dms_read),CN=[^,\\]+$" \1`}, pg["pg_ident"])
+	// Both DN orders (PostgreSQL 18 prints CN first, 17 OU first).
+	assert.Equal(t, []any{
+		`people "/^CN=[^,\\]+,OU=(dms_admin|dms_observer|dms_read)$" \1`,
+		`people "/^OU=(dms_admin|dms_observer|dms_read),CN=[^,\\]+$" \1`,
+	}, pg["pg_ident"])
 }
 
 // The incident of 2.17.0: the people line used a regex that matched dms_app

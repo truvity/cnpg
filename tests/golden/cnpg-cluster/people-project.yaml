@@ -25,6 +25,7 @@ spec:
       - hostssl all dms_admin,dms_observer,dms_read all cert clientname=DN map=people
       - hostssl all all all cert
     pg_ident:
+      - people "/^CN=[^,\\]+,OU=(dms_admin|dms_observer|dms_read)$" \1
       - people "/^OU=(dms_admin|dms_observer|dms_read),CN=[^,\\]+$" \1
 
   storage:

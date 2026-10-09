@@ -6,6 +6,7 @@ upgrade is expected to clear.
 
 ## v2.18.1
 
+- **Fix:** the `people` pg_ident rule assumed the DN order of PostgreSQL 17 (`OU=..,CN=..`); PostgreSQL 18 presents `CN=..,OU=..` and no row matched (`no match in usermap "people"`). `peopleProject` now renders two rows, one per order, each with a single capture group, same anti-injection shape (exactly one OU, a CN without an unescaped comma, no other RDN).
 - **Fix:** v2.18.0 asked the operator to drop a retained `{project}_ddl` role with a `DatabaseRole` of `ensure: absent`; the operator rejects that (`ensure: absent is not supported for DatabaseRole; delete the resource with databaseRoleReclaimPolicy: delete instead`), so the sync of the existing `*-ddl` objects failed. The chart now re-declares that legacy object with `databaseRoleReclaimPolicy: delete` (everything else as in v2.17.x). Syncing it makes the policy live; the release after it removes the object, which prunes it and drops the role (check first that it owns nothing). Adopt v2.18.1 directly rather than v2.18.0 if the ddl objects exist.
 
 ## v2.18.0
