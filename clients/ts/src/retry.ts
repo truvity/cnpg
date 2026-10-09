@@ -32,6 +32,7 @@ export async function retry<T>(policy: RetryPolicy, fn: () => Promise<T>, signal
       if (signal?.aborted || !isRetryable(err) || attempt >= policy.attempts) throw err;
       const delay = backoffMs(policy, attempt);
       if (Date.now() - start + delay > policy.budgetMs) throw err;
+      policy.onRetry?.(attempt, err as Error, delay);
       await sleep(delay, signal);
       if (signal?.aborted) throw err;
     }
@@ -78,9 +79,30 @@ const MESSAGES = [
  */
 export function isRetryable(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
+  // The cause chain: a wrapper (such as the health check's) hides the pg error's code.
+  const chain: Error[] = [];
+  for (let e: unknown = err; e instanceof Error && chain.length < 8; e = e.cause) chain.push(e);
+  if (chain.some(neverRetryable)) return false;
+  return chain.some(retryableOne);
+}
+
+/** One try of the first connection ran past its own bound; the caller's signal is separate. */
+export class AttemptTimeoutError extends Error {
+  constructor(what: string, ms: number) {
+    super(`cnpg-client: ${what}: attempt timed out after ${ms}ms`);
+    this.name = "AttemptTimeoutError";
+  }
+}
+
+function neverRetryable(err: Error): boolean {
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" && (NEVER_CODES.has(code) || code.startsWith("ERR_SSL_"));
+}
+
+function retryableOne(err: Error): boolean {
+  if (err instanceof AttemptTimeoutError) return true;
   const code = (err as { code?: unknown }).code;
   if (typeof code === "string") {
-    if (NEVER_CODES.has(code) || code.startsWith("ERR_SSL_")) return false;
     if (NETWORK_CODES.has(code)) return true;
     if (/^[0-9A-Z]{5}$/.test(code)) return retryableSqlState(code);
   }

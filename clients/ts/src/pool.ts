@@ -3,10 +3,13 @@ import { isIP } from "node:net";
 import type { Span, Tracer } from "@opentelemetry/api";
 import pg from "pg";
 import { type CnpgConfig, redactConfig, validateConfig } from "./config.js";
-import { retry } from "./retry.js";
+import { AttemptTimeoutError, retry } from "./retry.js";
 
 /** Bounds {@link CnpgPool.health}. */
 export const HEALTH_TIMEOUT_MS = 2_000;
+
+/** Bounds one try of the first connection in {@link CnpgPool.create}: cold DNS, TLS and authentication. */
+export const STARTUP_ATTEMPT_TIMEOUT_MS = 5_000;
 
 /** Open, idle and waiting connections, for a metrics exporter. */
 export interface PoolStats {
@@ -99,6 +102,8 @@ function operation(text: string): string {
 export interface CnpgPoolOptions {
   /** OpenTelemetry tracer; spans only for {@link CnpgPool.query}. */
   tracer?: Tracer;
+  /** Abandons the first connection (and its retries) when aborted; an abort is never retried. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -124,7 +129,7 @@ export class CnpgPool {
     validateConfig(config);
     const p = new CnpgPool(config, options.tracer);
     try {
-      await retry(config.retry, () => p.health());
+      await retry(config.retry, () => p.startupProbe(), options.signal);
     } catch (e) {
       await p.end().catch(() => undefined);
       throw new Error(
@@ -135,6 +140,25 @@ export class CnpgPool {
       );
     }
     return p;
+  }
+
+  /** One try of the first connection: a raw `select 1` bounded by {@link STARTUP_ATTEMPT_TIMEOUT_MS}. */
+  private async startupProbe(): Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new AttemptTimeoutError("first connection", STARTUP_ATTEMPT_TIMEOUT_MS)),
+        STARTUP_ATTEMPT_TIMEOUT_MS,
+      );
+    });
+    try {
+      await Promise.race([
+        this.pool.query({ text: "select 1", query_timeout: STARTUP_ATTEMPT_TIMEOUT_MS } as pg.QueryConfig),
+        deadline,
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /** Runs one statement; traced when a tracer was given. */
