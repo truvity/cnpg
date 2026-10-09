@@ -18,6 +18,12 @@ import (
 // HealthTimeout bounds [Pool.Health].
 const HealthTimeout = 2 * time.Second
 
+// StartupAttemptTimeout bounds each try of the first connection in [New]. It
+// is longer than [HealthTimeout] because a cold start pays for DNS, the TCP
+// and TLS handshakes (verify-full) and authentication on the first query. A
+// try that runs out of time is retried under cfg.Retry; it does not fail New.
+const StartupAttemptTimeout = 5 * time.Second
+
 // Pool is a pgx pool with the contract's behaviour. The embedded
 // *pgxpool.Pool is the full pgx API (Query, Exec, Begin, Stat, Close, and
 // stdlib.OpenDBFromPool for gorm and database/sql).
@@ -41,7 +47,7 @@ func New(ctx context.Context, cfg Config) (*Pool, error) {
 		return nil, fmt.Errorf("pgclient: create pool: %w", err)
 	}
 	p := &Pool{Pool: pool, cfg: cfg}
-	if err := Retry(ctx, cfg.Retry, p.Health); err != nil {
+	if err := Retry(ctx, cfg.Retry, p.startupAttempt); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("pgclient: first connection to %s:%d: %w", cfg.Host, cfg.Port, err)
 	}
@@ -52,7 +58,34 @@ func New(ctx context.Context, cfg Config) (*Pool, error) {
 // It exercises the real path (Service, TLS, authentication), so it suits a
 // readiness probe.
 func (p *Pool) Health(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, HealthTimeout)
+	return p.health(ctx, HealthTimeout)
+}
+
+// startupAttempt is one try of the first connection. Its own timeout is not
+// the caller's deadline, so it is reported as retryable; the caller's own
+// context ending still stops the retry.
+func (p *Pool) startupAttempt(ctx context.Context) error {
+	return markAttemptTimeout(ctx, p.health(ctx, StartupAttemptTimeout))
+}
+
+// markAttemptTimeout turns a deadline error into a retryable one when the
+// caller's ctx (the parent of the try) is still live.
+func markAttemptTimeout(ctx context.Context, err error) error {
+	if err != nil && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
+		return &attemptTimeoutError{err: err}
+	}
+	return err
+}
+
+// attemptTimeoutError marks a try that ran out of its per-attempt time while
+// the caller's context was still live.
+type attemptTimeoutError struct{ err error }
+
+func (e *attemptTimeoutError) Error() string { return "attempt timed out: " + e.err.Error() }
+func (e *attemptTimeoutError) Unwrap() error { return e.err }
+
+func (p *Pool) health(ctx context.Context, d time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, d)
 	defer cancel()
 	var one int
 	if err := p.QueryRow(ctx, "select 1").Scan(&one); err != nil {
