@@ -6,6 +6,8 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+## v2.17.0
+
 - **Feature:** `peopleProject` on `cnpg-cluster` (and `cnpg-projects`): a person's database role comes from the OU of their client certificate, by convention. Set to the project name, the chart renders the four roles `{project}_admin` (member of the database owner, never superuser), `{project}_ddl`, `{project}_observer` and `{project}_read` (no credential of their own), the hba line `hostssl all /^{project}_.*$ all cert clientname=DN map=people` before the catch-all, and one pg_ident rule mapping a certificate with `OU={project}_{level}` to that role. The person connects with `-U {project}_{level}`; a certificate with another project's OU, with no OU, or with a second OU does not map. Off by default: a render without it is byte-identical. The client CA must carry the issuing root of those certificates (`trust.bundle.extraCertificates`).
 
 ## v2.16.0
