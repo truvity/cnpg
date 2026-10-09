@@ -31,16 +31,46 @@ postgresql.extra_pg_hba, never replace.
 {{- if $peopleRoles }}
 - hostssl all {{ $peopleRoles }} all cert map=people
 {{- end }}
-{{- with .Values.peopleProject }}
-- hostssl all /^{{ . }}_.*$ all cert clientname=DN map=people
-{{- end }}
 {{- range ((.Values.postgresql.pgHba | default dict).beforeCatchAll | default list) }}
 - {{ . }}
+{{- end }}
+{{- with .Values.peopleProject }}
+{{- include "cnpg-cluster.peopleProjectCheck" $ }}
+- hostssl all {{ . }}_admin,{{ . }}_ddl,{{ . }}_observer,{{ . }}_read all cert clientname=DN map=people
 {{- end }}
 - hostssl all all all cert
 {{- range .Values.postgresql.extra_pg_hba }}
 - {{ . }}
 {{- end }}
+{{- end -}}
+
+{{/*
+peopleProject names four roles ({p}_admin, _ddl, _observer, _read). Fails
+the render when any of them is also the owner, a roles[] entry or a user of a
+beforeCatchAll line: the people hba line (cert, clientname=DN) would then
+sit in front of, or in place of, that role's own login. The hba line itself
+names exactly these four roles, never a pattern, so no other role can match.
+*/}}
+{{- define "cnpg-cluster.peopleProjectCheck" -}}
+{{- $p := .Values.peopleProject -}}
+{{- $mine := list (printf "%s_admin" $p) (printf "%s_ddl" $p) (printf "%s_observer" $p) (printf "%s_read" $p) -}}
+{{- $taken := list (.Values.bootstrap.initdb.owner | default "") -}}
+{{- range (.Values.roles | default list) -}}
+{{- $taken = append $taken (.name | replace "-" "_") -}}
+{{- end -}}
+{{- range ((.Values.postgresql.pgHba | default dict).beforeCatchAll | default list) -}}
+{{- $f := regexSplit "\\s+" (trim .) -1 -}}
+{{- if ge (len $f) 3 -}}
+{{- range (splitList "," (index $f 2)) -}}
+{{- $taken = append $taken (trimAll "\"" .) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- range $mine -}}
+{{- if has . $taken -}}
+{{- fail (printf "peopleProject %q: the role %q is also the owner, a roles[] entry or a beforeCatchAll user; rename the project or the role (the people hba line would otherwise shadow its own login)" $p .) -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

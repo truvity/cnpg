@@ -66,9 +66,62 @@ func TestRoles_PeopleProjectConvention(t *testing.T) {
 
 	pg := docs["Cluster"][0]["spec"].(map[string]any)["postgresql"].(map[string]any)
 	hba := pg["pg_hba"].([]any)
-	assert.Contains(t, hba, "hostssl all /^dms_.*$ all cert clientname=DN map=people")
-	assert.Less(t, indexOf(hba, "hostssl all /^dms_.*$ all cert clientname=DN map=people"), indexOf(hba, "hostssl all all all cert"))
+	people := "hostssl all dms_admin,dms_ddl,dms_observer,dms_read all cert clientname=DN map=people"
+	assert.Contains(t, hba, people)
+	assert.Less(t, indexOf(hba, people), indexOf(hba, "hostssl all all all cert"))
 	assert.Equal(t, []any{`people "/^OU=(dms_admin|dms_ddl|dms_observer|dms_read),CN=[^,\\]+$" \1`}, pg["pg_ident"])
+}
+
+// The incident of 2.17.0: the people line used a regex that matched dms_app
+// and sat before the caller's own line. It must name only the four roles and
+// come after the caller's beforeCatchAll lines.
+func TestRoles_PeopleLineNamesFourRolesAfterCallerLines(t *testing.T) {
+	docs, err := renderDocs(t, map[string]any{
+		"clusterName":   "dms-pg",
+		"profile":       "devel",
+		"namespace":     "dms",
+		"peopleProject": "dms",
+		"bootstrap":     map[string]any{"initdb": map[string]any{"database": "dms", "owner": "dms"}},
+		"postgresql":    map[string]any{"pgHba": map[string]any{"beforeCatchAll": []any{"hostssl all dms_app all scram-sha-256"}}},
+	})
+	require.NoError(t, err)
+	hba := docs["Cluster"][0]["spec"].(map[string]any)["postgresql"].(map[string]any)["pg_hba"].([]any)
+	people := "hostssl all dms_admin,dms_ddl,dms_observer,dms_read all cert clientname=DN map=people"
+	assert.Equal(t, []any{
+		"hostssl all dms all scram-sha-256",
+		"hostssl all dms_app all scram-sha-256",
+		people,
+		"hostssl all all all cert",
+	}, hba)
+	for _, l := range hba {
+		assert.NotContains(t, l, "/^")
+	}
+}
+
+func TestRoles_PeopleProjectRefusesCollidingRole(t *testing.T) {
+	base := func() map[string]any {
+		return map[string]any{
+			"clusterName":   "dms-pg",
+			"profile":       "devel",
+			"namespace":     "dms",
+			"peopleProject": "dms",
+			"bootstrap":     map[string]any{"initdb": map[string]any{"database": "dms", "owner": "dms"}},
+		}
+	}
+	v := base()
+	v["roles"] = []any{map[string]any{"name": "dms-read", "auth": "cert"}}
+	_, err := renderDocs(t, v)
+	require.ErrorContains(t, err, "dms_read")
+
+	v = base()
+	v["postgresql"] = map[string]any{"pgHba": map[string]any{"beforeCatchAll": []any{"hostssl all dms_ddl all scram-sha-256"}}}
+	_, err = renderDocs(t, v)
+	require.ErrorContains(t, err, "dms_ddl")
+
+	v = base()
+	v["bootstrap"] = map[string]any{"initdb": map[string]any{"database": "dms", "owner": "dms_admin"}}
+	_, err = renderDocs(t, v)
+	require.ErrorContains(t, err, "dms_admin")
 }
 
 func indexOf(l []any, v string) int {
