@@ -284,6 +284,11 @@
         "secretName": { "type": "string", "pattern": "^$|^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$", "description": "Secret written by the replication Certificate and named by spec.certificates.replicationTLSSecret. Empty = <clusterName>-replication-tls." }
       }
     },
+    "peopleProject": {
+      "type": "string",
+      "pattern": "^$|^[a-z][a-z0-9]*$",
+      "description": "The project name that prefixes the four person roles ({project}_admin, _ddl, _observer, _read). Set: the chart renders those roles, an hba line `hostssl all /^{project}_.*$ all cert clientname=DN map=people` before the catch-all, and one pg_ident rule mapping a client certificate with OU={project}_{level} to that role. Empty = off."
+    },
     "people": {
       "type": "array",
       "description": "Humans authenticating with a client certificate whose CN is the email; rows of the people pg_ident map.",

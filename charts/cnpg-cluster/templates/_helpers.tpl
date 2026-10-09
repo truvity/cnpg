@@ -30,6 +30,9 @@ postgresql.extra_pg_hba, never replace.
 {{- if $peopleRoles }}
 - hostssl all {{ $peopleRoles }} all cert map=people
 {{- end }}
+{{- with .Values.peopleProject }}
+- hostssl all /^{{ . }}_.*$ all cert clientname=DN map=people
+{{- end }}
 {{- range ((.Values.postgresql.pgHba | default dict).beforeCatchAll | default list) }}
 - {{ . }}
 {{- end }}
@@ -70,6 +73,9 @@ reject every connection that reaches it, silently, at connect time.
 
 {{/* pg_ident rows for the people map. */}}
 {{- define "cnpg-cluster.pgIdent" -}}
+{{- with .Values.peopleProject }}
+- people "/^OU=({{ . }}_admin|{{ . }}_ddl|{{ . }}_observer|{{ . }}_read),CN=[^,\\]+$" \1
+{{- end }}
 {{- range (.Values.people | default list) }}
 - people {{ .email }} {{ .role }}
 {{- end }}
