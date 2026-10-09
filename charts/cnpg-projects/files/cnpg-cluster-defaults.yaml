@@ -417,5 +417,13 @@ replication:
 # Only those roles are reachable through it; everything else keeps the
 # plain `cert` line. Role names starting pg_ are refused.
 people: []
+
+# Person access by convention (the OU of the certificate selects the role):
+# set to the project name and the chart renders {project}_admin, _ddl,
+# _observer and _read (admin = the owner's rights, never superuser), the
+# hba line before the catch-all and one pg_ident rule for
+# OU={project}_{level}. The client CA must carry the environment's db-client
+# issuing root (trust.bundle.extraCertificates). Empty = off.
+peopleProject: ""
 #  - email: ada@example.com
 #    role: readonly

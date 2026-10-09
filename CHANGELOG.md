@@ -6,6 +6,8 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+- **Feature:** `peopleProject` on `cnpg-cluster` (and `cnpg-projects`): a person's database role comes from the OU of their client certificate, by convention. Set to the project name, the chart renders the four roles `{project}_admin` (member of the database owner, never superuser), `{project}_ddl`, `{project}_observer` and `{project}_read` (no credential of their own), the hba line `hostssl all /^{project}_.*$ all cert clientname=DN map=people` before the catch-all, and one pg_ident rule mapping a certificate with `OU={project}_{level}` to that role. The person connects with `-U {project}_{level}`; a certificate with another project's OU, with no OU, or with a second OU does not map. Off by default: a render without it is byte-identical. The client CA must carry the issuing root of those certificates (`trust.bundle.extraCertificates`).
+
 ## v2.16.0
 
 - **Feature:** `roles[]` of `cnpg-cluster` (and `cnpg-projects`) take `auth: none` and `login`. `auth: none` renders a `DatabaseRole` with neither a client certificate nor a password: the shape of the `people_*` roles (`people_cluster_admin`, `people_ddl`, `people_schema_observer`, `people_read_all`), which a person reaches only through the `people` pg_ident map, and which get their rights from `inRoles`. `login: false` renders a pure group role (default `true`, as before). The `DatabaseRole` object name now turns `_` into `-` (a role name with an underscore made an invalid Kubernetes name before; a name without one renders as it did). A render that sets neither field is byte-identical to v2.15.1.

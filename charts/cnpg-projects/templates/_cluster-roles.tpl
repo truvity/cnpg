@@ -48,4 +48,36 @@ spec:
 {{- end }}
 {{- end }}
 
+{{- /* peopleProject: the four roles a person's certificate selects by its
+OU ({project}_admin|ddl|observer|read), by convention, in every project's
+database. They hold no credential (auth none): only the people map's OU
+rule reaches them, and a role must be LOGIN for PostgreSQL to admit the
+connection. admin is the database owner's, never superuser. */}}
+{{- with .Values.peopleProject }}
+{{- $project := . }}
+{{- range (list
+  (dict "level" "admin" "in" (list $.Values.bootstrap.initdb.owner))
+  (dict "level" "ddl" "in" (list "pg_read_all_data" "pg_write_all_data"))
+  (dict "level" "observer" "in" (list))
+  (dict "level" "read" "in" (list "pg_read_all_data"))) }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: {{ $.Values.clusterName }}-{{ $project | replace "_" "-" }}-{{ .level }}
+  namespace: {{ $.Values.namespace }}
+spec:
+  cluster:
+    name: {{ $.Values.clusterName }}
+  name: {{ $project }}_{{ .level }}
+  ensure: present
+  login: true
+  {{- with .in }}
+  inRoles:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  databaseRoleReclaimPolicy: retain
+{{- end }}
+{{- end }}
+
 {{- end -}}
