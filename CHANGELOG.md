@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## v2.18.3
+
+- Dependency updates.
+
 ## v2.18.2
 
 - **Fix (the transitional ddl role is gone):** the `DatabaseRole` that v2.18.1 re-declared for a retained `{project}_ddl` role (`databaseRoleReclaimPolicy: delete`) is no longer rendered. With the object gone from the render, a GitOps controller that prunes deletes it, the operator drops the PostgreSQL role, and the `ddl` level is fully removed. Before moving, check that the role owns nothing and holds no grants (`select count(*) from pg_class c join pg_roles r on r.oid=c.relowner where r.rolname='{project}_ddl'` and the `pg_shdepend` rows for it); a role that owns objects makes the drop fail visibly on the object. If the controller does not prune (`Prune=false`), delete the `{cluster}-{project}-ddl` objects by hand. A render of `peopleProject` now has no `_ddl` object at all.
