@@ -22,10 +22,10 @@ spec:
     pg_hba:
       - hostssl all dms all scram-sha-256
       - hostssl all dms_app all scram-sha-256
-      - hostssl all dms_admin,dms_ddl,dms_observer,dms_read all cert clientname=DN map=people
+      - hostssl all dms_admin,dms_observer,dms_read all cert clientname=DN map=people
       - hostssl all all all cert
     pg_ident:
-      - people "/^OU=(dms_admin|dms_ddl|dms_observer|dms_read),CN=[^,\\]+$" \1
+      - people "/^OU=(dms_admin|dms_observer|dms_read),CN=[^,\\]+$" \1
 
   storage:
     size: 2Gi
@@ -87,24 +87,6 @@ spec:
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: dms-pg-dms-ddl
-  namespace: dms
-spec:
-  cluster:
-    name: dms-pg
-  name: dms_ddl
-  ensure: present
-  login: true
-  inRoles:
-    - pg_read_all_data
-    - pg_write_all_data
-  databaseRoleReclaimPolicy: retain
-
----
-# Source: cnpg-cluster/templates/roles.yaml
-apiVersion: postgresql.cnpg.io/v1
-kind: DatabaseRole
-metadata:
   name: dms-pg-dms-observer
   namespace: dms
 spec:
@@ -131,3 +113,17 @@ spec:
   inRoles:
     - pg_read_all_data
   databaseRoleReclaimPolicy: retain
+
+---
+# Source: cnpg-cluster/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: dms-pg-dms-ddl
+  namespace: dms
+spec:
+  cluster:
+    name: dms-pg
+  name: dms_ddl
+  ensure: absent
+  databaseRoleReclaimPolicy: delete

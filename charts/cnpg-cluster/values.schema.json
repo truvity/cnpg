@@ -287,7 +287,7 @@
     "peopleProject": {
       "type": "string",
       "pattern": "^$|^[a-z][a-z0-9]*$",
-      "description": "The project name that prefixes the four person roles ({project}_admin, _ddl, _observer, _read). Set: the chart renders those roles, an hba line `hostssl all /^{project}_.*$ all cert clientname=DN map=people` before the catch-all, and one pg_ident rule mapping a client certificate with OU={project}_{level} to that role. Empty = off."
+      "description": "The project name that prefixes the three person roles ({project}_admin, _observer, _read). Set: the chart renders those roles, an hba line `hostssl all {project}_admin,{project}_observer,{project}_read all cert clientname=DN map=people` before the catch-all, and one pg_ident rule mapping a client certificate with OU={project}_{level} to that role. Empty = off."
     },
     "people": {
       "type": "array",
