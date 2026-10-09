@@ -10,6 +10,11 @@ export interface RetryPolicy {
   maxDelayMs: number;
   /** Total time that may be spent waiting, ms. */
   budgetMs: number;
+  /**
+   * Called before each sleep, after a retryable failure: `attempt` is the try
+   * that failed (1-based), `delayMs` the coming sleep. For logging.
+   */
+  onRetry?: (attempt: number, err: Error, delayMs: number) => void;
 }
 
 export interface CnpgConfig {

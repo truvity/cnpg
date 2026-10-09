@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backoffMs, defaultRetryPolicy, isRetryable, retry } from "../src/index.js";
+import { AttemptTimeoutError, backoffMs, defaultRetryPolicy, isRetryable, retry } from "../src/index.js";
 
 const sqlState = (code: string) => Object.assign(new Error(`pg ${code}`), { code });
 const fast = { attempts: 4, initialDelayMs: 1, maxDelayMs: 4, budgetMs: 1_000 };
@@ -26,6 +26,18 @@ describe("isRetryable", () => {
     ["unknown issuer", sqlState("UNABLE_TO_VERIFY_LEAF_SIGNATURE"), false],
     ["hostname mismatch", sqlState("ERR_TLS_CERT_ALTNAME_INVALID"), false],
     ["tls alert from the server", sqlState("ERR_SSL_TLSV1_ALERT_UNKNOWN_CA"), false],
+    [
+      "refused, wrapped like the health check",
+      new Error("cnpg-client: health: x", { cause: sqlState("ECONNREFUSED") }),
+      true,
+    ],
+    [
+      "timed out in startup, wrapped",
+      new Error("outer", { cause: new AttemptTimeoutError("first connection", 5000) }),
+      true,
+    ],
+    ["bad certificate, wrapped", new Error("outer", { cause: sqlState("CERT_HAS_EXPIRED") }), false],
+    ["wrapped permanent error", new Error("outer", { cause: sqlState("28P01") }), false],
     ["plain error", new Error("boom"), false],
     ["not an error", "boom", false],
   ])("%s", (_name, err, want) => {
@@ -88,6 +100,71 @@ describe("retry", () => {
       ac.signal,
     ).catch(() => undefined);
     expect(n).toBe(1);
+  });
+
+  it("retries a refused first connection and calls onRetry", async () => {
+    const seen: [number, string, number][] = [];
+    let n = 0;
+    const v = await retry({ ...fast, onRetry: (a, e, d) => seen.push([a, e.message, d]) }, async () => {
+      if (++n < 3) throw new Error("wrapped", { cause: sqlState("ECONNREFUSED") });
+      return "ok";
+    });
+    expect([v, n]).toEqual(["ok", 3]);
+    expect(seen.map((x) => [x[0], x[1]])).toEqual([
+      [1, "wrapped"],
+      [2, "wrapped"],
+    ]);
+    expect(seen.every((x) => x[2] >= 0 && x[2] <= fast.maxDelayMs)).toBe(true);
+  });
+
+  it("succeeds on the second attempt after a startup timeout", async () => {
+    let n = 0;
+    const v = await retry(fast, async () => {
+      if (++n < 2) throw new AttemptTimeoutError("first connection", 5000);
+      return "ok";
+    });
+    expect([v, n]).toEqual(["ok", 2]);
+  });
+
+  it("gives up at the attempt cap with the last error", async () => {
+    let n = 0;
+    const onRetry: number[] = [];
+    await expect(
+      retry({ ...fast, onRetry: (a) => onRetry.push(a) }, async () => {
+        n++;
+        throw sqlState("ECONNREFUSED");
+      }),
+    ).rejects.toMatchObject({ code: "ECONNREFUSED" });
+    expect(n).toBe(fast.attempts);
+    expect(onRetry).toEqual([1, 2, 3]);
+  });
+
+  it("does not retry after the caller's abort or deadline", async () => {
+    let n = 0;
+    const ac = new AbortController();
+    await retry(
+      fast,
+      async () => {
+        n++;
+        ac.abort();
+        throw sqlState("ECONNREFUSED");
+      },
+      ac.signal,
+    ).catch(() => undefined);
+    expect(n).toBe(1);
+
+    n = 0;
+    await retry(
+      fast,
+      async () => {
+        n++;
+        await new Promise((r) => setTimeout(r, 30)); // outlives the deadline
+        throw sqlState("ECONNREFUSED");
+      },
+      AbortSignal.timeout(5),
+    ).catch(() => undefined);
+    expect(n).toBe(1);
+    expect(isRetryable(new DOMException("aborted", "AbortError"))).toBe(false);
   });
 
   it("backs off within bounds", () => {

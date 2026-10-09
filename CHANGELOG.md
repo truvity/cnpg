@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Fix (TypeScript client):** `CnpgPool.create` no longer fails on a slow or refused first try. The first connection ran `health()`, whose 2s bound ended a cold start (DNS, TLS verify-full, authentication) with `first connection ... health: timed out`, and `isRetryable` read only the top-level error, so that timeout and even `ECONNREFUSED` (wrapped by `health()`) were never retried. Each startup try is now a raw `select 1` with its own 5s bound (`STARTUP_ATTEMPT_TIMEOUT_MS`, error class `AttemptTimeoutError`) under `config.retry`; `isRetryable` walks the `cause` chain; `health()` keeps its 2s bound. New `RetryPolicy.onRetry(attempt, err, delayMs)` hook, called before each sleep, and `CnpgPoolOptions.signal` to abandon the first connection (an abort is never retried). Mirrors the Go client fix of v2.18.2.
+
 ## v2.18.3
 
 - Dependency updates.
