@@ -25,10 +25,20 @@ MIIBexample
 
 // render runs helm template with the values file content and returns the
 // objects by kind, then name.
+// noHints turns the chart's Argo CD hints off, so a test asserts exactly what
+// an entry names and nothing the chart adds.
+var noHints = []string{"--set", "argocd.scheduledBackupSyncWave=", "--set", "argocd.serverTLSSyncWave=", "--set", "argocd.guardCASecret=false"}
+
 func render(t *testing.T, values string) map[string]map[string]map[string]any {
 	t.Helper()
 
-	cmd := exec.CommandContext(t.Context(), "helm", "template", "x", ".", "-f", "-")
+	return renderWith(t, values, noHints...)
+}
+
+func renderWith(t *testing.T, values string, args ...string) map[string]map[string]map[string]any {
+	t.Helper()
+
+	cmd := exec.CommandContext(t.Context(), "helm", append([]string{"template", "x", ".", "-f", "-"}, args...)...)
 	cmd.Stdin = strings.NewReader(values)
 
 	out, err := cmd.CombinedOutput()
@@ -310,4 +320,38 @@ scheduledBackups:
 	spec := func(n string) map[string]any { return objs["ScheduledBackup"][n]["spec"].(map[string]any) }
 	assert.Equal(t, true, spec("a")["immediate"])
 	assert.NotContains(t, spec("b"), "immediate")
+}
+
+// TestDefaults: an entry that names only its Cluster gets the cnpg-cluster
+// convention's names, the shared TLS settings, the sync waves and the CA
+// Secret guard; the entry's own values win.
+func TestDefaults(t *testing.T) {
+	objs := renderWith(t, `
+serverTLSDefaults:
+  issuerRef: {name: issuer, kind: ClusterIssuer}
+  caCertificates: ["`+strings.ReplaceAll(root, "\n", `\n`)+`"]
+  duration: 720h
+scheduledBackups:
+  - {namespace: app, clusterName: app-pg}
+  - {name: custom, namespace: app, clusterName: other-pg, objectStoreName: o, annotations: {argocd.argoproj.io/sync-wave: "3"}}
+serverTLS:
+  - {clusterName: app-pg, namespace: app}
+  - {clusterName: other-pg, namespace: app, certificateName: other-pg-server, duration: 1h}
+`)
+	ann := func(kind, name string) map[string]any {
+		a, _ := objs[kind][name]["metadata"].(map[string]any)["annotations"].(map[string]any)
+
+		return a
+	}
+
+	sb := objs["ScheduledBackup"]["app-pg-scheduled-backup"]
+	require.NotNil(t, sb)
+	assert.Equal(t, "app-pg-objectstore", sb["spec"].(map[string]any)["pluginConfiguration"].(map[string]any)["parameters"].(map[string]any)["barmanObjectName"])
+	assert.Equal(t, "25", ann("ScheduledBackup", "app-pg-scheduled-backup")["argocd.argoproj.io/sync-wave"])
+	assert.Equal(t, "3", ann("ScheduledBackup", "custom")["argocd.argoproj.io/sync-wave"], "the entry wins")
+	assert.Equal(t, "-1", ann("Certificate", "app-pg-server-tls")["argocd.argoproj.io/sync-wave"])
+	assert.Equal(t, "720h", objs["Certificate"]["app-pg-server-tls"]["spec"].(map[string]any)["duration"])
+	assert.Equal(t, "1h", objs["Certificate"]["other-pg-server"]["spec"].(map[string]any)["duration"])
+	assert.Equal(t, "Prune=false,Delete=false", ann("Secret", "app-pg-server-ca")["argocd.argoproj.io/sync-options"])
+	assert.NotContains(t, ann("Certificate", "app-pg-server-tls"), "argocd.argoproj.io/sync-options")
 }

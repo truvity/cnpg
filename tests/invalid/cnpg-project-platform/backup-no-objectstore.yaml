@@ -1,2 +1,0 @@
-scheduledBackups:
-  - {name: a, namespace: ns, clusterName: c}

@@ -103,3 +103,58 @@ scheduledBackups:
 	assert.Equal(t, true, spec("a")["immediate"])
 	assert.NotContains(t, spec("b"), "immediate")
 }
+
+const rootPEM = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"
+
+func annotations(o map[string]any) map[string]any {
+	a, _ := o["metadata"].(map[string]any)["annotations"].(map[string]any)
+
+	return a
+}
+
+// TestPlatformDefaults: an entry that names only its Cluster gets the
+// ScheduledBackup and ObjectStore names of the cnpg-cluster convention, the
+// shared TLS settings, the sync waves and the CA Secret guard; the entry's
+// own values win, and an empty wave or guardCASecret false render none.
+func TestPlatformDefaults(t *testing.T) {
+	values := `
+serverTLSDefaults:
+  issuerRef: {name: issuer, kind: ClusterIssuer}
+  caCertificates: ["` + strings.ReplaceAll(rootPEM, "\n", `\n`) + `"]
+  duration: 720h
+  labels: {team: data}
+scheduledBackups:
+  - {namespace: app, clusterName: app-pg}
+  - {name: custom, namespace: app, clusterName: other-pg, objectStoreName: o, annotations: {argocd.argoproj.io/sync-wave: "3"}}
+serverTLS:
+  - {clusterName: app-pg, namespace: app}
+  - {clusterName: other-pg, namespace: app, certificateName: other-pg-server, duration: 1h}
+`
+	objs := objects(t, ".", values)
+
+	sb := objs["ScheduledBackup/app-pg-scheduled-backup"]
+	require.NotNil(t, sb)
+	assert.Equal(t, "app-pg-objectstore", sb["spec"].(map[string]any)["pluginConfiguration"].(map[string]any)["parameters"].(map[string]any)["barmanObjectName"])
+	assert.Equal(t, "25", annotations(sb)["argocd.argoproj.io/sync-wave"])
+	assert.Equal(t, "3", annotations(objs["ScheduledBackup/custom"])["argocd.argoproj.io/sync-wave"], "the entry's annotation wins")
+
+	cert := objs["Certificate/app-pg-server-tls"]
+	require.NotNil(t, cert)
+	assert.Equal(t, "-1", annotations(cert)["argocd.argoproj.io/sync-wave"])
+	assert.Equal(t, "720h", cert["spec"].(map[string]any)["duration"])
+	assert.Equal(t, "data", cert["metadata"].(map[string]any)["labels"].(map[string]any)["team"])
+
+	ca := objs["Secret/app-pg-server-ca"]
+	require.NotNil(t, ca)
+	assert.Equal(t, "Prune=false,Delete=false", annotations(ca)["argocd.argoproj.io/sync-options"])
+	assert.NotContains(t, annotations(cert), "argocd.argoproj.io/sync-options", "the guard is on the CA Secret alone")
+
+	assert.Equal(t, "1h", objs["Certificate/other-pg-server"]["spec"].(map[string]any)["duration"], "the entry wins over the defaults")
+
+	off := objects(t, ".", values+`
+argocd: {scheduledBackupSyncWave: "", serverTLSSyncWave: "", guardCASecret: false}
+`)
+	assert.Nil(t, annotations(off["ScheduledBackup/app-pg-scheduled-backup"]))
+	assert.Nil(t, annotations(off["Certificate/app-pg-server-tls"]))
+	assert.Nil(t, annotations(off["Secret/app-pg-server-ca"]))
+}

@@ -54,10 +54,8 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "name",
           "namespace",
-          "clusterName",
-          "objectStoreName"
+          "clusterName"
         ],
         "properties": {
           "name": {
@@ -100,9 +98,7 @@
         "additionalProperties": false,
         "required": [
           "clusterName",
-          "namespace",
-          "issuerRef",
-          "caCertificates"
+          "namespace"
         ],
         "properties": {
           "clusterName": {
@@ -271,6 +267,103 @@
               }
             }
           }
+        }
+      }
+    },
+    "serverTLSDefaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Merged under every serverTLS entry, the entry winning.",
+      "properties": {
+        "issuerRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "Issuer",
+                "ClusterIssuer"
+              ]
+            },
+            "group": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "caCertificates": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "-----BEGIN CERTIFICATE-----"
+          }
+        },
+        "duration": {
+          "$ref": "#/definitions/duration"
+        },
+        "renewBefore": {
+          "$ref": "#/definitions/duration"
+        },
+        "privateKey": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "algorithm": {
+              "type": "string",
+              "enum": [
+                "RSA",
+                "ECDSA",
+                "Ed25519"
+              ]
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "encoding": {
+              "type": "string",
+              "enum": [
+                "PKCS1",
+                "PKCS8"
+              ]
+            },
+            "rotationPolicy": {
+              "type": "string",
+              "enum": [
+                "Never",
+                "Always"
+              ]
+            }
+          }
+        },
+        "labels": {
+          "$ref": "#/definitions/stringMap"
+        }
+      }
+    },
+    "argocd": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scheduledBackupSyncWave": {
+          "type": "string",
+          "pattern": "^(-?[0-9]+)?$"
+        },
+        "serverTLSSyncWave": {
+          "type": "string",
+          "pattern": "^(-?[0-9]+)?$"
+        },
+        "guardCASecret": {
+          "type": "boolean"
         }
       }
     }

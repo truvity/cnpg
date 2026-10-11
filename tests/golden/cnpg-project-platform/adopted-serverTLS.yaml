@@ -8,6 +8,8 @@ metadata:
   labels:
     cnpg.io/reload: "true"
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
     example.com/sync-options: Prune=false,Delete=false
 type: Opaque
 stringData:
@@ -24,6 +26,7 @@ metadata:
   name: example-pg-server-tls
   namespace: example
   annotations:
+    argocd.argoproj.io/sync-wave: "-1"
     example.com/sync-options: Prune=false,Delete=false
 spec:
   secretName: example-pg-server-tls
