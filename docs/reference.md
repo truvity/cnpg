@@ -91,6 +91,11 @@ fail the render, whichever list they are in.
 | `objectStores[].dataJobs` / `.walMaxParallel` | int | `2` / `4` | Parallel uploads. |
 | `scheduledBackups[].name` / `.namespace` / `.clusterName` / `.objectStoreName` | string | required | The `ScheduledBackup`, the CNPG `Cluster` it backs up and the `ObjectStore` it writes to. Method `plugin`, `backupOwnerReference: self`. |
 | `scheduledBackups[].schedule` | string | `0 0 2 * * *` | Six-field cron, seconds first. |
+| `scheduledBackups[].name` / `.objectStoreName` | string | `<clusterName>-scheduled-backup` / `<clusterName>-objectstore` | Left out, they take the cnpg-cluster chart's convention (its ObjectStore is `<clusterName>-objectstore`). |
+| `serverTLSDefaults` | object | `{}` | `issuerRef`, `caCertificates`, `duration`, `renewBefore`, `privateKey`, `labels` merged under every `serverTLS` entry, the entry winning. A platform sets what is the same for every Cluster once, and an entry carries only its Cluster. |
+| `argocd.scheduledBackupSyncWave` | string | `"25"` | `argocd.argoproj.io/sync-wave` on every ScheduledBackup (after the Cluster and its ObjectStore). `""` renders none. The entry's own annotation wins. |
+| `argocd.serverTLSSyncWave` | string | `"-1"` | The wave of the server Certificate and CA Secret: before the Cluster (wave 0) that names them. A Cluster cannot become healthy without the CA Secret, and Argo CD starts no later wave until the earlier is healthy. `""` renders none. |
+| `argocd.guardCASecret` | bool | `true` | `argocd.argoproj.io/sync-options: Prune=false,Delete=false` on the CA Secret alone, so removing an entry never drops the CA a running database verifies with. |
 | `serverTLS[].clusterName` / `.namespace` | string | required | The `Cluster`. The `Certificate` covers `<clusterName>-{rw,ro,r}.<namespace>.svc.cluster.local` and nothing shorter (a private CA constrained to `cluster.local` cannot sign the short forms). |
 | `serverTLS[].certificateName` / `.secretName` / `.caSecretName` | string | `<clusterName>-server-tls` / `<clusterName>-server-tls` / `<clusterName>-server-ca` | The names, so an object another renderer made can be taken over under its own name. The Certificate and its Secret may share a name; two Secrets or two Certificates may not. |
 | `serverTLS[].issuerRef` | `{name, kind, group}` | required | The cert-manager issuer. |

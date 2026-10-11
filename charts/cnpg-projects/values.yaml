@@ -21,6 +21,24 @@ clusters: []
 # ObjectStore, these objects point at it).
 scheduledBackups: []
 serverTLS: []
+# Merged under every serverTLS entry, the entry winning: what is the same for
+# every Cluster of a platform (issuerRef, caCertificates, duration,
+# renewBefore, privateKey, labels).
+serverTLSDefaults: {}
+# A scheduledBackups entry names its ScheduledBackup {clusterName}-scheduled-backup
+# and its ObjectStore {clusterName}-objectstore unless it says otherwise. Argo CD
+# hints on those objects (annotations; an entry's own win). Set a wave to "" (or
+# guardCASecret to false) to render none.
+argocd:
+  # sync-wave of every ScheduledBackup: after the Cluster and its ObjectStore.
+  scheduledBackupSyncWave: "25"
+  # sync-wave of the server Certificate and CA Secret: BEFORE the Cluster (wave
+  # 0) that names them. The Cluster cannot become healthy without the CA Secret
+  # and Argo CD starts no later wave until the earlier is healthy.
+  serverTLSSyncWave: "-1"
+  # Prune=false,Delete=false on the CA Secret alone: removing an entry never
+  # drops the CA the running database verifies with.
+  guardCASecret: true
 
 # The archive identity: an IAM role per project, with the same trust and the
 # same permissions each time, and a Pod Identity association per

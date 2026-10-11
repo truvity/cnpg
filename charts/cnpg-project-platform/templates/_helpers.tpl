@@ -21,3 +21,21 @@ annotations:
 {{- define "cnpg-project-platform.on" -}}
 {{- if or (not (hasKey . "enabled")) .enabled -}}true{{- end -}}
 {{- end -}}
+
+{{/* The sync-wave annotation for a wave value; nothing when the wave is empty. */}}
+{{- define "cnpg-project-platform.waveAnnotations" -}}
+{{- if .wave }}
+argocd.argoproj.io/sync-wave: {{ .wave | quote }}
+{{- else }}
+{}
+{{- end }}
+{{- end -}}
+
+{{/* The prune/delete guard annotation when guard is true; nothing otherwise. */}}
+{{- define "cnpg-project-platform.guardAnnotations" -}}
+{{- if .guard }}
+argocd.argoproj.io/sync-options: Prune=false,Delete=false
+{{- else }}
+{}
+{{- end }}
+{{- end -}}

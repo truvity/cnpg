@@ -10,6 +10,8 @@ metadata:
     example.com/team: data
     example.com/tier: primary
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
     example.com/owner: platform
     example.com/wave: "15"
 type: Opaque
@@ -33,6 +35,8 @@ metadata:
     cnpg.io/reload: "true"
     example.com/team: data
   annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
     example.com/owner: platform
 type: Opaque
 stringData:
@@ -52,6 +56,7 @@ metadata:
     example.com/team: data
     example.com/tier: primary
   annotations:
+    argocd.argoproj.io/sync-wave: "-1"
     example.com/owner: platform
     example.com/wave: "15"
 spec:
@@ -87,6 +92,7 @@ metadata:
   labels:
     example.com/team: data
   annotations:
+    argocd.argoproj.io/sync-wave: "-1"
     example.com/owner: platform
 spec:
   secretName: two-pg-server-tls
@@ -169,6 +175,7 @@ metadata:
     example.com/team: data
     example.com/tier: primary
   annotations:
+    argocd.argoproj.io/sync-wave: "25"
     example.com/owner: platform
     example.com/wave: "25"
 spec:
@@ -193,6 +200,7 @@ metadata:
   labels:
     example.com/team: data
   annotations:
+    argocd.argoproj.io/sync-wave: "25"
     example.com/owner: platform
 spec:
   schedule: "0 0 2 * * *"

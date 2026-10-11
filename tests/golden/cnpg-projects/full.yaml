@@ -7,6 +7,9 @@ metadata:
   namespace: alpha
   labels:
     cnpg.io/reload: "true"
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    argocd.argoproj.io/sync-wave: "-1"
 type: Opaque
 stringData:
   ca.crt: |
@@ -38,6 +41,8 @@ kind: Certificate
 metadata:
   name: alpha-pg-server-tls
   namespace: alpha
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   secretName: alpha-pg-server-tls
   dnsNames:
@@ -283,6 +288,8 @@ kind: ScheduledBackup
 metadata:
   name: alpha-pg-scheduled-backup
   namespace: alpha
+  annotations:
+    argocd.argoproj.io/sync-wave: "25"
 spec:
   schedule: "0 0 2 * * *"
   immediate: true

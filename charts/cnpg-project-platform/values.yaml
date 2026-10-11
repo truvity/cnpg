@@ -5,7 +5,22 @@
 # empty until asked for. The chart decides NOTHING about which project gets
 # which object, or whether a project has moved to this arrangement yet: the
 # caller computes that and passes the result as entries (and as `enabled`).
-# No name below is a default; each is an input. See docs/reference.md.
+# See docs/reference.md. A name left out of an entry takes the convention
+# the cnpg-cluster chart uses (e.g. <clusterName>-scheduled-backup).
+
+# Argo CD hints on the objects below (annotations; an entry's own win). Set a
+# value to "" (or guardCASecret to false) to render none.
+argocd:
+  # sync-wave of every ScheduledBackup: after the Cluster and its ObjectStore.
+  scheduledBackupSyncWave: "25"
+  # sync-wave of the server Certificate and CA Secret: BEFORE the Cluster (wave
+  # 0) that names them. The Cluster cannot become healthy without the CA Secret
+  # and Argo CD starts no later wave until the earlier is healthy, so a later
+  # wave never brought a NEW database up.
+  serverTLSSyncWave: "-1"
+  # Prune=false,Delete=false on the CA Secret alone: removing an entry never
+  # drops the CA the running database verifies with.
+  guardCASecret: true
 
 # Stamped on every object. Per-entry labels and annotations are merged over
 # them (the entry wins).
@@ -33,10 +48,10 @@ objectStores: []
 # ScheduledBackups (postgresql.cnpg.io/v1), method plugin, owned by
 # themselves, each naming the ObjectStore it writes to.
 scheduledBackups: []
-#  - name: example-pg-scheduled-backup required
+#  - name: example-pg-scheduled-backup default {clusterName}-scheduled-backup
 #    namespace: example                 required
 #    clusterName: example-pg            required: the CNPG Cluster
-#    objectStoreName: example-objectstore required
+#    objectStoreName: example-objectstore default {clusterName}-objectstore
 #    schedule: "0 0 2 * * *"            six-field cron, seconds first (default "0 0 2 * * *")
 #    immediate: true                    first base backup on creation (default true; false leaves it out)
 #    labels: {}
@@ -63,3 +78,7 @@ serverTLS: []
 #    annotations: {}                   on the Certificate AND the CA Secret
 #    caSecretAnnotations: {}           on the CA Secret only, merged over annotations (default none)
 #    enabled: true
+# Merged under every serverTLS entry, the entry winning: what is the same for
+# every Cluster of a platform (issuerRef, caCertificates, duration,
+# renewBefore, privateKey, labels).
+serverTLSDefaults: {}

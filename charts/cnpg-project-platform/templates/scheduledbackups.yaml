@@ -1,11 +1,16 @@
 {{- /* One ScheduledBackup per entry: method plugin (barman-cloud), owned by
 itself, writing to the ObjectStore the entry names. `immediate` defaults to
 true (first base backup on creation; the operator ignores it once the
-ScheduledBackup has run); `immediate: false` on an entry leaves it out. */}}
+ScheduledBackup has run); `immediate: false` on an entry leaves it out.
+`name` defaults to <clusterName>-scheduled-backup and `objectStoreName` to
+<clusterName>-objectstore, the name the cnpg-cluster chart gives its store.
+argocd.scheduledBackupSyncWave is the sync-wave annotation, under the
+entry's own. */}}
 {{- $seen := dict }}
 {{- range $i, $b := .Values.scheduledBackups }}
 {{- if include "cnpg-project-platform.on" $b }}
-{{- $name := required (printf "scheduledBackups[%d].name is required" $i) $b.name }}
+{{- $cluster := required (printf "scheduledBackups[%d].clusterName is required" $i) $b.clusterName }}
+{{- $name := $b.name | default (printf "%s-scheduled-backup" $cluster) }}
 {{- $ns := required (printf "scheduledBackups[%d].namespace is required" $i) $b.namespace }}
 {{- $key := printf "%s/%s" $ns $name }}
 {{- if hasKey $seen $key }}
@@ -16,7 +21,7 @@ ScheduledBackup has run); `immediate: false` on an entry leaves it out. */}}
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
-  {{- include "cnpg-project-platform.metadata" (dict "root" $ "name" $name "namespace" $ns "labels" $b.labels "annotations" $b.annotations) | nindent 2 }}
+  {{- include "cnpg-project-platform.metadata" (dict "root" $ "name" $name "namespace" $ns "labels" $b.labels "annotations" (merge (dict) ($b.annotations | default dict) (include "cnpg-project-platform.waveAnnotations" (dict "wave" ($.Values.argocd.scheduledBackupSyncWave | toString)) | fromYaml))) | nindent 2 }}
 spec:
   schedule: {{ $b.schedule | default "0 0 2 * * *" | quote }}
   {{- if or (not (hasKey $b "immediate")) $b.immediate }}
@@ -25,10 +30,10 @@ spec:
   backupOwnerReference: self
   method: plugin
   cluster:
-    name: {{ required (printf "scheduledBackups[%d].clusterName is required" $i) $b.clusterName }}
+    name: {{ $cluster }}
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io
     parameters:
-      barmanObjectName: {{ required (printf "scheduledBackups[%d].objectStoreName is required" $i) $b.objectStoreName }}
+      barmanObjectName: {{ $b.objectStoreName | default (printf "%s-objectstore" $cluster) }}
 {{- end }}
 {{- end }}
