@@ -38,7 +38,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>21</maven.compiler.release>
-    <kotlin.version>2.4.20</kotlin.version>
+    <kotlin.version>2.4.21</kotlin.version>
     <kotlin.compiler.jvmTarget>21</kotlin.compiler.jvmTarget>
     <pgjdbc.version>42.7.14</pgjdbc.version>
     <hikaricp.version>7.1.0</hikaricp.version>
