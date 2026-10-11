@@ -106,3 +106,35 @@ alias the component does not mirror.
 
 `BucketName`, `BucketARN`, `KMSKeyARN` (`pulumi.StringOutput`). The component
 exports no stack output of its own: the caller names those.
+
+## The writer's side: `NewRole` and `RolePolicy`
+
+The bucket admits one writer role by name (`Args.WriterRoleName`, a glob).
+`NewRole` makes that role in the workload account: an IAM role with a Pod
+Identity trust policy, an inline policy and one Pod Identity association per
+service account, all as one `truvity/k8s` Pod Identity component
+(`truvity:k8s/aws:PodIdentity`, exported as `RoleTypeToken`).
+
+`RolePolicy` renders the inline policy alone, as JSON, for a caller that makes
+the role itself:
+
+| Sid | Grants |
+|---|---|
+| `WriteOwnSubtree` | put, get, delete, multipart on `<bucket>/<WritePrefix>*` |
+| `ReadProjectPrefix` | get on `<bucket>/<ReadPrefix>*` |
+| `ListProjectPrefix` | list the bucket, `s3:prefix` like `<ReadPrefix>*` if present |
+| `UseBackupKey` | encrypt, decrypt, re-encrypt, generate data key on the key |
+
+Delete is on the write subtree because retention pruning needs it; on the
+versioned bucket it only creates a delete marker, and the bucket policy denies
+`DeleteObjectVersion`. The list statement is `StringLikeIfExists` because
+`HeadBucket` carries no `s3:prefix`. The document's bytes are pinned by a
+test: an adopted role keeps its policy only while the string is unchanged.
+
+Bucket and key ARNs, both prefixes, the role and policy names, the namespace
+and the service accounts are inputs. Options adjust the registration without
+the library knowing any estate's names: `WithChildNames` (the logical names of
+the role, policy and associations), `WithLegacyTopLevel` (alias each child
+from the URN it has directly under the stack), `WithProtect`,
+`WithIgnoreAssociationTags` and `WithResourceOptions` (aliases, parent,
+dependsOn on the component).

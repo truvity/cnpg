@@ -19,6 +19,10 @@
 //   - optionally a same-account replica in another region, with its own
 //     key, a replication role and the replication configuration.
 //
+// NewRole and RolePolicy are the writer's side: the Pod Identity role in the
+// workload account that the bucket's writer glob admits, with an inline policy
+// scoped to a prefix and the key.
+//
 // The bucket and the keys are protected by default (Args.Protect), and the
 // keys are retained on delete: key destruction is a break-glass act, so
 // Pulumi drops a key from state instead of scheduling its deletion.
