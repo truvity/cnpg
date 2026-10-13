@@ -2,6 +2,7 @@ package backupstore_test
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -87,6 +88,15 @@ func runRole(t *testing.T, opts ...backupstore.RoleOption) []registration {
 	return rec.regs
 }
 
+// sortedJoin compares resource names as a set: the mock runtime records
+// sibling registrations in whatever order they complete.
+func sortedJoin(ss []string) string {
+	out := append([]string(nil), ss...)
+	sort.Strings(out)
+
+	return strings.Join(out, ",")
+}
+
 func names(regs []registration) []string {
 	var out []string
 
@@ -100,9 +110,9 @@ func names(regs []registration) []string {
 }
 
 func TestNewRoleDefaultNames(t *testing.T) {
-	got := strings.Join(names(runRole(t)), ",")
-	want := "pg-backup/env-pg-backup-proj,pg-backup/env-pg-backup-proj-role,pg-backup/env-pg-backup-proj-role-policy," +
-		"pg-backup/env-pg-backup-proj-pia-proj-pg,pg-backup/env-pg-backup-proj-pia-proj-rehearsal-pg"
+	got := sortedJoin(names(runRole(t)))
+	want := sortedJoin(strings.Split("pg-backup/env-pg-backup-proj,pg-backup/env-pg-backup-proj-role,pg-backup/env-pg-backup-proj-role-policy,"+
+		"pg-backup/env-pg-backup-proj-pia-proj-pg,pg-backup/env-pg-backup-proj-pia-proj-rehearsal-pg", ","))
 
 	if got != want {
 		t.Errorf("names:\n got %s\nwant %s", got, want)
@@ -126,8 +136,8 @@ func TestNewRoleAdoptionOptions(t *testing.T) {
 		}),
 	)
 
-	got := strings.Join(names(regs), ",")
-	want := c + "," + c + "/role," + c + "/policy," + c + "/pia-proj-pg," + c + "/pia-proj-rehearsal-pg"
+	got := sortedJoin(names(regs))
+	want := sortedJoin([]string{c, c + "/role", c + "/policy", c + "/pia-proj-pg", c + "/pia-proj-rehearsal-pg"})
 
 	if got != want {
 		t.Errorf("names:\n got %s\nwant %s", got, want)
