@@ -6,6 +6,8 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+## v2.20.0
+
 - **Behaviour change (Go, `backupstore`):** the bucket's default encryption rule now sets `BucketKeyEnabled: true` (S3 Bucket Keys), and states `BlockedEncryptionTypes: [SSE-C]` (what S3 already applies), by default and without an option. A busy backup bucket drops about 99% of its KMS requests (one observed bucket made about 78k `GenerateDataKey` calls an hour). For an existing bucket the next apply is one in-place update of the `-encryption` resource (`bucketKeyEnabled: false => true`); it affects only objects written afterwards, nothing is rewritten, and no resource is created, replaced or deleted. A caller that already enabled bucket keys through a transform sees no change and can drop the transform.
 
 ## v2.19.0
