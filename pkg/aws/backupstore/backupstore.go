@@ -383,6 +383,9 @@ func (b *builder) primary() error {
 					SseAlgorithm:   pulumi.String("aws:kms"),
 					KmsMasterKeyId: key.Arn,
 				},
+				// S3 Bucket Keys cut the KMS requests of a busy backup bucket
+				// by about 99%: one data key serves many objects.
+				BucketKeyEnabled: pulumi.Bool(true),
 			},
 		},
 	}, b.childOpts([]string{formerEncryption})...); err != nil {

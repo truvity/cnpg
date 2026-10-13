@@ -217,6 +217,26 @@ func TestMinimalHasNoReplicaNoLockNoReplicaPolicy(t *testing.T) {
 	}
 }
 
+func TestEncryptionUsesBucketKeys(t *testing.T) {
+	for name, a := range map[string]*backupstore.Args{"minimal": base(), "full": full()} {
+		regs, err := run(t, a)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		enc := find(t, regs, "aws:s3/bucketServerSideEncryptionConfigurationV2:BucketServerSideEncryptionConfigurationV2", bucket+"-encryption")
+
+		rules := enc.inputs["rules"].ArrayValue()
+		if len(rules) != 1 {
+			t.Fatalf("%s: want one SSE rule, got %d", name, len(rules))
+		}
+
+		if v := rules[0].ObjectValue()["bucketKeyEnabled"]; !v.IsBool() || !v.BoolValue() {
+			t.Errorf("%s: bucketKeyEnabled = %v, want true", name, v)
+		}
+	}
+}
+
 func TestEveryChildIsUnderTheComponent(t *testing.T) {
 	regs, err := run(t, full())
 	if err != nil {
