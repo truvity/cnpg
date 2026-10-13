@@ -234,6 +234,10 @@ func TestEncryptionUsesBucketKeys(t *testing.T) {
 		if v := rules[0].ObjectValue()["bucketKeyEnabled"]; !v.IsBool() || !v.BoolValue() {
 			t.Errorf("%s: bucketKeyEnabled = %v, want true", name, v)
 		}
+
+		if v := rules[0].ObjectValue()["blockedEncryptionTypes"]; !v.IsArray() || len(v.ArrayValue()) != 1 || v.ArrayValue()[0].StringValue() != "SSE-C" {
+			t.Errorf("%s: blockedEncryptionTypes = %v, want [SSE-C]", name, v)
+		}
 	}
 }
 

@@ -386,6 +386,9 @@ func (b *builder) primary() error {
 				// S3 Bucket Keys cut the KMS requests of a busy backup bucket
 				// by about 99%: one data key serves many objects.
 				BucketKeyEnabled: pulumi.Bool(true),
+				// What S3 now sets on every bucket, stated so the input matches
+				// it: no customer-provided keys (SSE-C).
+				BlockedEncryptionTypes: pulumi.StringArray{pulumi.String("SSE-C")},
 			},
 		},
 	}, b.childOpts([]string{formerEncryption})...); err != nil {
