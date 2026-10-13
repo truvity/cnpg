@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Behaviour change (Go, `backupstore`):** the bucket's default encryption rule now sets `BucketKeyEnabled: true` (S3 Bucket Keys), by default and without an option. A busy backup bucket drops about 99% of its KMS requests (one observed bucket made about 78k `GenerateDataKey` calls an hour). For an existing bucket the next apply is one in-place update of the `-encryption` resource (`bucketKeyEnabled: false => true`); it affects only objects written afterwards, nothing is rewritten, and no resource is created, replaced or deleted. A caller that already enabled bucket keys through a transform sees no change and can drop the transform.
+
 ## v2.19.0
 
 - **Feature (Go):** `backupstore.NewRole` and `backupstore.RolePolicy`, the writer's side of the backup store. `NewRole` makes the IAM role the bucket's writer glob admits, with its inline policy and one Pod Identity association per service account, as the `truvity/k8s` Pod Identity component. The policy is write (put, get, delete, multipart) on one prefix, read and list on the project prefix, and the bucket's key; `RolePolicy` renders it alone. Bucket and key ARNs, both prefixes, the names, namespace and service accounts are inputs. Options (`WithChildNames`, `WithLegacyTopLevel`, `WithProtect`, `WithIgnoreAssociationTags`, `WithResourceOptions`) let a caller that already runs such a role keep its logical names and aliases, so its URNs do not move. The policy bytes are pinned by a test. New dependency: `github.com/truvity/k8s` v0.28.0.
