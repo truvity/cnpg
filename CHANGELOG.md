@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.21.0
 
 - **Feature (chart `cnpg-backup-access`, new):** the source-account side of a per-project backup bucket as ACK objects. For each cluster entry it renders an `iam.services.k8s.aws` `Role` `<rolePrefix>-<cluster>-archive` and `-restore` (Pod Identity trust pinned to `aws:SourceAccount`, `aws:SourceArn` (the EKS cluster) and the binding's namespace and ServiceAccount session tags, optional permissions boundary, tags, and an inline policy generated from the bucket name, prefix and partition) and the `eks.services.k8s.aws` `PodIdentityAssociation` of each (archive: the cluster's own ServiceAccount; restore: `<cluster>-restore`, optionally in a drill namespace, optionally rendered as a `ServiceAccount`). The inline policies equal `backupstore.TenantRolePolicy` for an SSE-S3 `SingleProject` bucket byte for byte; a Go test renders the chart and compares them. The association's `roleARN` is computed (the `cnpg-projects` `backupAccess` pattern); `global.useRoleRef` writes `roleRef` instead. The render is refused for an empty bucket, account, region, EKS cluster or role prefix, a duplicate cluster or prefix, and a prefix that does not end in `/`. Published as `oci://ghcr.io/truvity/charts/cnpg-backup-access`; see docs/backup-access.md.
 - **Feature (Go, `backupstore`):** the per-cluster access model, all opt-in. A caller that sets none of the new fields gets byte-identical resources and policies (a golden test pins a minimal and a full configuration); a note on the one escape change below.
