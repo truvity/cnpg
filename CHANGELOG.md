@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.22.0
 
 - **Feature (charts `cnpg-cluster`, `cnpg-projects`):** what a move to a new backup bucket needs, all opt-in; a render that sets none of them is byte-identical (the existing goldens are unchanged).
   - `backup.retentionDays: 0` renders no `retentionPolicy` on the `ObjectStore`. With the no-delete roles of a per-project bucket the plugin's pruning would get 403 and mark backups failed; expiry is the bucket lifecycle's job. The default stays `30`.
