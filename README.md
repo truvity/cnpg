@@ -32,7 +32,9 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
   backup bucket (`pkg/aws/backupstore`): per cluster an archive and a restore
   IAM `Role` and the Pod Identity association binding each to its
   ServiceAccount, as ACK objects, with the role policies pinned equal to the
-  library's. See [docs/backup-access.md](docs/backup-access.md).
+  library's. See [docs/backup-access.md](docs/backup-access.md) and, for moving a
+  running cluster onto such a bucket,
+  [docs/moving-to-a-new-backup-bucket.md](docs/moving-to-a-new-backup-bucket.md).
 
 - **charts/cnpg-cluster** — a CNPG `Cluster` with an opinionated two-posture
   profile model, plus roles, declared databases, backup `ObjectStore`s and

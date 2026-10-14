@@ -45,7 +45,17 @@
         "serverName": { "type": "string", "description": "Barman server directory under the prefix. Defaults to clusterName. Bump on a recreated (fresh initdb) cluster so it does not reuse its predecessor's archive directory." },
         "schedule": { "type": "string", "description": "Cron schedule for the ScheduledBackup, e.g. '0 0 2 * * *'." },
         "immediate": { "type": "boolean", "description": "Take the first base backup as soon as the ScheduledBackup is created rather than at the first cron tick. Ignored by the operator on a ScheduledBackup that has already run." },
-        "retentionDays": { "type": "integer", "minimum": 0, "description": "Functional PITR window, enforced by the barman-cloud plugin's pruning." },
+        "retentionDays": { "type": "integer", "minimum": 0, "description": "Functional PITR window, enforced by the barman-cloud plugin's pruning. 0 renders no retentionPolicy (the plugin never prunes): for buckets whose writer role cannot delete, where expiry is the bucket lifecycle's job." },
+        "tags": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Object tags on every base backup and WAL upload (ObjectStore spec.configuration.tags), e.g. cnpg-backup-retention: managed." },
+        "historyTags": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Object tags on the timeline history files only (spec.configuration.historyTags), e.g. cnpg-backup-retention: keep." },
+        "onDemand": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "A one-off Backup (method plugin), for the moment a serverName bump leaves the new directory with no base backup.",
+          "properties": {
+            "name": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$", "maxLength": 63, "description": "Id of the Backup; it is named {clusterName}-{name}. Change it to take another. Empty renders none." }
+          }
+        },
         "walCompression": { "type": "string", "description": "WAL segment compression algorithm passed to the barman-cloud plugin." },
         "dataCompression": { "type": "string", "description": "Base backup compression algorithm passed to the barman-cloud plugin (a narrower enum than WAL's)." },
         "encryption": { "type": "string", "description": "Server-side encryption header requested on every upload (e.g. AES256). Empty sends no x-amz-server-side-encryption header, which is required by stores that reject it (Cloudflare R2 among them)." },

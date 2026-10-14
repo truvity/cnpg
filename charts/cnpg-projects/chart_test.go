@@ -158,3 +158,31 @@ argocd: {scheduledBackupSyncWave: "", serverTLSSyncWave: "", guardCASecret: fals
 	assert.Nil(t, annotations(off["Certificate/app-pg-server-tls"]))
 	assert.Nil(t, annotations(off["Secret/app-pg-server-ca"]))
 }
+
+// TestBackupCutoverOptions: the options a move to a new backup bucket needs
+// render in a cluster entry as in cnpg-cluster (the glob test above compares
+// the whole render for tests/cases/cnpg-cluster/backup-cutover; this states
+// what that render must contain).
+func TestBackupCutoverOptions(t *testing.T) {
+	raw, err := os.ReadFile("../../tests/cases/cnpg-cluster/backup-cutover/values.yaml")
+	require.NoError(t, err)
+
+	var values map[string]any
+	require.NoError(t, yaml.Unmarshal(raw, &values))
+
+	wrapped, err := yaml.Marshal(map[string]any{"clusters": []any{map[string]any{"values": values}}})
+	require.NoError(t, err)
+
+	objs := objects(t, ".", string(wrapped))
+
+	store := objs["ObjectStore/pg-objectstore"]
+	require.NotNil(t, store)
+
+	spec := store["spec"].(map[string]any)
+	assert.NotContains(t, spec, "retentionPolicy")
+
+	conf := spec["configuration"].(map[string]any)
+	assert.Equal(t, map[string]any{"cnpg-backup-retention": "managed"}, conf["tags"])
+	assert.Equal(t, map[string]any{"cnpg-backup-retention": "keep"}, conf["historyTags"])
+	assert.NotNil(t, objs["Backup/pg-g2"])
+}

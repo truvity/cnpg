@@ -206,3 +206,32 @@ clusters:
 func TestNothingListedRendersNothing(t *testing.T) {
 	assert.Empty(t, render(t, "{}"))
 }
+
+// TestArchiveAssociationCanBeSkipped: archive.association=false renders the
+// archive Role and no archive PodIdentityAssociation (the restore pair is
+// unchanged); the default renders both.
+func TestArchiveAssociationCanBeSkipped(t *testing.T) {
+	kinds := func(assoc string) map[string]bool {
+		objs := render(t, `
+global: {accountID: "`+account+`", eksClusterName: example-eks, region: eu-west-1, rolePrefix: example}
+bucket: {name: `+bucket+`}
+clusters:
+  - {name: app-pg, namespace: app`+assoc+`}
+`)
+		got := map[string]bool{}
+		for _, o := range objs {
+			got[fmt.Sprintf("%v/%s", o["kind"], name(o))] = true
+		}
+
+		return got
+	}
+
+	def := kinds("")
+	assert.True(t, def["PodIdentityAssociation/example-app-pg-archive"])
+
+	skip := kinds(", archive: {association: false}")
+	assert.True(t, skip["Role/example-app-pg-archive"])
+	assert.False(t, skip["PodIdentityAssociation/example-app-pg-archive"])
+	assert.True(t, skip["PodIdentityAssociation/example-app-pg-restore"])
+	assert.Len(t, skip, len(def)-1)
+}

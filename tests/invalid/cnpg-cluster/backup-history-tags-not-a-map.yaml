@@ -1,0 +1,7 @@
+clusterName: pg
+namespace: app
+profile: devel
+backup:
+  enabled: true
+  bucketName: example-backups
+  historyTags: keep

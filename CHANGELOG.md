@@ -4,6 +4,16 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Feature (charts `cnpg-cluster`, `cnpg-projects`):** what a move to a new backup bucket needs, all opt-in; a render that sets none of them is byte-identical (the existing goldens are unchanged).
+  - `backup.retentionDays: 0` renders no `retentionPolicy` on the `ObjectStore`. With the no-delete roles of a per-project bucket the plugin's pruning would get 403 and mark backups failed; expiry is the bucket lifecycle's job. The default stays `30`.
+  - `backup.tags` and `backup.historyTags` render `spec.configuration.tags` and `.historyTags` (the `cnpg-backup-retention: managed` / `keep` contract of the backupstore lifecycle). Default empty.
+  - `backup.onDemand.name: <id>` renders a one-off plugin `Backup` named `<clusterName>-<id>` with `argocd.argoproj.io/sync-options: Prune=false`; a new id renders a new `Backup` and leaves the old one. `ScheduledBackup` `immediate` does not fire on a `serverName` bump; this does. Default off.
+  - `cnpg-projects` carries the same templates (`hack/sync-cnpg-projects.sh`); the parity test now covers the new `backup-cutover` case.
+- **Feature (chart `cnpg-backup-access`):** `clusters[].archive.association: false` renders the archive `Role` but no `PodIdentityAssociation`, for the cutover period in which the ServiceAccount is still bound to a legacy role (EKS allows one association per cluster, namespace and ServiceAccount). Default `true`.
+- **Docs:** new guide docs/moving-to-a-new-backup-bucket.md: the cutover order, the PITR gap until the first base backup in the new location completes, and restoring older points from the old `serverName`.
+
 ## v2.21.0
 
 - **Feature (chart `cnpg-backup-access`, new):** the source-account side of a per-project backup bucket as ACK objects. For each cluster entry it renders an `iam.services.k8s.aws` `Role` `<rolePrefix>-<cluster>-archive` and `-restore` (Pod Identity trust pinned to `aws:SourceAccount`, `aws:SourceArn` (the EKS cluster) and the binding's namespace and ServiceAccount session tags, optional permissions boundary, tags, and an inline policy generated from the bucket name, prefix and partition) and the `eks.services.k8s.aws` `PodIdentityAssociation` of each (archive: the cluster's own ServiceAccount; restore: `<cluster>-restore`, optionally in a drill namespace, optionally rendered as a `ServiceAccount`). The inline policies equal `backupstore.TenantRolePolicy` for an SSE-S3 `SingleProject` bucket byte for byte; a Go test renders the chart and compares them. The association's `roleARN` is computed (the `cnpg-projects` `backupAccess` pattern); `global.useRoleRef` writes `roleRef` instead. The render is refused for an empty bucket, account, region, EKS cluster or role prefix, a duplicate cluster or prefix, and a prefix that does not end in `/`. Published as `oci://ghcr.io/truvity/charts/cnpg-backup-access`; see docs/backup-access.md.

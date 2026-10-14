@@ -1,0 +1,24 @@
+{{- with .Values.backup.onDemand }}
+{{- if and $.Values.backup.enabled $.Values.backup.bucketName .name }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: {{ $.Values.clusterName }}-{{ .name }}
+  namespace: {{ $.Values.namespace }}
+  annotations:
+    # An old id's Backup is a record of a base backup, not the backup: Argo CD
+    # must not prune it when the id changes (docs/moving-to-a-new-backup-bucket.md).
+    argocd.argoproj.io/sync-options: Prune=false
+    {{- with $.Values.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  cluster:
+    name: {{ $.Values.clusterName }}
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: {{ $.Values.clusterName }}-objectstore
+{{- end }}
+{{- end }}

@@ -1,0 +1,47 @@
+---
+# Source: cnpg-backup-access/templates/access.yaml
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: example-app-pg-archive
+  namespace: default
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
+spec:
+  name: example-app-pg-archive
+  description: "CNPG archive access to example-backup for app/app-pg"
+  assumeRolePolicyDocument: "{\"Statement\":[{\"Action\":[\"sts:AssumeRole\",\"sts:TagSession\"],\"Condition\":{\"ArnEquals\":{\"aws:SourceArn\":\"arn:aws:eks:eu-west-1:123456789012:cluster/example-eks\"},\"StringEquals\":{\"aws:RequestTag/kubernetes-namespace\":\"app\",\"aws:RequestTag/kubernetes-service-account\":\"app-pg\",\"aws:SourceAccount\":\"123456789012\"}},\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"pods.eks.amazonaws.com\"}}],\"Version\":\"2012-10-17\"}"
+  inlinePolicies:
+    cnpg-backup-archive: "{\"Statement\":[{\"Action\":[\"s3:PutObject\"],\"Condition\":{\"StringEquals\":{\"s3:x-amz-server-side-encryption\":\"AES256\"}},\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backup/app/app-pg/*\",\"Sid\":\"Put1Archive\"},{\"Action\":[\"s3:AbortMultipartUpload\",\"s3:ListMultipartUploadParts\",\"s3:GetObject\",\"s3:PutObjectTagging\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backup/app/app-pg/*\",\"Sid\":\"Object1Archive\"},{\"Action\":[\"s3:ListBucket\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backup\",\"Sid\":\"List1Archive\"}],\"Version\":\"2012-10-17\"}"
+
+---
+# Source: cnpg-backup-access/templates/access.yaml
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: example-app-pg-restore
+  namespace: default
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
+spec:
+  name: example-app-pg-restore
+  description: "CNPG restore access to example-backup for app/app-pg"
+  assumeRolePolicyDocument: "{\"Statement\":[{\"Action\":[\"sts:AssumeRole\",\"sts:TagSession\"],\"Condition\":{\"ArnEquals\":{\"aws:SourceArn\":\"arn:aws:eks:eu-west-1:123456789012:cluster/example-eks\"},\"StringEquals\":{\"aws:RequestTag/kubernetes-namespace\":\"app\",\"aws:RequestTag/kubernetes-service-account\":\"app-pg-restore\",\"aws:SourceAccount\":\"123456789012\"}},\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"pods.eks.amazonaws.com\"}}],\"Version\":\"2012-10-17\"}"
+  inlinePolicies:
+    cnpg-backup-restore: "{\"Statement\":[{\"Action\":[\"s3:GetObject\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backup/app/app-pg/*\",\"Sid\":\"Object1Restore\"},{\"Action\":[\"s3:ListBucket\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backup\",\"Sid\":\"List1Restore\"}],\"Version\":\"2012-10-17\"}"
+
+---
+# Source: cnpg-backup-access/templates/access.yaml
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: example-app-pg-restore
+  namespace: default
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
+    services.k8s.aws/region: eu-west-1
+spec:
+  clusterName: example-eks
+  namespace: app
+  serviceAccount: app-pg-restore
+  roleARN: arn:aws:iam::123456789012:role/example-app-pg-restore

@@ -45,7 +45,8 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "serviceAccount": { "$ref": "#/definitions/k8sName" }
+              "serviceAccount": { "$ref": "#/definitions/k8sName" },
+              "association": { "type": "boolean", "description": "Default true. false renders the archive Role but no PodIdentityAssociation, while the ServiceAccount is still bound to another role (EKS allows one association per cluster, namespace and ServiceAccount). Set it back to true at the cutover." }
             }
           },
           "restore": {

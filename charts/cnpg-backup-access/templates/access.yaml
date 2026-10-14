@@ -34,6 +34,10 @@ spec:
       value: {{ $v | toJson }}
     {{- end }}
   {{- end }}
+{{- /* archive.association: false renders the Role alone, for the cutover period
+in which the ServiceAccount is still bound to another role: EKS allows ONE
+association per (cluster, namespace, ServiceAccount). */}}
+{{- if or (ne $p "archive") (not (and $c.archive (hasKey $c.archive "association") (not $c.archive.association))) }}
 ---
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: PodIdentityAssociation
@@ -54,6 +58,7 @@ spec:
   tags:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- if and $c.restore $c.restore.createServiceAccount (include "cnpg-backup-access.restoreOn" $c) }}

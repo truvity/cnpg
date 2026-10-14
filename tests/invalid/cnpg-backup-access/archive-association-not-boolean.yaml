@@ -1,0 +1,12 @@
+global:
+  accountID: "123456789012"
+  region: eu-west-1
+  eksClusterName: example-eks
+  rolePrefix: example
+bucket:
+  name: example-backup
+clusters:
+  - name: app-pg
+    namespace: app
+    archive:
+      association: "no"
