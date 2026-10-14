@@ -81,7 +81,25 @@ backup:
   # retentionDays is the FUNCTIONAL PITR window (plugin-pruned). A
   # bucket lifecycle rule, if the platform sets one, is only a backstop
   # for what the plugin fails to prune — it must outlive this window.
+  # 0 renders NO retentionPolicy: the plugin then never prunes. Use it on a
+  # bucket whose writer role has no delete rights (the backupstore
+  # tenant roles): the plugin's pruning would get 403 and mark backups
+  # failed, so expiry is the bucket lifecycle's job (docs/backupstore.md).
   retentionDays: 30
+  # Object tags the plugin puts on every base backup and WAL upload
+  # (ObjectStore spec.configuration.tags) and, separately, on the timeline
+  # history files (historyTags). Empty adds nothing. The backupstore
+  # lifecycle selects on cnpg-backup-retention:
+  #   tags:        {cnpg-backup-retention: managed}   expires at the bucket age
+  #   historyTags: {cnpg-backup-retention: keep}      never expires
+  tags: {}
+  historyTags: {}
+  # onDemand.name: render a one-off Backup (method plugin) named
+  # {clusterName}-{name}. A ScheduledBackup's `immediate` does not fire when
+  # serverName changes; set a NEW id with each generation bump to take a base
+  # backup at once. Changing the id renders a new Backup; the old one stays
+  # (Prune=false). Empty (default) renders none.
+  onDemand: {}
   # Separate knobs — the plugin's data enum (bzip2/gzip/lz4/snappy) is
   # narrower than WAL's (which adds xz/zstd).
   walCompression: zstd

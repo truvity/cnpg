@@ -1,0 +1,21 @@
+# A cluster moved onto a per-project bucket with no-delete roles: the plugin
+# does not prune (expiry is the bucket lifecycle's), objects carry the
+# lifecycle tags, and a one-off Backup is taken for the new serverName.
+clusterName: pg
+namespace: app
+profile: devel
+bootstrap:
+  initdb: {database: app, owner: app-owner}
+roles:
+  - {name: my-app, auth: cert}
+backup:
+  enabled: true
+  bucketName: example-project-backups
+  serverName: pg-g2
+  retentionDays: 0
+  tags:
+    cnpg-backup-retention: managed
+  historyTags:
+    cnpg-backup-retention: keep
+  onDemand:
+    name: g2

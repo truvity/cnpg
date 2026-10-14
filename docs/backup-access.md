@@ -38,6 +38,7 @@ clusters:
     prefix: <namespace>/<cluster>/      # default; must end in /
     archive:
       serviceAccount: <cluster>         # default: the cluster name
+      association: true                 # false: the Role only, no PodIdentityAssociation (cutover period)
     restore:
       enabled: true                     # default
       serviceAccount: <cluster>-restore # default
@@ -85,14 +86,24 @@ Give `backupstore.Args.Tenants` the same role ARNs this chart creates:
 (`restore` for the other), prefix `<namespace>/<cluster>/`, and `SessionTags`
 equal to the association (EKS cluster, namespace, ServiceAccount).
 
+## Before the cutover: `archive.association: false`
+
+EKS allows one Pod Identity association per (EKS cluster, namespace,
+ServiceAccount). While a database's ServiceAccount is still bound to a legacy
+role, `archive.association: false` renders the archive `Role` (so the bucket
+and its policy can be prepared and the role named) but not the association.
+Flip it to `true` in the sync that moves the ServiceAccount; the order is in
+[moving-to-a-new-backup-bucket.md](moving-to-a-new-backup-bucket.md).
+
 ## With cnpg-cluster's ObjectStore
 
 Point the barman-cloud `ObjectStore` (`cnpg-cluster`, `cnpg-project-platform`)
 at `s3://<bucket>/<namespace>/<cluster>` with `s3Credentials.inheritFromIAMRole:
 true` and `encryption: AES256` (the archive role's `s3:PutObject` is
-conditioned on it), leave `retentionPolicy` unset (the role cannot delete; the
-bucket lifecycle expires objects), and tag `cnpg-backup-retention: managed`
-per backupstore.md. A restore or drill reads the archive prefix with the
+conditioned on it), leave `retentionPolicy` unset (`backup.retentionDays: 0`;
+the role cannot delete, the bucket lifecycle expires objects), and tag
+`cnpg-backup-retention: managed` (`backup.tags`) and `keep` on the history files
+(`backup.historyTags`), per backupstore.md. A restore or drill reads the archive prefix with the
 `<cluster>-restore` ServiceAccount.
 
 ## ACK mechanics

@@ -1,0 +1,15 @@
+# Cutover period: the archive Role exists (the bucket policy can already name
+# it) but the ServiceAccount is still bound to a legacy role, so no archive
+# PodIdentityAssociation is rendered. The restore association is unaffected.
+global:
+  accountID: "123456789012"
+  region: eu-west-1
+  eksClusterName: example-eks
+  rolePrefix: example
+bucket:
+  name: example-backup
+clusters:
+  - name: app-pg
+    namespace: app
+    archive:
+      association: false

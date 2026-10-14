@@ -21,6 +21,17 @@ spec:
       name: {{ required "backup.endpointCA.name is required when endpointCA is set" .name }}
       key: {{ required "backup.endpointCA.key is required when endpointCA is set" .key }}
 {{- end }}
+{{- with .Values.backup.tags }}
+    # Object tags on every base backup and WAL upload (barman --tags); the
+    # bucket lifecycle selects on them (docs/backupstore.md).
+    tags:
+      {{- toYaml . | nindent 6 }}
+{{- end }}
+{{- with .Values.backup.historyTags }}
+    # Object tags on the timeline history files only (barman --history-tags).
+    historyTags:
+      {{- toYaml . | nindent 6 }}
+{{- end }}
     s3Credentials:
 {{- if .Values.backup.existingSecret }}
 {{- $keys := .Values.backup.existingSecretKeys | default dict }}
@@ -57,9 +68,11 @@ spec:
       encryption: {{ . }}
 {{- end }}
       maxParallel: 4
+{{- if .Values.backup.retentionDays }}
   # The FUNCTIONAL PITR window; a bucket lifecycle rule, if any, is
   # the platform's backstop and must outlive it.
   retentionPolicy: {{ .Values.backup.retentionDays }}d
+{{- end }}
 {{- end }}
 
 {{- end -}}
