@@ -1,0 +1,39 @@
+# Nothing here names an estate: every value is an input. With no clusters the
+# chart renders nothing, but bucket.name, global.accountID,
+# global.eksClusterName and global.rolePrefix are required as soon as one
+# cluster is listed (see values.schema.json and templates/_validate.tpl).
+global:
+  # The SOURCE account: the account the Roles are created in and the
+  # aws:SourceAccount the trust policy pins. Required.
+  accountID: ""
+  # The AWS partition in the bucket ARN.
+  partition: aws
+  # Optional: set on each PodIdentityAssociation as services.k8s.aws/region.
+  region: ""
+  # The EKS cluster the associations are made on. Required.
+  eksClusterName: ""
+  # Role names are <rolePrefix>-<cluster>-archive and -restore. Required.
+  rolePrefix: ""
+  # Optional: ARN of the managed policy set as the permissions boundary.
+  permissionsBoundaryARN: ""
+  # The namespace the ACK objects (Roles, associations) are created in; the
+  # release namespace when empty. Put them where the ACK controllers' own
+  # identity applies them, NOT in a project namespace: a project's identity
+  # must not be able to mint these roles.
+  objectNamespace: ""
+  # false (default): the association's roleARN is computed from the partition,
+  # account and role name (the estate pattern of cnpg-projects' backupAccess).
+  # true: roleRef to the Role object, resolved by ACK once the Role is synced.
+  useRoleRef: false
+  # Tags on every Role and association (the chart adds none).
+  tags: {}
+
+bucket:
+  # The project's bucket in the backup account (a SingleProject bucket).
+  name: ""
+
+# One entry per CloudNativePG cluster; see the README for the fields.
+clusters: []
+
+commonLabels: {}
+commonAnnotations: {}

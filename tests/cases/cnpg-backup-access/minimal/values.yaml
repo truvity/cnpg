@@ -1,0 +1,10 @@
+# One cluster, only the required keys.
+global:
+  accountID: "123456789012"
+  eksClusterName: example-eks
+  rolePrefix: example
+bucket:
+  name: example-backup
+clusters:
+  - name: example-pg
+    namespace: example

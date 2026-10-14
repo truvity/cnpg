@@ -1,0 +1,29 @@
+# One project, two clusters: a custom prefix and archive ServiceAccount, a
+# restore ServiceAccount in a drill namespace (created by the chart), a
+# cluster with restore switched off, a boundary, tags and a region.
+global:
+  accountID: "123456789012"
+  partition: aws
+  region: eu-west-1
+  objectNamespace: ack-system
+  eksClusterName: example-eks
+  rolePrefix: example
+  permissionsBoundaryARN: arn:aws:iam::123456789012:policy/example-boundary
+  tags:
+    Owner: platform
+    Project: example
+bucket:
+  name: example-backup
+clusters:
+  - name: app-pg
+    namespace: app
+    restore:
+      namespace: app-drill
+      createServiceAccount: true
+  - name: ledger-pg
+    namespace: ledger
+    prefix: ledger/ledger-pg/
+    archive:
+      serviceAccount: ledger-postgres
+    restore:
+      enabled: false

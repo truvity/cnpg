@@ -1,0 +1,25 @@
+apiVersion: v2
+name: cnpg-backup-access
+description: >-
+  The source-account side of a per-cluster backup bucket, as AWS Controllers
+  for Kubernetes objects: for each CloudNativePG cluster an IAM Role for the
+  archive sidecar and one for restores and drills (ACK iam Role), and the EKS
+  Pod Identity association that binds each Role to its ServiceAccount (ACK eks
+  PodIdentityAssociation). The role policies are the ones the Go package
+  backupstore renders (TenantRolePolicy), pinned equal by a test.
+type: application
+# Placeholder: the git tag is the sole version authority. The release
+# workflow stamps both fields from the tag.
+version: 0.0.0
+appVersion: 0.0.0
+home: https://github.com/truvity/cnpg
+sources:
+  - https://github.com/truvity/cnpg
+keywords:
+  - cloudnative-pg
+  - postgresql
+  - ack
+  - pod-identity
+maintainers:
+  - name: Truvity
+    url: https://github.com/truvity

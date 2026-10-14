@@ -1,0 +1,11 @@
+# The association references the Role object instead of computing the ARN.
+global:
+  accountID: "123456789012"
+  eksClusterName: example-eks
+  rolePrefix: example
+  useRoleRef: true
+bucket:
+  name: example-backup
+clusters:
+  - name: example-pg
+    namespace: example

@@ -1,0 +1,65 @@
+---
+# Source: cnpg-backup-access/templates/access.yaml
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: example-example-pg-archive
+  namespace: default
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
+spec:
+  name: example-example-pg-archive
+  description: "CNPG archive access to example-backup for example/example-pg"
+  assumeRolePolicyDocument: "{\"Statement\":[{\"Action\":[\"sts:AssumeRole\",\"sts:TagSession\"],\"Condition\":{\"StringEquals\":{\"aws:SourceAccount\":\"123456789012\"}},\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"pods.eks.amazonaws.com\"}}],\"Version\":\"2012-10-17\"}"
+  inlinePolicies:
+    cnpg-backup-archive: "{\"Statement\":[{\"Action\":[\"s3:PutObject\"],\"Condition\":{\"StringEquals\":{\"s3:x-amz-server-side-encryption\":\"AES256\"}},\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backup/example/example-pg/*\",\"Sid\":\"Put1Archive\"},{\"Action\":[\"s3:AbortMultipartUpload\",\"s3:ListMultipartUploadParts\",\"s3:GetObject\",\"s3:PutObjectTagging\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backup/example/example-pg/*\",\"Sid\":\"Object1Archive\"},{\"Action\":[\"s3:ListBucket\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backup\",\"Sid\":\"List1Archive\"}],\"Version\":\"2012-10-17\"}"
+
+---
+# Source: cnpg-backup-access/templates/access.yaml
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: example-example-pg-restore
+  namespace: default
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
+spec:
+  name: example-example-pg-restore
+  description: "CNPG restore access to example-backup for example/example-pg"
+  assumeRolePolicyDocument: "{\"Statement\":[{\"Action\":[\"sts:AssumeRole\",\"sts:TagSession\"],\"Condition\":{\"StringEquals\":{\"aws:SourceAccount\":\"123456789012\"}},\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"pods.eks.amazonaws.com\"}}],\"Version\":\"2012-10-17\"}"
+  inlinePolicies:
+    cnpg-backup-restore: "{\"Statement\":[{\"Action\":[\"s3:GetObject\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backup/example/example-pg/*\",\"Sid\":\"Object1Restore\"},{\"Action\":[\"s3:ListBucket\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:s3:::example-backup\",\"Sid\":\"List1Restore\"}],\"Version\":\"2012-10-17\"}"
+
+---
+# Source: cnpg-backup-access/templates/access.yaml
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: example-example-pg-archive
+  namespace: default
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
+spec:
+  clusterName: example-eks
+  namespace: example
+  serviceAccount: example-pg
+  roleRef:
+    from:
+      name: example-example-pg-archive
+
+---
+# Source: cnpg-backup-access/templates/access.yaml
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  name: example-example-pg-restore
+  namespace: default
+  annotations:
+    services.k8s.aws/adoption-policy: adopt-or-create
+spec:
+  clusterName: example-eks
+  namespace: example
+  serviceAccount: example-pg-restore
+  roleRef:
+    from:
+      name: example-example-pg-restore
