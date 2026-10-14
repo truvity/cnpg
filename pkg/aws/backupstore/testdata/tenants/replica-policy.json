@@ -1,0 +1,58 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyDeleteObjectVersionFromExternalAccount",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": "s3:DeleteObjectVersion",
+      "Resource": "arn:testpart:s3:::example-backup-replica/*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:PrincipalAccount": "dst-account"
+        }
+      }
+    },
+    {
+      "Sid": "DenyDeleteObjectsFromExternalAccount",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": [
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion",
+        "s3:BypassGovernanceRetention"
+      ],
+      "Resource": "arn:testpart:s3:::example-backup-replica/*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:PrincipalAccount": "dst-account"
+        }
+      }
+    },
+    {
+      "Sid": "DenyBucketConfigurationFromExternalAccount",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": [
+        "s3:PutLifecycleConfiguration",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy",
+        "s3:PutBucketVersioning",
+        "s3:PutReplicationConfiguration",
+        "s3:PutBucketObjectLockConfiguration"
+      ],
+      "Resource": "arn:testpart:s3:::example-backup-replica",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:PrincipalAccount": "dst-account"
+        }
+      }
+    }
+  ]
+}

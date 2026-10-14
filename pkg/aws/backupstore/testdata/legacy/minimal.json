@@ -1,0 +1,107 @@
+[
+  {
+    "type": "aws:kms/alias:Alias",
+    "name": "example-backup-kms-alias",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::backup",
+    "inputs": {
+      "name": "alias/example-backup",
+      "targetKeyId": ""
+    }
+  },
+  {
+    "type": "aws:kms/key:Key",
+    "name": "example-backup-kms",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::backup",
+    "inputs": {
+      "description": "backups example-backup",
+      "enableKeyRotation": true,
+      "policy": "{\n  \"Statement\": [\n    {\n      \"Action\": \"kms:*\",\n      \"Effect\": \"Allow\",\n      \"Principal\": {\n        \"AWS\": \"arn:testpart:iam::dst-account:root\"\n      },\n      \"Resource\": \"*\",\n      \"Sid\": \"BackupAccountKeyAdmin\"\n    },\n    {\n      \"Action\": [\n        \"kms:Encrypt\",\n        \"kms:Decrypt\",\n        \"kms:ReEncrypt*\",\n        \"kms:GenerateDataKey*\",\n        \"kms:DescribeKey\"\n      ],\n      \"Condition\": {\n        \"StringLike\": {\n          \"aws:PrincipalArn\": \"arn:testpart:iam::src-account:role/writer-*\"\n        }\n      },\n      \"Effect\": \"Allow\",\n      \"Principal\": {\n        \"AWS\": \"arn:testpart:iam::src-account:root\"\n      },\n      \"Resource\": \"*\",\n      \"Sid\": \"WorkloadBackupRolesUseKey\"\n    }\n  ],\n  \"Version\": \"2012-10-17\"\n}"
+    }
+  },
+  {
+    "type": "aws:s3/bucket:Bucket",
+    "name": "example-backup",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::backup",
+    "inputs": {
+      "bucket": "example-backup",
+      "tags": {
+        "Owner": "someone"
+      }
+    }
+  },
+  {
+    "type": "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2",
+    "name": "example-backup-lifecycle",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::backup",
+    "inputs": {
+      "bucket": "example-backup-id",
+      "rules": [
+        {
+          "expiration": {
+            "days": 30
+          },
+          "filter": {
+            "prefix": ""
+          },
+          "id": "tiering",
+          "noncurrentVersionExpiration": {
+            "noncurrentDays": 7
+          },
+          "status": "Enabled"
+        }
+      ]
+    }
+  },
+  {
+    "type": "aws:s3/bucketPolicy:BucketPolicy",
+    "name": "example-backup-policy",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::backup",
+    "inputs": {
+      "bucket": "example-backup-id",
+      "policy": "{\n  \"Version\": \"2012-10-17\",\n  \"Statement\": [\n    {\n      \"Sid\": \"AllowSourceAccountObjectAccess\",\n      \"Effect\": \"Allow\",\n      \"Principal\": {\n        \"AWS\": \"arn:testpart:iam::src-account:root\"\n      },\n      \"Action\": [\n        \"s3:PutObject\",\n        \"s3:GetObject\",\n        \"s3:DeleteObject\",\n        \"s3:AbortMultipartUpload\",\n        \"s3:ListMultipartUploadParts\"\n      ],\n      \"Resource\": \"arn:testpart:s3:::example-backup/*\",\n      \"Condition\": {\n        \"StringLike\": {\n          \"aws:PrincipalArn\": \"arn:testpart:iam::src-account:role/writer-*\"\n        }\n      }\n    },\n    {\n      \"Sid\": \"AllowSourceAccountListBucket\",\n      \"Effect\": \"Allow\",\n      \"Principal\": {\n        \"AWS\": \"arn:testpart:iam::src-account:root\"\n      },\n      \"Action\": [\n        \"s3:ListBucket\",\n        \"s3:ListBucketMultipartUploads\"\n      ],\n      \"Resource\": \"arn:testpart:s3:::example-backup\",\n      \"Condition\": {\n        \"StringLike\": {\n          \"aws:PrincipalArn\": \"arn:testpart:iam::src-account:role/writer-*\"\n        }\n      }\n    },\n    {\n      \"Sid\": \"DenyDeleteObjectVersionFromExternalAccount\",\n      \"Effect\": \"Deny\",\n      \"Principal\": {\n        \"AWS\": \"*\"\n      },\n      \"Action\": \"s3:DeleteObjectVersion\",\n      \"Resource\": \"arn:testpart:s3:::example-backup/*\",\n      \"Condition\": {\n        \"StringNotEquals\": {\n          \"aws:PrincipalAccount\": \"dst-account\"\n        }\n      }\n    }\n  ]\n}"
+    }
+  },
+  {
+    "type": "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock",
+    "name": "example-backup-public-access",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::backup",
+    "inputs": {
+      "blockPublicAcls": true,
+      "blockPublicPolicy": true,
+      "bucket": "example-backup-id",
+      "ignorePublicAcls": true,
+      "restrictPublicBuckets": true
+    }
+  },
+  {
+    "type": "aws:s3/bucketServerSideEncryptionConfigurationV2:BucketServerSideEncryptionConfigurationV2",
+    "name": "example-backup-encryption",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::backup",
+    "inputs": {
+      "bucket": "example-backup-id",
+      "rules": [
+        {
+          "applyServerSideEncryptionByDefault": {
+            "kmsMasterKeyId": "",
+            "sseAlgorithm": "aws:kms"
+          },
+          "blockedEncryptionTypes": [
+            "SSE-C"
+          ],
+          "bucketKeyEnabled": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "aws:s3/bucketVersioningV2:BucketVersioningV2",
+    "name": "example-backup-versioning",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::backup",
+    "inputs": {
+      "bucket": "example-backup-id",
+      "versioningConfiguration": {
+        "status": "Enabled"
+      }
+    }
+  }
+]
