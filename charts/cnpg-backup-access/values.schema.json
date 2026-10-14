@@ -21,6 +21,7 @@
         "permissionsBoundaryARN": { "type": "string" },
         "objectNamespace": { "type": "string" },
         "useRoleRef": { "type": "boolean" },
+        "adoptAssociations": { "type": "boolean", "description": "Stamp adopt-or-create on the PodIdentityAssociations too. Default false: only Roles are adopted." },
         "tags": { "$ref": "#/definitions/stringMap" }
       }
     },

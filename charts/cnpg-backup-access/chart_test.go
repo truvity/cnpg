@@ -235,3 +235,50 @@ clusters:
 	assert.True(t, skip["PodIdentityAssociation/example-app-pg-restore"])
 	assert.Len(t, skip, len(def)-1)
 }
+
+func adoption(o map[string]any) any {
+	md := o["metadata"].(map[string]any)
+	a, _ := md["annotations"].(map[string]any)
+
+	return a["services.k8s.aws/adoption-policy"]
+}
+
+// Roles are adopt-or-create (their names are unique); associations are not
+// adopted unless global.adoptAssociations is set, because an adopted
+// association of the same (cluster, namespace, ServiceAccount) is deleted in
+// AWS when the legacy object that also owns it is pruned.
+func TestAssociationsAreNotAdoptedByDefault(t *testing.T) {
+	for _, tc := range []struct {
+		extra string
+		want  any
+	}{
+		{"", nil},
+		{", adoptAssociations: false", nil},
+		{", adoptAssociations: true", "adopt-or-create"},
+	} {
+		objs := render(t, `
+global: {accountID: "`+account+`", eksClusterName: example-eks, region: eu-west-1, rolePrefix: example`+tc.extra+`}
+bucket: {name: `+bucket+`}
+clusters:
+  - {name: app-pg, namespace: app}
+`)
+
+		var roles, assocs int
+
+		for _, o := range objs {
+			switch o["kind"] {
+			case "Role":
+				roles++
+
+				assert.Equal(t, "adopt-or-create", adoption(o), "role %s%s", name(o), tc.extra)
+			case "PodIdentityAssociation":
+				assocs++
+
+				assert.Equal(t, tc.want, adoption(o), "association %s%s", name(o), tc.extra)
+			}
+		}
+
+		assert.Equal(t, 2, roles)
+		assert.Equal(t, 2, assocs)
+	}
+}

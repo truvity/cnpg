@@ -38,7 +38,6 @@ metadata:
   name: example-example-pg-archive
   namespace: default
   annotations:
-    services.k8s.aws/adoption-policy: adopt-or-create
     services.k8s.aws/region: eu-west-1
 spec:
   clusterName: example-eks
@@ -56,7 +55,6 @@ metadata:
   name: example-example-pg-restore
   namespace: default
   annotations:
-    services.k8s.aws/adoption-policy: adopt-or-create
     services.k8s.aws/region: eu-west-1
 spec:
   clusterName: example-eks

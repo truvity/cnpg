@@ -3,7 +3,7 @@
 A running cluster that archived to a shared or legacy bucket moves onto a
 per-project bucket (`pkg/aws/backupstore`, access by `cnpg-backup-access`) with
 a new `serverName` and a new `ObjectStore`. The charts have four options for
-this; all are off by default and change nothing for a render that does not set
+this; all are off by default (the adoption value too) and change nothing for a render that does not set
 them.
 
 | Need | Value |
@@ -12,6 +12,7 @@ them.
 | The bucket lifecycle must find the objects | `backup.tags` and `backup.historyTags` |
 | A base backup in the new location at once | `backup.onDemand.name: <id>` |
 | The archive role exists before the ServiceAccount is rebound | `cnpg-backup-access`: `clusters[].archive.association: false` |
+| An association is adopted instead of created (rarely wanted) | `cnpg-backup-access`: `global.adoptAssociations: true` (default `false`) |
 
 `cnpg-cluster` and `cnpg-projects` render the same `ObjectStore` and `Backup`
 for the same inputs: `cnpg-projects` carries the `cnpg-cluster` templates
@@ -82,31 +83,60 @@ Before: the database's ServiceAccount is bound by a legacy Pod Identity
 association object to a legacy role, and the `ObjectStore` points at the legacy
 bucket.
 
-1. Prepare the destination. Deploy the `backupstore` bucket and
+0. Prepare the destination. Deploy the `backupstore` bucket (see
+   `backupstore.NewProjectBuckets` for a bucket per project) and
    `cnpg-backup-access` with `clusters[].archive.association: false`: the
    archive and restore roles exist, and no second association is made on the
    ServiceAccount.
-2. Mark the legacy association objects `services.k8s.aws/deletion-policy:
-   retain`, and let that sync first. Removing the objects later then leaves
-   the AWS association in place until the new one replaces it, instead of
-   deleting it.
-3. In one sync: remove the legacy association objects from Git, set
-   `archive.association: true` (the new association takes the
-   ServiceAccount), and change the cluster values: `backup.bucketName`, a new
-   `backup.serverName` (the next generation, e.g. `<cluster>-g2`; barman
+1. **First sync: the legacy association leaves.** Remove the legacy
+   association object of the database's ServiceAccount from Git. The legacy
+   role keeps any non-database ServiceAccount it serves (a rehearsal
+   ServiceAccount, say). Then verify in AWS that the association is gone:
+
+   ```
+   aws eks list-pod-identity-associations --cluster-name <eks-cluster> \
+     --namespace <namespace> --service-account <cluster>
+   ```
+
+   The list must be empty. Do not go on while it is not: EKS allows one
+   association per (EKS cluster, namespace, ServiceAccount), so the new
+   association cannot be made while the old one exists. Do not "retain and
+   adopt" the legacy association either (`deletion-policy: retain` on the
+   legacy object, and adoption on the new one): two objects would then own one
+   association, and when the legacy object is pruned its controller deletes
+   the association in AWS while the new object still reports Synced, leaving
+   the database with none. The chart does not adopt associations by default
+   for this reason (`global.adoptAssociations`, docs/backup-access.md).
+2. **Second sync: the new association and the cluster values.** Set
+   `archive.association: true` (the new association takes the ServiceAccount)
+   and change the cluster values: `backup.bucketName`, a new
+   `backup.serverName` (the next generation, e.g. `<project>-pg-g2`; barman
    refuses a non-empty directory for a new history), `backup.retentionDays: 0`,
    `backup.tags` and `backup.historyTags`, and a new `backup.onDemand.name`.
-4. The primary must restart: Pod Identity credentials are injected when a pod
-   is created, so a running pod keeps the old role's environment. The
-   `ObjectStore` change makes the operator roll the primary; if it does not,
-   delete the pod (switchover first on a replicated cluster).
-5. The `Backup` renders with the sync and runs once the primary is healthy.
-   Check it reaches `completed`, and that WAL appears under the new
+3. **Recreate EVERY instance, replicas first, then the primary by
+   switchover.** Pod Identity credentials are injected when a pod is created.
+   A pod created while the ServiceAccount had no association gets no AWS
+   environment at all, and a pod that was running before the switch keeps the
+   old role's cached credentials. Either way each instance must be recreated
+   after the new association exists: delete the replicas one at a time, then
+   switch over to a recreated replica and delete the old primary's pod. Do not
+   rely on the `ObjectStore` change to roll them.
+4. Mind the primary's shutdown. A primary that cannot archive WAL (it has no
+   working credentials for the new location) blocks its own shutdown until
+   `stopDelay` runs out, because the instance manager waits for the archive to
+   drain. If the first sync left the primary without credentials, expect the
+   delete to take up to `stopDelay`.
+5. **Take a new-named `Backup` after the restarts.** The chart's `onDemand`
+   `Backup` is created at sync, before the instances are restarted, so it runs
+   with the old credentials and fails. Once every instance is back, set a new
+   `backup.onDemand.name` (`g3` if `g2` failed) so a fresh `Backup` runs, and
+   check it reaches `completed` and that WAL appears under the new
    `serverName`.
-
-Do not run the legacy association and the new one on one ServiceAccount: EKS
-allows one association per (EKS cluster, namespace, ServiceAccount) and refuses
-the second.
+6. Expect the plugin to delete Kubernetes `Backup` records that are not in the
+   new location's catalog: the records of the old location's base backups
+   disappear from the cluster. This is bookkeeping only; nothing in S3 is
+   touched, and the old location stays restorable from its bucket and
+   `serverName`.
 
 ## The PITR gap
 
@@ -114,8 +144,8 @@ Until the first base backup in the new location completes, the new
 `serverName` holds WAL with nothing to replay it onto: point-in-time recovery
 into that window is not possible from the new location. Between the switch and
 that completion the recoverable history is the old location's, up to the last
-WAL it received. To keep the gap short, take the on-demand backup in the same
-sync as the move (step 3), and do not bump `serverName` again until it has
+WAL it received. To keep the gap short, take the new-named `Backup` as soon as every instance
+is recreated (steps 3 to 5), and do not bump `serverName` again until it has
 completed.
 
 ## Restoring older points from the old serverName
