@@ -28,38 +28,39 @@ const (
 
 // Defaults of Lifecycle.
 const (
-	DefaultWALMarginDays      = 7
 	DefaultNoncurrentDays     = 7
 	DefaultAbortMultipartDays = 7
 )
 
-// Lifecycle parameterizes the bucket's lifecycle configuration. Base backups
-// expire after BaseBackupDays, WAL after BaseBackupDays+WALMarginDays.
+// Lifecycle parameterizes the bucket's lifecycle configuration: ONE expiry
+// age, RetentionDays, for every object the plugin tags "managed" (base
+// backups and WAL alike), with no per-path rule and no WAL margin.
 //
-// Why the margin: a base backup's first WAL segment is written BEFORE its
-// backup.info (the segment that was current when the backup started), and
-// S3 lifecycle works in whole days (an object expires at midnight UTC after
-// the day count has elapsed). With one equal age for both, the oldest backup
-// that still exists could have lost the WAL it needs to be consistent.
-// WAL kept WALMarginDays longer guarantees that every backup that still
-// exists has all the WAL from its start on.
+// Why one age is enough: the WAL a base backup needs is archived AFTER the
+// backup starts, so it is never older than the backup. S3 lifecycle counts
+// whole days and expires an object at midnight UTC after the day count has
+// elapsed, so two objects created on the same UTC day expire together. With
+// backups scheduled away from midnight UTC (02:00, say), a backup and the
+// WAL it needs are created on the same UTC day and expire in the same
+// midnight sweep; the oldest backup that still exists never loses WAL.
+// THE BACKUP SCHEDULE MUST THEREFORE STAY AWAY FROM MIDNIGHT UTC: a backup
+// that starts shortly before 00:00 UTC could have its WAL written the next
+// day and outlive it, and one that spans midnight could lose its first
+// segment a day early.
 //
 // Rules, by id:
-//   - "base-backups/<prefix>" and "wal/<prefix>", per archive tenant
-//     (prefix = <tenant prefix><serverName>/base/ and /wals/), each also
-//     filtered by the tag LifecycleTagKey=LifecycleTagManage. Without archive
-//     tenants one rule "managed" covers the whole bucket by the tag and uses
-//     the longer (WAL) age, because base backups and WAL cannot be told apart
-//     without a prefix;
+//   - "managed": expiry at RetentionDays of objects tagged
+//     LifecycleTagKey=LifecycleTagManage, bucket-wide. Use one bucket per
+//     project so the age is the project's;
 //   - "housekeeping": noncurrent versions expire after NoncurrentDays, an
 //     incomplete multipart upload is aborted after AbortMultipartDays, and an
 //     expired object delete marker is removed;
 //   - "tier-storage-class", only when Transitions is set.
 type Lifecycle struct {
-	// BaseBackupDays is N: the retention of base backups. Required, above zero.
-	BaseBackupDays int
-	// WALMarginDays is added to N for WAL. Zero means DefaultWALMarginDays.
-	WALMarginDays int
+	// RetentionDays is the age at which managed objects expire. Required,
+	// above zero. The replica's lifecycle and the Object Lock governance
+	// default retention use the same number.
+	RetentionDays int
 	// NoncurrentDays expires noncurrent versions. Zero means
 	// DefaultNoncurrentDays.
 	NoncurrentDays int
@@ -79,19 +80,15 @@ func orDefault(v, d int) int {
 	return v
 }
 
-func (l Lifecycle) walDays() int {
-	return l.BaseBackupDays + orDefault(l.WALMarginDays, DefaultWALMarginDays)
-}
-
 func (l Lifecycle) validate() []error {
 	var errs []error
 
-	if l.BaseBackupDays <= 0 {
-		errs = append(errs, fmt.Errorf("args: Lifecycle.BaseBackupDays is %d, want above 0", l.BaseBackupDays))
+	if l.RetentionDays <= 0 {
+		errs = append(errs, fmt.Errorf("args: Lifecycle.RetentionDays is %d, want above 0", l.RetentionDays))
 	}
 
 	for field, v := range map[string]int{
-		"WALMarginDays": l.WALMarginDays, "NoncurrentDays": l.NoncurrentDays, "AbortMultipartDays": l.AbortMultipartDays,
+		"NoncurrentDays": l.NoncurrentDays, "AbortMultipartDays": l.AbortMultipartDays,
 	} {
 		if v < 0 {
 			errs = append(errs, fmt.Errorf("args: Lifecycle.%s is %d, want 0 (the default) or more", field, v))
@@ -101,58 +98,24 @@ func (l Lifecycle) validate() []error {
 	return errs
 }
 
-func tagged() pulumi.StringMap {
-	return pulumi.StringMap{LifecycleTagKey: pulumi.String(LifecycleTagManage)}
-}
-
-func expireRule(id, prefix string, days int) *s3.BucketLifecycleConfigurationV2RuleArgs {
-	rule := &s3.BucketLifecycleConfigurationV2RuleArgs{
-		Id:         pulumi.String(id),
-		Status:     pulumi.String("Enabled"),
-		Expiration: &s3.BucketLifecycleConfigurationV2RuleExpirationArgs{Days: pulumi.Int(days)},
-	}
-
-	if prefix == "" {
-		rule.Filter = &s3.BucketLifecycleConfigurationV2RuleFilterArgs{
-			Tag: &s3.BucketLifecycleConfigurationV2RuleFilterTagArgs{
-				Key: pulumi.String(LifecycleTagKey), Value: pulumi.String(LifecycleTagManage),
-			},
-		}
-	} else {
-		rule.Filter = &s3.BucketLifecycleConfigurationV2RuleFilterArgs{
-			And: &s3.BucketLifecycleConfigurationV2RuleFilterAndArgs{Prefix: pulumi.String(prefix), Tags: tagged()},
-		}
-	}
-
-	return rule
-}
-
-// LifecycleRules builds the rules of l for the given tenants. withTiering
-// adds the Transitions rule (the primary only).
-func LifecycleRules(l Lifecycle, tenants []Tenant, withTiering bool) (s3.BucketLifecycleConfigurationV2RuleArray, error) {
+// LifecycleRules builds the rules of l. withTiering adds the Transitions
+// rule (the primary only).
+func LifecycleRules(l Lifecycle, withTiering bool) (s3.BucketLifecycleConfigurationV2RuleArray, error) {
 	if err := errors.Join(l.validate()...); err != nil {
 		return nil, err
 	}
 
-	var rules s3.BucketLifecycleConfigurationV2RuleArray
-
-	archivers := 0
-
-	for _, t := range tenants {
-		if t.Purpose != PurposeArchive {
-			continue
-		}
-
-		archivers++
-		server := t.Prefix + t.serverName() + "/"
-		rules = append(rules,
-			expireRule("base-backups/"+server, server+"base/", l.BaseBackupDays),
-			expireRule("wal/"+server, server+"wals/", l.walDays()),
-		)
-	}
-
-	if archivers == 0 {
-		rules = append(rules, expireRule("managed", "", l.walDays()))
+	rules := s3.BucketLifecycleConfigurationV2RuleArray{
+		&s3.BucketLifecycleConfigurationV2RuleArgs{
+			Id:         pulumi.String("managed"),
+			Status:     pulumi.String("Enabled"),
+			Expiration: &s3.BucketLifecycleConfigurationV2RuleExpirationArgs{Days: pulumi.Int(l.RetentionDays)},
+			Filter: &s3.BucketLifecycleConfigurationV2RuleFilterArgs{
+				Tag: &s3.BucketLifecycleConfigurationV2RuleFilterTagArgs{
+					Key: pulumi.String(LifecycleTagKey), Value: pulumi.String(LifecycleTagManage),
+				},
+			},
+		},
 	}
 
 	rules = append(rules, &s3.BucketLifecycleConfigurationV2RuleArgs{

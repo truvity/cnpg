@@ -34,6 +34,7 @@ b, err := backupstore.New(ctx, "backup", &backupstore.Args{
 | `WriterObjectActions` | `[]string` | Replaces the writer's object actions. Nil grants put, get, delete and the two multipart actions; an append-only log passes put and get. Empty is refused. |
 | `Encryption` | `Encryption` | `""`/`EncryptionKMS` (default): a component-owned KMS key. `EncryptionSSES3`: S3-managed keys, no KMS key, see "SSE-S3 mode". |
 | `Tenants` | `[]Tenant` | The per-cluster access model; replaces the writer glob. See "Tenants". |
+| `SingleProject` | `bool` | The bucket holds ONE project (the standard shape, a bucket per project per environment): every tenant may list the whole bucket, which barman-cloud's HeadBucket needs. Requires `Tenants`. See "One bucket per project". |
 | `DenyDestructive` | `bool` | The global denies without tenants (tenants imply it). |
 | `Lifecycle` | `*Lifecycle` | Parametrized, tag-based rules, added after `LifecycleRules`. See "Lifecycle". |
 | `ReaderRoleName` | `string` | One more role in the source account, read-only (get, list, decrypt). An exact name; a glob is refused. |
@@ -154,7 +155,10 @@ dependsOn on the component).
 
 A tenant is one `(role, prefix, purpose)` the bucket admits. It replaces the
 writer glob: the glob admits every matching role to the whole bucket, tenants
-separate per project and per Postgres cluster. Existing callers set none of
+separate the Postgres clusters of a project. The standard layout is one bucket
+per project per environment ("One bucket per project"), so the example below
+sets `SingleProject`; every cluster still has its own prefix and its own
+`archive` and `restore` roles. Existing callers set none of
 this and see no change (see "What stays the same").
 
 ```go
@@ -163,7 +167,8 @@ b, err := backupstore.New(ctx, "backup", &backupstore.Args{
 	SourceAccountID: "<source-account-id>",
 	BackupAccountID: "<backup-account-id>",
 	Encryption:      backupstore.EncryptionSSES3,
-	Lifecycle:       &backupstore.Lifecycle{BaseBackupDays: 30},
+	SingleProject:   true, // one bucket per project
+	Lifecycle:       &backupstore.Lifecycle{RetentionDays: 30},
 	Tenants: []backupstore.Tenant{
 		{
 			RoleARN: "arn:<partition>:iam::<source-account-id>:role/<archive-role>",
@@ -188,8 +193,7 @@ b, err := backupstore.New(ctx, "backup", &backupstore.Args{
 `Tenant` fields: `RoleARN` (an exact ARN, in any source account),
 `Prefix` (`<namespace>/<cluster>/`, trailing slash, no glob), `Purpose`
 (`PurposeArchive` or `PurposeRestore`), `SessionTags` (optional),
-`ServerName` (the barman server name, default the last element of the prefix;
-only the lifecycle uses it) and `AllowHeadBucket` (see below). A role may be
+A role may be
 in several tenants (archive on its own prefix, restore on an old cluster's);
 two archive tenants on one prefix are refused.
 
@@ -222,44 +226,47 @@ Cross-account access needs both sides, so the bucket policy admits the source
 account root narrowed by the exact role ARN (a trust principal cannot be a
 role that does not exist yet).
 
-### ListBucket, HeadBucket and barman-cloud
+### One bucket per project
 
-The tenant list is `s3:ListBucket` with `StringLike s3:prefix <prefix>*`. This
-replaces today's `StringLikeIfExists` for tenants, which let a request with no
-`s3:prefix` key pass.
+**The standard shape is a bucket per project per environment**, with its own
+replica in the second region. A project is the set of CNPG clusters of one
+team or namespace. Inside the bucket every cluster keeps its own
+`<namespace>/<cluster>/` prefix and its own `archive` and `restore` tenant
+roles. Why a bucket per project:
 
-What the barman-cloud tools call (barman `REL_3_X_master`, which the
-barman-cloud plugin runs):
+- **HeadBucket.** barman-cloud opens every command (`barman-cloud-backup`,
+  `-wal-archive`, `-check-wal-archive`, `-restore`) with a HeadBucket, which S3
+  authorizes as `s3:ListBucket` and which carries **no `s3:prefix` key**. A
+  prefix-limited list therefore returns 403 and the command stops
+  (`Permission denied when accessing bucket`). S3 has no condition that tells
+  HeadBucket from an unprefixed ListObjects. In a bucket that holds only one
+  project's objects the unprefixed list is harmless: it shows the key names of
+  that project's own clusters.
+- **Blast radius.** A wrong policy, a lost key, or a compromised role reaches
+  one project's bucket, not the estate's.
+- **Retention per project.** One expiry age per bucket (see "Lifecycle"), so a
+  project picks its own.
+- **Lock and deletion.** Object Lock, the replica, and the retirement of a
+  bucket are per project: a project can be locked, replicated or retired
+  without touching another.
 
-- Every command (`barman-cloud-backup`, `-wal-archive`, `-check-wal-archive`,
-  `-restore`) opens with `verify_cloud_connectivity_and_bucket_existence()` or
-  `test_connectivity()`, which calls **HeadBucket**. A 403 is turned into
-  `CloudProviderError: Permission denied when accessing bucket` and the
-  command stops.
-- Listing is `list_objects_v2` with `Prefix=<server>/...` and a delimiter:
-  prefix-scoped, so the strict list suffices for it.
+**API.** `Args.SingleProject` is a bucket-level flag, not a per-tenant one. It
+was chosen over keeping a per-tenant `AllowHeadBucket` as the default because
+the property it states is about the bucket (it holds one project), not about a
+role: a per-tenant option invites a half-open bucket in which one tenant lists
+everything and its neighbour does not, and it needed a `Null`-condition list,
+a second deny and a role-policy twin per tenant. The flag does one thing: every
+tenant gets `s3:ListBucket` on the bucket without an `s3:prefix` condition (in
+the bucket policy and in the role policy), and the list-outside-prefix deny is
+dropped. Everything else is unchanged: put and get only on the tenant's own
+prefix, and the explicit deny of everything else for the role (`s3:*` with
+`NotResource` the bucket and its prefixes). Without the flag the list stays
+limited to the prefix (`StringLike s3:prefix <prefix>*`, no `IfExists`), for a
+bucket shared by several projects whose roles do not run barman-cloud.
 
-HeadBucket is authorized as `s3:ListBucket` and carries **no `s3:prefix`
-key**. A condition on `s3:prefix` without `IfExists`/`Null` therefore denies
-it. So the strict default breaks barman-cloud until it is relaxed. The two
-choices:
-
-- `Tenant.AllowHeadBucket: true` adds one statement, `s3:ListBucket` with
-  `Null s3:prefix = true`, to the bucket policy and the role policy, and keeps
-  the deny for any list WITH a prefix outside the tenant's. Price: an
-  **unprefixed ListObjectsV2 passes too** (it has no `s3:prefix` either), so
-  the tenant can list the key names (not read the contents) of the whole
-  bucket. S3 has no condition key that tells the two apart.
-- Leave it off for a role that does not run barman-cloud (a role that only
-  lists and reads with the AWS SDK, which needs no HeadBucket): the strict
-  prefix list is then the whole story.
-
-Barman-cloud needs the first. Set `AllowHeadBucket` on tenants whose
-workload runs the plugin, and accept key-name visibility; the contents stay
-separated by the object grants and the deny outside the prefix.
-
-Archive also gets `s3:PutObjectTagging`: barman sends `--tags` with the
-upload, which S3 authorizes as a tagging action. It is not a delete.
+What a tenant can see in a per-project bucket: the key names of the other
+clusters of the same project. What it cannot do: read, write, tag or delete any
+object outside its prefix, and no tenant can delete anything.
 
 ### Append-only
 
@@ -301,14 +308,15 @@ instead of the writer glob.
 
 `Args.TenantRolePolicies(kmsKeyARN)` and the component's `TenantRolePolicies`
 output return one JSON document per role ARN, to attach in the source account;
-`TenantRolePolicy(TenantRolePolicyArgs)` renders one role from its tenants.
+`TenantRolePolicy(TenantRolePolicyArgs)` renders one role from its tenants
+(set `SingleProject` there to match the bucket).
 They are plain JSON, so the estate can put the same string in a Pulumi
 `iam.RolePolicy` or into an ACK `Role` object.
 
 | Purpose | Grants |
 | --- | --- |
-| `archive` | `s3:PutObject` (with the `AES256` condition in SSE-S3 mode), `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts`, `s3:GetObject`, `s3:PutObjectTagging` on `<bucket>/<prefix>*`; `s3:ListBucket` with `s3:prefix` like `<prefix>*` |
-| `restore` | `s3:GetObject` on `<bucket>/<prefix>*`; `s3:ListBucket` limited the same way |
+| `archive` | `s3:PutObject` (with the `AES256` condition in SSE-S3 mode), `s3:AbortMultipartUpload`, `s3:ListMultipartUploadParts`, `s3:GetObject`, `s3:PutObjectTagging` on `<bucket>/<prefix>*`; `s3:ListBucket` with `s3:prefix` like `<prefix>*` (the whole bucket with `SingleProject`) |
+| `restore` | `s3:GetObject` on `<bucket>/<prefix>*`; `s3:ListBucket`, limited the same way |
 
 KMS mode adds the key. No document holds a delete action; a test enforces it.
 
@@ -318,8 +326,7 @@ KMS mode adds the key. No document holds a delete action; a test enforces it.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `BaseBackupDays` | required | N: base backups expire after N days |
-| `WALMarginDays` | 7 | WAL expires after N + margin days |
+| `RetentionDays` | required | managed objects (base backups and WAL) expire after this many days |
 | `NoncurrentDays` | 7 | noncurrent versions expire |
 | `AbortMultipartDays` | 7 | incomplete multipart uploads are aborted |
 | `Transitions` | none | the optional IA / Glacier-IR tiering rule (primary only) |
@@ -327,14 +334,22 @@ KMS mode adds the key. No document holds a delete action; a test enforces it.
 `LifecycleRules` is still honoured; the generated rules are added after it
 (rule ids differ from `Backstop`'s `tiering`).
 
-**Why a margin.** A base backup's first WAL segment is written before its
-`backup.info`: it is the segment that was current when the backup started. S3
-lifecycle works in whole days (midnight UTC). With one age for both, the oldest
-backup that still exists could have lost the WAL it needs to be consistent.
-WAL kept `WALMarginDays` longer means every backup that still exists has all
-of its WAL.
+**One age per bucket.** There is a single expiry age for everything the plugin
+tags `managed`: no WAL margin and no per-path (base versus WAL) rules. The WAL
+a base backup needs is archived *after* the backup starts, so it is never older
+than the backup. S3 lifecycle counts whole days and expires an object at
+midnight UTC once the day count has elapsed, so two objects created on the same
+UTC day expire in the same sweep. With the backup scheduled away from midnight
+UTC (for example 02:00), a backup and its WAL are created on the same UTC day
+and expire together; the oldest backup that still exists keeps its WAL.
 
-**Tags.** The rules select objects by tag, so nothing the plugin did not write
+**Requirement: keep the backup schedule away from midnight UTC.** A backup
+that starts shortly before 00:00 UTC can have its WAL written on the next day
+and outlive it, and one that runs across midnight can lose its first WAL
+segment a day early. Schedule the `ScheduledBackup` at a time such as `02:00`
+UTC, and keep the run well inside that day.
+
+**Tags.** The rule selects objects by tag, so nothing the plugin did not write
 is ever expired. The barman-cloud plugin's `ObjectStore` applies
 `spec.configuration.tags` to base backups AND WAL files and
 `spec.configuration.historyTags` to timeline history files only. Set:
@@ -349,19 +364,14 @@ spec:
 ```
 
 History files are tiny and PITR across a timeline switch needs them for as
-long as any backup spans it, so they never expire here. (`tags` cannot tell a
-base backup from WAL, so the N versus N+margin split is by prefix.)
+long as any backup spans it, so they never expire here.
 
-**Rules.** For each archive tenant: `base-backups/<prefix><server>/`
-(prefix `<tenant prefix><server>/base/` plus the managed tag, N days) and
-`wal/<prefix><server>/` (`.../wals/` + tag, N + margin days), where `<server>`
-is `Tenant.ServerName` (the plugin's `serverName`; CNPG defaults it to the
-cluster name). Without archive tenants one rule `managed` covers the whole
-bucket by the tag with the longer age, because without a prefix the two
-cannot be told apart. Always, one rule `housekeeping`: noncurrent versions
-expire after `NoncurrentDays`, incomplete multipart uploads are aborted after
-`AbortMultipartDays`, and expired object delete markers are removed. With
-`Transitions`, `tier-storage-class`.
+**Rules.** `managed`: expiry at `RetentionDays` of objects tagged
+`cnpg-backup-retention=managed`, bucket-wide (a bucket is one project's).
+`housekeeping`: noncurrent versions expire after `NoncurrentDays`, incomplete
+multipart uploads are aborted after `AbortMultipartDays`, and expired object
+delete markers are removed. With `Transitions`, `tier-storage-class`. The
+replica gets `managed` and `housekeeping` with the same numbers.
 
 A lifecycle expiry of a current object on a versioned bucket adds a delete
 marker; the noncurrent rule removes the version `NoncurrentDays` later, and the
@@ -372,11 +382,10 @@ lifecycle does this: it is S3's own action, so the delete denies do not bind it.
 
 `Replica.ObjectLockGovernance` creates the replica bucket with S3 Object Lock,
 a **GOVERNANCE** default retention of `Replica.ObjectLockDays` (default
-`Lifecycle.BaseBackupDays`), the delete-protection bucket policy (the global
+`Lifecycle.RetentionDays`), the delete-protection bucket policy (the global
 denies above; `s3:BypassGovernanceRetention` is denied outside the backup
 account) and, with `Lifecycle`, the lifecycle rules (expiry and housekeeping,
-no tiering). Equal to N, the lock ends when base backups expire, and WAL
-outlives it.
+no tiering). Equal to the retention, the lock ends when the objects expire.
 
 **Object Lock can only be enabled when a bucket is created.** The option is
 therefore explicit, and it does not change an existing replica in place: set

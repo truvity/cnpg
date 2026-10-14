@@ -51,31 +51,9 @@ type Tenant struct {
 	Prefix string
 	// Purpose is PurposeArchive or PurposeRestore.
 	Purpose Purpose
-	// ServerName is the barman server name the cluster archives under
-	// (the ObjectStore's serverName; CNPG defaults it to the cluster name).
-	// Empty means the last element of Prefix. Only the lifecycle rules use
-	// it, to tell base backups (<Prefix><ServerName>/base/) from WAL
-	// (<Prefix><ServerName>/wals/).
-	ServerName string
 	// SessionTags, when set, are required of the session as well as the role
 	// ARN, so a role shared by two ServiceAccounts is narrowed to one.
 	SessionTags *SessionTags
-	// AllowHeadBucket also admits s3:ListBucket without an s3:prefix key.
-	// HeadBucket carries no s3:prefix, and barman-cloud calls HeadBucket
-	// before every command; see docs/backupstore.md. It has a price: an
-	// unprefixed ListObjects (key names, no content) passes too. Off by
-	// default, because that is the strict reading of the separation.
-	AllowHeadBucket bool
-}
-
-func (t Tenant) serverName() string {
-	if t.ServerName != "" {
-		return t.ServerName
-	}
-
-	parts := strings.Split(strings.TrimSuffix(t.Prefix, "/"), "/")
-
-	return parts[len(parts)-1]
 }
 
 // roleParts splits arn:<partition>:iam::<account>:role/<name>.
@@ -117,10 +95,6 @@ func (t Tenant) validate(i int) []error {
 
 	if t.Purpose != PurposeArchive && t.Purpose != PurposeRestore {
 		errs = append(errs, fmt.Errorf("%s %q must be %q or %q", field("Purpose"), t.Purpose, PurposeArchive, PurposeRestore))
-	}
-
-	if t.ServerName != "" && (strings.Contains(t.ServerName, "/") || strings.ContainsAny(t.ServerName, "*?")) {
-		errs = append(errs, fmt.Errorf("%s %q must be one path element", field("ServerName"), t.ServerName))
 	}
 
 	return errs
@@ -197,7 +171,7 @@ func titled(p Purpose) string { return strings.ToUpper(string(p)[:1]) + string(p
 // s3:PutObjectTagging is part of archive because barman-cloud sends its
 // --tags with the upload, and S3 authorizes that tagging as its own action.
 // Tagging is not deletion; a retag can only keep an object longer.
-func tenantStatements(partition, bucket string, tenants []Tenant) []policyStatement {
+func tenantStatements(partition, bucket string, tenants []Tenant, singleProject bool) []policyStatement {
 	var out []policyStatement
 
 	for i, t := range tenants {
@@ -209,23 +183,18 @@ func tenantStatements(partition, bucket string, tenants []Tenant) []policyStatem
 			Action: t.objectActions(), Resource: prefixResource(bucket, t.Prefix), Condition: t.identity(),
 		})
 
+		// A per-project bucket lists whole: barman-cloud's HeadBucket carries
+		// no s3:prefix, and the bucket holds only this project's keys. Else
+		// the list is limited to the tenant's prefix.
 		list := t.identity()
-		list["StringLike"] = map[string]any{"s3:prefix": []string{t.Prefix + "*"}}
+		if !singleProject {
+			list["StringLike"] = map[string]any{"s3:prefix": []string{t.Prefix + "*"}}
+		}
 
 		out = append(out, policyStatement{
 			Sid: "Allow" + n + "ListBucket", Effect: polAllow, Principal: principal,
 			Action: actListBucket, Resource: bucket, Condition: list,
 		})
-
-		if t.AllowHeadBucket {
-			head := t.identity()
-			head["Null"] = map[string]any{"s3:prefix": "true"}
-
-			out = append(out, policyStatement{
-				Sid: "Allow" + n + "HeadBucket", Effect: polAllow, Principal: principal,
-				Action: actListBucket, Resource: bucket, Condition: head,
-			})
-		}
 	}
 
 	// One pair of denies per distinct role ARN, in first-seen order: the
@@ -246,12 +215,10 @@ func tenantStatements(partition, bucket string, tenants []Tenant) []policyStatem
 		group := byRole[arn]
 		resources := []string{bucket}
 		prefixes := make([]string, 0, len(group))
-		head := false
 
 		for _, t := range group {
 			resources = append(resources, prefixResource(bucket, t.Prefix))
 			prefixes = append(prefixes, t.Prefix+"*")
-			head = head || t.AllowHeadBucket
 		}
 
 		role := map[string]any{condStringEquals: map[string]any{condPrincipalARN: arn}}
@@ -262,19 +229,16 @@ func tenantStatements(partition, bucket string, tenants []Tenant) []policyStatem
 			Action: "s3:*", NotResource: resources, Condition: role,
 		})
 
-		listCond := map[string]any{
-			condStringEquals: map[string]any{condPrincipalARN: arn},
-			"StringNotLike":  map[string]any{"s3:prefix": prefixes},
-		}
-		if head {
-			// A list WITH an s3:prefix outside the prefixes is denied; one
-			// without the key (HeadBucket) is left to the allow.
-			listCond["Null"] = map[string]any{"s3:prefix": "false"}
+		if singleProject {
+			continue
 		}
 
 		out = append(out, policyStatement{
 			Sid: fmt.Sprintf("DenyTenantRole%dListOutsideItsPrefix", k+1), Effect: "Deny", Principal: anyone,
-			Action: actListBucket, Resource: bucket, Condition: listCond,
+			Action: actListBucket, Resource: bucket, Condition: map[string]any{
+				condStringEquals: map[string]any{condPrincipalARN: arn},
+				"StringNotLike":  map[string]any{"s3:prefix": prefixes},
+			},
 		})
 	}
 
@@ -329,6 +293,9 @@ type TenantRolePolicyArgs struct {
 	KMSKeyARN string
 	// Tenants are every tenant of ONE role (usually one).
 	Tenants []Tenant
+	// SingleProject lists the whole bucket instead of the tenant's prefix;
+	// it must equal Args.SingleProject.
+	SingleProject bool
 }
 
 // TenantRolePolicy renders the identity policy a tenant role carries in the
@@ -402,17 +369,14 @@ func TenantRolePolicy(a TenantRolePolicyArgs) (string, error) {
 			})
 		}
 
-		statements = append(statements, map[string]any{
+		list := map[string]any{
 			polSid: "List" + n, polEffect: polAllow, polAction: []string{actListBucket}, polResource: a.BucketARN,
-			polCondition: map[string]any{"StringLike": map[string]any{"s3:prefix": []string{t.Prefix + "*"}}},
-		})
-
-		if t.AllowHeadBucket {
-			statements = append(statements, map[string]any{
-				polSid: "Head" + n, polEffect: polAllow, polAction: []string{actListBucket}, polResource: a.BucketARN,
-				polCondition: map[string]any{"Null": map[string]any{"s3:prefix": "true"}},
-			})
 		}
+		if !a.SingleProject {
+			list[polCondition] = map[string]any{"StringLike": map[string]any{"s3:prefix": []string{t.Prefix + "*"}}}
+		}
+
+		statements = append(statements, list)
 	}
 
 	if a.Encryption.kms() {
