@@ -108,6 +108,33 @@ fail the render, whichever list they are in.
 A namespace named `on`, `off`, `y` or `n` is read by YAML as a boolean and
 refused by the schema; quote it.
 
+## charts/cnpg-backup-access
+
+ACK `Role` and `PodIdentityAssociation` objects for each cluster's archive and
+restore access to a per-project backup bucket; see [backup-access.md](backup-access.md).
+Nothing renders until `clusters` is listed.
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `global.accountID` | string | required | Source account of the Roles; `aws:SourceAccount` in the trust policy. |
+| `global.partition` | string | `aws` | `aws`, `aws-cn` or `aws-us-gov`. |
+| `global.region` | string | `""` | Sets `services.k8s.aws/region` on the associations. |
+| `global.eksClusterName` | string | required | `clusterName` of every association. |
+| `global.rolePrefix` | string | required | Role names are `<rolePrefix>-<cluster>-archive` and `-restore`. |
+| `global.permissionsBoundaryARN` | string | `""` | Permissions boundary of every Role. |
+| `global.objectNamespace` | string | release namespace | Namespace of the ACK objects. |
+| `global.useRoleRef` | bool | `false` | `roleRef` instead of the computed `roleARN`. |
+| `global.tags` | map | `{}` | Tags on every Role and association. |
+| `bucket.name` | string | required | The project's bucket in the backup account. |
+| `clusters[].name`, `.namespace` | string | required | The CNPG cluster; the name is unique. |
+| `clusters[].prefix` | string | `<namespace>/<name>/` | Must end in `/`, unique. |
+| `clusters[].archive.serviceAccount` | string | cluster name | ServiceAccount bound to the archive role. |
+| `clusters[].restore.enabled` | bool | `true` | Render the restore role and association. |
+| `clusters[].restore.serviceAccount` | string | `<name>-restore` | ServiceAccount bound to the restore role. |
+| `clusters[].restore.namespace` | string | cluster namespace | Namespace of the restore ServiceAccount. |
+| `clusters[].restore.createServiceAccount` | bool | `false` | Render the restore ServiceAccount. |
+| `commonLabels`, `commonAnnotations` | map | `{}` | On every object. |
+
 ## charts/cnpg-cluster
 
 ### Identity

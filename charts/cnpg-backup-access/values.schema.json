@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "cnpg-backup-access values",
+  "description": "An unknown key is an error, not a silent no-op. What a schema cannot express (a name or prefix used twice, a prefix that must end in /) is refused by templates/_validate.tpl; every rule has a fixture under tests/invalid/cnpg-backup-access/.",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
+    "k8sName": { "type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$" }
+  },
+  "properties": {
+    "global": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accountID": { "type": "string", "pattern": "^([0-9]{12})?$", "description": "The source account the Roles live in. Required once a cluster is listed." },
+        "partition": { "type": "string", "enum": ["aws", "aws-cn", "aws-us-gov"] },
+        "region": { "type": "string", "description": "Optional: services.k8s.aws/region on each association." },
+        "eksClusterName": { "type": "string", "description": "Required once a cluster is listed." },
+        "rolePrefix": { "type": "string", "pattern": "^([A-Za-z0-9+=,.@_-]+)?$", "description": "Required once a cluster is listed." },
+        "permissionsBoundaryARN": { "type": "string" },
+        "objectNamespace": { "type": "string" },
+        "useRoleRef": { "type": "boolean" },
+        "tags": { "$ref": "#/definitions/stringMap" }
+      }
+    },
+    "bucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$", "description": "The project's bucket in the backup account. Required once a cluster is listed." }
+      }
+    },
+    "clusters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "namespace"],
+        "properties": {
+          "name": { "$ref": "#/definitions/k8sName" },
+          "namespace": { "$ref": "#/definitions/k8sName" },
+          "prefix": { "type": "string", "description": "Default <namespace>/<name>/. Must end in /." },
+          "archive": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "serviceAccount": { "$ref": "#/definitions/k8sName" }
+            }
+          },
+          "restore": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "serviceAccount": { "$ref": "#/definitions/k8sName" },
+              "namespace": { "$ref": "#/definitions/k8sName" },
+              "createServiceAccount": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "commonLabels": { "$ref": "#/definitions/stringMap" },
+    "commonAnnotations": { "$ref": "#/definitions/stringMap" }
+  }
+}

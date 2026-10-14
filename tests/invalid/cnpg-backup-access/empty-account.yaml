@@ -1,0 +1,3 @@
+global: {accountID: "", eksClusterName: example-eks, rolePrefix: example}
+bucket: {name: example-backup}
+clusters: [{name: pg, namespace: a}]

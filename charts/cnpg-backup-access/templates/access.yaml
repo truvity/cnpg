@@ -1,0 +1,75 @@
+{{- /* Per cluster: the archive and restore Roles (ACK iam) and the Pod Identity
+associations (ACK eks) that bind them. */}}
+{{- include "cnpg-backup-access.validate" . }}
+{{- $g := .Values.global }}
+{{- $objNS := $g.objectNamespace | default .Release.Namespace }}
+{{- /* adopt-or-create, as cnpg-projects' backupAccess: a role or association
+that already exists under the same identity is adopted, not refused. */}}
+{{- $ann := merge (deepCopy (.Values.commonAnnotations | default dict)) (dict "services.k8s.aws/adoption-policy" "adopt-or-create") }}
+{{- range $c := .Values.clusters }}
+{{- $prefix := include "cnpg-backup-access.prefix" $c }}
+{{- range $p := list "archive" "restore" }}
+{{- if or (eq $p "archive") (include "cnpg-backup-access.restoreOn" $c) }}
+{{- $role := printf "%s-%s-%s" $g.rolePrefix $c.name $p }}
+{{- $sa := ternary (include "cnpg-backup-access.archiveSA" $c) (include "cnpg-backup-access.restoreSA" $c) (eq $p "archive") }}
+{{- $ns := ternary $c.namespace (include "cnpg-backup-access.restoreNamespace" $c) (eq $p "archive") }}
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  {{- include "cnpg-backup-access.metadata" (dict "root" $ "name" $role "namespace" $objNS "annotations" $ann) | nindent 2 }}
+spec:
+  name: {{ $role }}
+  description: {{ printf "CNPG %s access to %s for %s/%s" $p $.Values.bucket.name $c.namespace $c.name | toJson }}
+  assumeRolePolicyDocument: {{ include "cnpg-backup-access.trust" $g | toJson }}
+  inlinePolicies:
+    cnpg-backup-{{ $p }}: {{ include "cnpg-backup-access.policy" (dict "bucket" $.Values.bucket.name "partition" ($g.partition | default "aws") "prefix" $prefix "purpose" $p) | toJson }}
+  {{- with $g.permissionsBoundaryARN }}
+  permissionsBoundary: {{ . }}
+  {{- end }}
+  {{- with $g.tags }}
+  tags:
+    {{- range $k, $v := . }}
+    - key: {{ $k | toJson }}
+      value: {{ $v | toJson }}
+    {{- end }}
+  {{- end }}
+---
+apiVersion: eks.services.k8s.aws/v1alpha1
+kind: PodIdentityAssociation
+metadata:
+  {{- include "cnpg-backup-access.metadata" (dict "root" $ "name" $role "namespace" $objNS "annotations" (merge (deepCopy $ann) (ternary (dict "services.k8s.aws/region" $g.region) (dict) (ne (default "" $g.region) "")))) | nindent 2 }}
+spec:
+  clusterName: {{ $g.eksClusterName }}
+  namespace: {{ $ns }}
+  serviceAccount: {{ $sa }}
+  {{- if $g.useRoleRef }}
+  roleRef:
+    from:
+      name: {{ $role }}
+  {{- else }}
+  roleARN: {{ printf "arn:%s:iam::%s:role/%s" ($g.partition | default "aws") $g.accountID $role }}
+  {{- end }}
+  {{- with $g.tags }}
+  tags:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- if and $c.restore $c.restore.createServiceAccount (include "cnpg-backup-access.restoreOn" $c) }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "cnpg-backup-access.restoreSA" $c }}
+  namespace: {{ include "cnpg-backup-access.restoreNamespace" $c }}
+  {{- with $.Values.commonLabels }}
+  labels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $.Values.commonAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}

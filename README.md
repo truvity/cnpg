@@ -10,6 +10,7 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
 | `cnpg-cluster` | the platform | once per PostgreSQL cluster |
 | `cnpg-projects` | the platform | once per Kubernetes cluster: every project's `Cluster` (cnpg-cluster per row), its backups, server TLS and archive role |
 | `cnpg-project-platform` | the platform | once per Kubernetes cluster, for the projects whose `Cluster` another chart renders |
+| `cnpg-backup-access` | the platform | once per project bucket: the ACK IAM roles and Pod Identity associations of each cluster's archive and restore access |
 | `cnpg-database` | a product | once per product (its databases, roles, client certificates) |
 | `cnpg-client` | a product (library) | included by each application chart that connects |
 
@@ -26,6 +27,12 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
   into it, and the server `Certificate` with its CA `Secret`. Every name is an
   entry's input and the chart decides nothing about which project gets which
   object. See [docs/reference.md](docs/reference.md).
+
+- **charts/cnpg-backup-access** — the source-account side of a per-project
+  backup bucket (`pkg/aws/backupstore`): per cluster an archive and a restore
+  IAM `Role` and the Pod Identity association binding each to its
+  ServiceAccount, as ACK objects, with the role policies pinned equal to the
+  library's. See [docs/backup-access.md](docs/backup-access.md).
 
 - **charts/cnpg-cluster** — a CNPG `Cluster` with an opinionated two-posture
   profile model, plus roles, declared databases, backup `ObjectStore`s and
@@ -63,6 +70,7 @@ Published as OCI charts:
 ```
 oci://ghcr.io/truvity/charts/cnpg-platform
 oci://ghcr.io/truvity/charts/cnpg-project-platform
+oci://ghcr.io/truvity/charts/cnpg-backup-access
 oci://ghcr.io/truvity/charts/cnpg-cluster
 oci://ghcr.io/truvity/charts/cnpg-database
 oci://ghcr.io/truvity/charts/cnpg-client
