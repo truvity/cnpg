@@ -23,6 +23,24 @@ const FormerTypeToken = "truvity:k8s/aws:BackupBucket"
 // empty.
 const DefaultPartition = "aws"
 
+// Encryption is how the bucket encrypts objects at rest.
+type Encryption string
+
+const (
+	// EncryptionKMS (the zero value too) encrypts with a customer-managed
+	// KMS key the component creates, with rotation on. It is what the
+	// component always did.
+	EncryptionKMS Encryption = "kms"
+	// EncryptionSSES3 encrypts with S3-managed keys (AES256). No KMS key is
+	// created, role policies carry no KMS statements, and the bucket policy
+	// denies any upload that does not state AES256.
+	EncryptionSSES3 Encryption = "sse-s3"
+)
+
+func (e Encryption) valid() bool { return e == "" || e == EncryptionKMS || e == EncryptionSSES3 }
+
+func (e Encryption) kms() bool { return e != EncryptionSSES3 }
+
 // Replica configures the same-account replica in another region.
 type Replica struct {
 	// Provider is the AWS provider of the replica's region, in the backup
@@ -37,6 +55,20 @@ type Replica struct {
 	// RolePermissionsBoundary is the ARN of the permissions boundary of
 	// that role, when the account requires one. Nil sets none.
 	RolePermissionsBoundary pulumi.StringInput
+	// ObjectLockGovernance creates the replica bucket WITH S3 Object Lock and
+	// a GOVERNANCE default retention of ObjectLockDays (Lifecycle.BaseBackupDays
+	// when that is zero), adds the delete-protection bucket policy and, when
+	// Args.Lifecycle is set, the lifecycle rules.
+	//
+	// Object Lock can only be enabled when a bucket is created. Set on a
+	// replica that already exists without it, this makes Pulumi REPLACE the
+	// bucket (a protected bucket refuses): it never changes a replica in
+	// place. Create a new replica bucket instead and retire the old one on
+	// your own schedule. See docs/backupstore.md.
+	ObjectLockGovernance bool
+	// ObjectLockDays is the governance retention. Zero means
+	// Lifecycle.BaseBackupDays. Ignored without ObjectLockGovernance.
+	ObjectLockDays int
 }
 
 // Args configures the component.
@@ -68,13 +100,32 @@ type Args struct {
 	// Exact names, never globs.
 	ListerRoleNames []string
 
-	// KeyDescription is the description of the bucket's KMS key.
+	// Encryption selects KMS (the default, "") or SSE-S3.
+	Encryption Encryption
+	// Tenants, when set, replace the writer glob: the bucket policy admits
+	// exactly these (role, prefix, purpose) triples, each with an explicit
+	// deny outside its prefix, and adds the global denies of delete and
+	// bucket configuration for principals outside the backup account.
+	// WriterRoleName and WriterObjectActions must then be empty.
+	Tenants []Tenant
+	// DenyDestructive adds the global denies (delete of objects and versions,
+	// lifecycle, bucket policy, versioning, replication configuration) for
+	// principals outside the backup account without any tenant. Tenants
+	// imply it.
+	DenyDestructive bool
+
+	// KeyDescription is the description of the bucket's KMS key (KMS mode).
 	KeyDescription string
 	// Tags are applied to the bucket (compliance tags, for example).
 	Tags map[string]string
-	// LifecycleRules is the bucket's lifecycle configuration. At least one
-	// rule. Backstop builds the common shape.
+	// LifecycleRules is the bucket's lifecycle configuration. Backstop builds
+	// the common shape. At least one rule must come from here or from
+	// Lifecycle.
 	LifecycleRules s3.BucketLifecycleConfigurationV2RuleArray
+	// Lifecycle, when set, adds the parametrized, tag-based rules (see
+	// Lifecycle) after LifecycleRules, to the bucket and, with
+	// Replica.ObjectLockGovernance, to the replica.
+	Lifecycle *Lifecycle
 	// ObjectLockDays, when above zero, creates the bucket (and the replica)
 	// with Object Lock and a COMPLIANCE default retention of that many days.
 	ObjectLockDays int
@@ -149,8 +200,12 @@ type BackupStore struct {
 	BucketName pulumi.StringOutput
 	// BucketARN is the bucket's ARN.
 	BucketARN pulumi.StringOutput
-	// KMSKeyARN is the ARN of the bucket's key.
+	// KMSKeyARN is the ARN of the bucket's key; empty in SSE-S3 mode.
 	KMSKeyARN pulumi.StringOutput
+	// TenantRolePolicies maps each tenant role ARN to the identity policy
+	// (JSON) the caller attaches to it in the source account. Empty without
+	// tenants.
+	TenantRolePolicies pulumi.StringMapOutput
 }
 
 func (a *Args) partition() string {
@@ -162,6 +217,55 @@ func (a *Args) partition() string {
 }
 
 func (a *Args) protect() bool { return a.Protect == nil || *a.Protect }
+
+func (a *Args) globalDenies() bool { return a.DenyDestructive || len(a.Tenants) > 0 }
+
+func (a *Args) replicaGlobalDenies() bool {
+	return a.globalDenies() || (a.Replica != nil && a.Replica.ObjectLockGovernance)
+}
+
+// TenantRolePolicies renders the identity policy of every tenant role, keyed
+// by role ARN, for the caller to attach in the source account. kmsKeyARN is
+// the bucket's key in KMS mode and ignored in SSE-S3 mode.
+func (a *Args) TenantRolePolicies(kmsKeyARN string) (map[string]string, error) {
+	return a.tenantRolePolicies(kmsKeyARN, true)
+}
+
+// tenantRolePolicies is TenantRolePolicies; strict false accepts an empty
+// key ARN, which is what an output not yet resolved (a preview, a mock) hands
+// the apply.
+func (a *Args) tenantRolePolicies(kmsKeyARN string, strict bool) (map[string]string, error) {
+	out := map[string]string{}
+	byRole := map[string][]Tenant{}
+
+	var order []string
+
+	for _, t := range a.Tenants {
+		if _, ok := byRole[t.RoleARN]; !ok {
+			order = append(order, t.RoleARN)
+		}
+
+		byRole[t.RoleARN] = append(byRole[t.RoleARN], t)
+	}
+
+	for _, arn := range order {
+		if !strict && a.Encryption.kms() && kmsKeyARN == "" {
+			kmsKeyARN = "<unresolved>"
+		}
+
+		doc, err := TenantRolePolicy(TenantRolePolicyArgs{
+			BucketARN: bucketARN(a.partition(), a.BucketName), Encryption: a.Encryption,
+			KMSKeyARN: kmsKeyARN, Tenants: byRole[arn],
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		out[arn] = doc
+	}
+
+	return out, nil
+}
 
 // Validate reports every problem with args at once, or returns nil.
 func (a *Args) Validate() error {
@@ -176,11 +280,30 @@ func (a *Args) Validate() error {
 	required("BucketName", a.BucketName)
 	required("SourceAccountID", a.SourceAccountID)
 	required("BackupAccountID", a.BackupAccountID)
-	required("WriterRoleName", a.WriterRoleName)
-	required("KeyDescription", a.KeyDescription)
+	if !a.Encryption.valid() {
+		errs = append(errs, fmt.Errorf("args: Encryption %q is unknown; use %q or %q", a.Encryption, EncryptionKMS, EncryptionSSES3))
+	}
 
-	if len(a.LifecycleRules) == 0 {
-		errs = append(errs, errors.New("args: LifecycleRules is empty"))
+	if len(a.Tenants) == 0 {
+		required("WriterRoleName", a.WriterRoleName)
+	} else {
+		if a.WriterRoleName != "" || a.WriterObjectActions != nil {
+			errs = append(errs, errors.New("args: Tenants replace the writer; leave WriterRoleName and WriterObjectActions empty"))
+		}
+
+		errs = append(errs, validateTenants(a.Tenants)...)
+	}
+
+	if a.Encryption.kms() {
+		required("KeyDescription", a.KeyDescription)
+	}
+
+	if a.Lifecycle != nil {
+		errs = append(errs, a.Lifecycle.validate()...)
+	}
+
+	if len(a.LifecycleRules) == 0 && a.Lifecycle == nil {
+		errs = append(errs, errors.New("args: LifecycleRules is empty; set LifecycleRules or Lifecycle"))
 	}
 
 	if a.ObjectLockDays < 0 {
@@ -210,7 +333,22 @@ func (a *Args) Validate() error {
 		}
 
 		required("Replica.BucketName", r.BucketName)
-		required("Replica.KeyDescription", r.KeyDescription)
+
+		if a.Encryption.kms() {
+			required("Replica.KeyDescription", r.KeyDescription)
+		}
+
+		if r.ObjectLockDays < 0 {
+			errs = append(errs, fmt.Errorf("args: Replica.ObjectLockDays is %d, want 0 or more", r.ObjectLockDays))
+		}
+
+		if r.ObjectLockGovernance && r.ObjectLockDays == 0 && (a.Lifecycle == nil || a.Lifecycle.BaseBackupDays <= 0) {
+			errs = append(errs, errors.New("args: Replica.ObjectLockGovernance needs Replica.ObjectLockDays or Lifecycle.BaseBackupDays"))
+		}
+
+		if r.ObjectLockGovernance && a.ObjectLockDays > 0 {
+			errs = append(errs, errors.New("args: Replica.ObjectLockGovernance and ObjectLockDays (COMPLIANCE on both buckets) are exclusive"))
+		}
 		required("Replica.RoleName", r.RoleName)
 
 		if r.BucketName != "" && r.BucketName == a.BucketName {
@@ -255,17 +393,48 @@ func New(ctx *pulumi.Context, name string, args *Args, opts ...pulumi.ResourceOp
 
 	comp.BucketName = b.bucket.Bucket
 	comp.BucketARN = b.bucket.Arn
-	comp.KMSKeyARN = b.key.Arn
+	comp.KMSKeyARN = pulumi.String("").ToStringOutput()
+
+	if b.key != nil {
+		comp.KMSKeyARN = b.key.Arn
+	}
+
+	policies, err := b.tenantPolicies()
+	if err != nil {
+		return nil, fmt.Errorf("backupstore %s: %w", name, err)
+	}
+
+	comp.TenantRolePolicies = policies
 
 	if err := ctx.RegisterResourceOutputs(comp, pulumi.Map{
-		"bucketName": comp.BucketName,
-		"bucketArn":  comp.BucketARN,
-		"kmsKeyArn":  comp.KMSKeyARN,
+		"bucketName":         comp.BucketName,
+		"bucketArn":          comp.BucketARN,
+		"kmsKeyArn":          comp.KMSKeyARN,
+		"tenantRolePolicies": comp.TenantRolePolicies,
 	}); err != nil {
 		return nil, err
 	}
 
 	return comp, nil
+}
+
+func (b *builder) tenantPolicies() (pulumi.StringMapOutput, error) {
+	if len(b.args.Tenants) == 0 {
+		return pulumi.StringMap{}.ToStringMapOutput(), nil
+	}
+
+	if b.key == nil {
+		docs, err := b.args.tenantRolePolicies("", false)
+		if err != nil {
+			return pulumi.StringMapOutput{}, err
+		}
+
+		return pulumi.ToStringMap(docs).ToStringMapOutput(), nil
+	}
+
+	return b.key.Arn.ApplyT(func(arn string) (map[string]string, error) {
+		return b.args.tenantRolePolicies(arn, false)
+	}).(pulumi.StringMapOutput), nil
 }
 
 type builder struct {
@@ -328,25 +497,27 @@ func (b *builder) primary() error {
 	name := a.BucketName
 	part := a.partition()
 
-	// RetainOnDelete: kms:ScheduleKeyDeletion is denied in the accounts this
-	// is built for (key destruction is a break-glass act), so Pulumi drops a
-	// key from state instead of deleting it.
-	key, err := kms.NewKey(b.ctx, name+"-kms", &kms.KeyArgs{
-		Description:       pulumi.String(a.KeyDescription),
-		EnableKeyRotation: pulumi.Bool(true),
-		Policy:            pulumi.String(buildKeyPolicy(part, a.SourceAccountID, a.BackupAccountID, a.WriterRoleName, a.ReaderRoleName)),
-	}, b.childOpts(nil, append(b.protectOpt(), pulumi.RetainOnDelete(true))...)...)
-	if err != nil {
-		return fmt.Errorf("create KMS key: %w", err)
-	}
+	if a.Encryption.kms() {
+		// RetainOnDelete: kms:ScheduleKeyDeletion is denied in the accounts this
+		// is built for (key destruction is a break-glass act), so Pulumi drops a
+		// key from state instead of deleting it.
+		key, err := kms.NewKey(b.ctx, name+"-kms", &kms.KeyArgs{
+			Description:       pulumi.String(a.KeyDescription),
+			EnableKeyRotation: pulumi.Bool(true),
+			Policy:            pulumi.String(buildKeyPolicy(part, a.SourceAccountID, a.BackupAccountID, a.WriterRoleName, a.ReaderRoleName, a.Tenants)),
+		}, b.childOpts(nil, append(b.protectOpt(), pulumi.RetainOnDelete(true))...)...)
+		if err != nil {
+			return fmt.Errorf("create KMS key: %w", err)
+		}
 
-	b.key = key
+		b.key = key
 
-	if _, err := kms.NewAlias(b.ctx, name+"-kms-alias", &kms.AliasArgs{
-		Name:        pulumi.String("alias/" + name),
-		TargetKeyId: key.KeyId,
-	}, b.childOpts(nil)...); err != nil {
-		return fmt.Errorf("create KMS alias: %w", err)
+		if _, err := kms.NewAlias(b.ctx, name+"-kms-alias", &kms.AliasArgs{
+			Name:        pulumi.String("alias/" + name),
+			TargetKeyId: key.KeyId,
+		}, b.childOpts(nil)...); err != nil {
+			return fmt.Errorf("create KMS alias: %w", err)
+		}
 	}
 
 	bucketArgs := &s3.BucketArgs{
@@ -379,13 +550,11 @@ func (b *builder) primary() error {
 		Bucket: bucket.ID(),
 		Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
 			&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
-				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
-					SseAlgorithm:   pulumi.String("aws:kms"),
-					KmsMasterKeyId: key.Arn,
-				},
+				ApplyServerSideEncryptionByDefault: b.encryptionDefault(),
 				// S3 Bucket Keys cut the KMS requests of a busy backup bucket
-				// by about 99%: one data key serves many objects.
-				BucketKeyEnabled: pulumi.Bool(true),
+				// by about 99%: one data key serves many objects. (Only KMS
+				// has a bucket key.)
+				BucketKeyEnabled: bucketKeyEnabled(a.Encryption),
 				// What S3 now sets on every bucket, stated so the input matches
 				// it: no customer-provided keys (SSE-C).
 				BlockedEncryptionTypes: pulumi.StringArray{pulumi.String("SSE-C")},
@@ -395,9 +564,14 @@ func (b *builder) primary() error {
 		return fmt.Errorf("configure bucket encryption: %w", err)
 	}
 
+	rules, err := b.lifecycleRules(true)
+	if err != nil {
+		return err
+	}
+
 	if _, err := s3.NewBucketLifecycleConfigurationV2(b.ctx, name+"-lifecycle", &s3.BucketLifecycleConfigurationV2Args{
 		Bucket: bucket.ID(),
-		Rules:  a.LifecycleRules,
+		Rules:  rules,
 	}, b.childOpts([]string{formerLifecycle})...); err != nil {
 		return fmt.Errorf("configure bucket lifecycle: %w", err)
 	}
@@ -429,6 +603,9 @@ func (b *builder) primary() error {
 		ReaderRole:      a.ReaderRoleName,
 		ListerRoles:     a.ListerRoleNames,
 		ObjectActions:   a.WriterObjectActions,
+		Tenants:         a.Tenants,
+		GlobalDenies:    a.globalDenies(),
+		SSES3:           !a.Encryption.kms(),
 	})
 
 	if _, err := s3.NewBucketPolicy(b.ctx, name+"-policy", &s3.BucketPolicyArgs{
@@ -439,6 +616,49 @@ func (b *builder) primary() error {
 	}
 
 	return nil
+}
+
+func (b *builder) encryptionDefault() *s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs {
+	if !b.args.Encryption.kms() {
+		return &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+			SseAlgorithm: pulumi.String("AES256"),
+		}
+	}
+
+	return &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+		SseAlgorithm:   pulumi.String("aws:kms"),
+		KmsMasterKeyId: b.key.Arn,
+	}
+}
+
+func bucketKeyEnabled(e Encryption) pulumi.BoolPtrInput {
+	if e.kms() {
+		return pulumi.Bool(true)
+	}
+
+	return nil
+}
+
+// lifecycleRules is the caller's rules followed by the parametrized ones.
+// The replica takes only the parametrized ones, and no tiering.
+func (b *builder) lifecycleRules(primary bool) (s3.BucketLifecycleConfigurationV2RuleArray, error) {
+	a := b.args
+
+	var rules s3.BucketLifecycleConfigurationV2RuleArray
+	if primary {
+		rules = append(rules, a.LifecycleRules...)
+	}
+
+	if a.Lifecycle != nil {
+		gen, err := LifecycleRules(*a.Lifecycle, a.Tenants, primary)
+		if err != nil {
+			return nil, fmt.Errorf("lifecycle rules: %w", err)
+		}
+
+		rules = append(rules, gen...)
+	}
+
+	return rules, nil
 }
 
 func blockPublicAccess(bucket pulumi.StringInput) *s3.BucketPublicAccessBlockArgs {
@@ -464,17 +684,24 @@ func (b *builder) replica() error {
 		return b.childOpts(sdkTypes, append([]pulumi.ResourceOption{pulumi.Provider(r.Provider)}, extra...)...)
 	}
 
-	replicaKey, err := kms.NewKey(b.ctx, rname+"-kms", &kms.KeyArgs{
-		Description:       pulumi.String(r.KeyDescription),
-		EnableKeyRotation: pulumi.Bool(true),
-	}, ropts(nil, append(b.protectOpt(), pulumi.RetainOnDelete(true))...)...)
-	if err != nil {
-		return fmt.Errorf("create replica KMS key: %w", err)
+	var replicaKey *kms.Key
+
+	if a.Encryption.kms() {
+		var err error
+
+		replicaKey, err = kms.NewKey(b.ctx, rname+"-kms", &kms.KeyArgs{
+			Description:       pulumi.String(r.KeyDescription),
+			EnableKeyRotation: pulumi.Bool(true),
+		}, ropts(nil, append(b.protectOpt(), pulumi.RetainOnDelete(true))...)...)
+		if err != nil {
+			return fmt.Errorf("create replica KMS key: %w", err)
+		}
 	}
 
 	replicaArgs := &s3.BucketV2Args{Bucket: pulumi.String(rname)}
-	if a.ObjectLockDays > 0 {
+	if a.ObjectLockDays > 0 || r.ObjectLockGovernance {
 		// Replicating locked objects requires Object Lock on the destination.
+		// Object Lock can only be switched on when a bucket is created.
 		replicaArgs.ObjectLockEnabled = pulumi.Bool(true)
 	}
 
@@ -496,13 +723,46 @@ func (b *builder) replica() error {
 		return fmt.Errorf("replica public access block: %w", err)
 	}
 
+	if r.ObjectLockGovernance {
+		days := r.ObjectLockDays
+		if days == 0 {
+			days = a.Lifecycle.BaseBackupDays
+		}
+
+		if _, err := s3.NewBucketObjectLockConfigurationV2(b.ctx, rname+"-object-lock", &s3.BucketObjectLockConfigurationV2Args{
+			Bucket: replica.ID(),
+			Rule: &s3.BucketObjectLockConfigurationV2RuleArgs{
+				DefaultRetention: &s3.BucketObjectLockConfigurationV2RuleDefaultRetentionArgs{
+					Mode: pulumi.String("GOVERNANCE"),
+					Days: pulumi.Int(days),
+				},
+			},
+		}, ropts([]string{formerObjectLock})...); err != nil {
+			return fmt.Errorf("replica object lock: %w", err)
+		}
+	}
+
+	if a.Lifecycle != nil && r.ObjectLockGovernance {
+		rules, err := b.lifecycleRules(false)
+		if err != nil {
+			return err
+		}
+
+		if _, err := s3.NewBucketLifecycleConfigurationV2(b.ctx, rname+"-lifecycle", &s3.BucketLifecycleConfigurationV2Args{
+			Bucket: replica.ID(),
+			Rules:  rules,
+		}, ropts([]string{formerLifecycle})...); err != nil {
+			return fmt.Errorf("replica lifecycle: %w", err)
+		}
+	}
+
 	// A resource policy on the replica only when something in the source
-	// account is meant to list it. It carries the delete-version deny, so
+	// account is meant to list it, or the global denies apply. It carries the delete-version deny, so
 	// the replica's immutability reads the same as the primary's. The deny
 	// binds principals outside the backup account only: replication writes
 	// from inside it, and lifecycle expiry is the service's own action.
-	if len(a.ListerRoleNames) > 0 {
-		doc, err := buildReplicaPolicy(part, rname, a.SourceAccountID, a.BackupAccountID, a.ListerRoleNames)
+	if len(a.ListerRoleNames) > 0 || a.replicaGlobalDenies() {
+		doc, err := buildReplicaPolicy(part, rname, a.SourceAccountID, a.BackupAccountID, a.ListerRoleNames, a.replicaGlobalDenies())
 		if err != nil {
 			return fmt.Errorf("marshal replica bucket policy: %w", err)
 		}
@@ -528,8 +788,15 @@ func (b *builder) replica() error {
 		return fmt.Errorf("replication role: %w", err)
 	}
 
-	policy := pulumi.All(b.bucket.Arn, replica.Arn, b.key.Arn, replicaKey.Arn).ApplyT(func(vs []any) (string, error) {
-		return buildReplicationPolicy(vs[0].(string), vs[1].(string), vs[2].(string), vs[3].(string), a.ObjectLockDays > 0)
+	lock := a.ObjectLockDays > 0
+	srcKey, dstKey := pulumi.String("").ToStringOutput(), pulumi.String("").ToStringOutput()
+
+	if replicaKey != nil {
+		srcKey, dstKey = b.key.Arn, replicaKey.Arn
+	}
+
+	policy := pulumi.All(b.bucket.Arn, replica.Arn, srcKey, dstKey).ApplyT(func(vs []any) (string, error) {
+		return buildReplicationPolicy(vs[0].(string), vs[1].(string), vs[2].(string), vs[3].(string), lock, replicaKey != nil)
 	}).(pulumi.StringOutput)
 
 	if _, err := iam.NewRolePolicy(b.ctx, name+"-replication-policy", &iam.RolePolicyArgs{
@@ -539,31 +806,40 @@ func (b *builder) replica() error {
 		return fmt.Errorf("replication policy: %w", err)
 	}
 
+	rule := &s3.BucketReplicationConfigRuleArgs{
+		Id:     pulumi.String("crr"),
+		Status: pulumi.String("Enabled"),
+		Filter: &s3.BucketReplicationConfigRuleFilterArgs{Prefix: pulumi.String("")},
+		DeleteMarkerReplication: &s3.BucketReplicationConfigRuleDeleteMarkerReplicationArgs{
+			Status: pulumi.String("Enabled"),
+		},
+		Destination: &s3.BucketReplicationConfigRuleDestinationArgs{
+			Bucket:       replica.Arn,
+			StorageClass: pulumi.String("STANDARD_IA"),
+		},
+	}
+
+	// KMS mode only: the replica has its own key. SSE-S3 objects replicate
+	// under the destination's default encryption, with no key to name.
+	if replicaKey != nil {
+		rule.SourceSelectionCriteria = &s3.BucketReplicationConfigRuleSourceSelectionCriteriaArgs{
+			SseKmsEncryptedObjects: &s3.BucketReplicationConfigRuleSourceSelectionCriteriaSseKmsEncryptedObjectsArgs{
+				Status: pulumi.String("Enabled"),
+			},
+		}
+		rule.Destination = &s3.BucketReplicationConfigRuleDestinationArgs{
+			Bucket:       replica.Arn,
+			StorageClass: pulumi.String("STANDARD_IA"),
+			EncryptionConfiguration: &s3.BucketReplicationConfigRuleDestinationEncryptionConfigurationArgs{
+				ReplicaKmsKeyId: replicaKey.Arn,
+			},
+		}
+	}
+
 	if _, err := s3.NewBucketReplicationConfig(b.ctx, name+"-replication", &s3.BucketReplicationConfigArgs{
 		Bucket: b.bucket.ID(),
 		Role:   role.Arn,
-		Rules: s3.BucketReplicationConfigRuleArray{
-			&s3.BucketReplicationConfigRuleArgs{
-				Id:     pulumi.String("crr"),
-				Status: pulumi.String("Enabled"),
-				Filter: &s3.BucketReplicationConfigRuleFilterArgs{Prefix: pulumi.String("")},
-				DeleteMarkerReplication: &s3.BucketReplicationConfigRuleDeleteMarkerReplicationArgs{
-					Status: pulumi.String("Enabled"),
-				},
-				SourceSelectionCriteria: &s3.BucketReplicationConfigRuleSourceSelectionCriteriaArgs{
-					SseKmsEncryptedObjects: &s3.BucketReplicationConfigRuleSourceSelectionCriteriaSseKmsEncryptedObjectsArgs{
-						Status: pulumi.String("Enabled"),
-					},
-				},
-				Destination: &s3.BucketReplicationConfigRuleDestinationArgs{
-					Bucket:       replica.Arn,
-					StorageClass: pulumi.String("STANDARD_IA"),
-					EncryptionConfiguration: &s3.BucketReplicationConfigRuleDestinationEncryptionConfigurationArgs{
-						ReplicaKmsKeyId: replicaKey.Arn,
-					},
-				},
-			},
-		},
+		Rules:  s3.BucketReplicationConfigRuleArray{rule},
 	}, b.childOpts(nil)...); err != nil {
 		return fmt.Errorf("replication config: %w", err)
 	}

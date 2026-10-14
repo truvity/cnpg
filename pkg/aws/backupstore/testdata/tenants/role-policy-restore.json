@@ -1,0 +1,28 @@
+{
+  "Statement": [
+    {
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:testpart:s3:::example-backup/<namespace-b>/<cluster-b>/*",
+      "Sid": "Object1Restore"
+    },
+    {
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "<namespace-b>/<cluster-b>/*"
+          ]
+        }
+      },
+      "Effect": "Allow",
+      "Resource": "arn:testpart:s3:::example-backup",
+      "Sid": "List1Restore"
+    }
+  ],
+  "Version": "2012-10-17"
+}

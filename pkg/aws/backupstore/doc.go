@@ -19,6 +19,14 @@
 //   - optionally a same-account replica in another region, with its own
 //     key, a replication role and the replication configuration.
 //
+// Optionally (all off by default): SSE-S3 instead of a KMS key
+// (Args.Encryption); per-cluster Tenants with strict prefixes, session-tag
+// conditions, explicit denies outside the prefix and global denies of delete
+// and bucket configuration, plus the tenants' identity policies
+// (TenantRolePolicies); parametrized, tag-based Lifecycle rules; and a
+// replica with Object Lock in governance mode (Replica.ObjectLockGovernance).
+// docs/backupstore.md explains each.
+//
 // NewRole and RolePolicy are the writer's side: the Pod Identity role in the
 // workload account that the bucket's writer glob admits, with an inline policy
 // scoped to a prefix and the key.

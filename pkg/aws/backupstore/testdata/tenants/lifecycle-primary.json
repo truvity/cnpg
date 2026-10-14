@@ -1,0 +1,58 @@
+[
+  {
+    "type": "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2",
+    "name": "example-backup-lifecycle",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::backup",
+    "inputs": {
+      "bucket": "example-backup-id",
+      "rules": [
+        {
+          "expiration": {
+            "days": 30
+          },
+          "filter": {
+            "and": {
+              "prefix": "\u003cnamespace-a\u003e/\u003ccluster-a\u003e/\u003ccluster-a\u003e/base/",
+              "tags": {
+                "cnpg-backup-retention": "managed"
+              }
+            }
+          },
+          "id": "base-backups/\u003cnamespace-a\u003e/\u003ccluster-a\u003e/\u003ccluster-a\u003e/",
+          "status": "Enabled"
+        },
+        {
+          "expiration": {
+            "days": 37
+          },
+          "filter": {
+            "and": {
+              "prefix": "\u003cnamespace-a\u003e/\u003ccluster-a\u003e/\u003ccluster-a\u003e/wals/",
+              "tags": {
+                "cnpg-backup-retention": "managed"
+              }
+            }
+          },
+          "id": "wal/\u003cnamespace-a\u003e/\u003ccluster-a\u003e/\u003ccluster-a\u003e/",
+          "status": "Enabled"
+        },
+        {
+          "abortIncompleteMultipartUpload": {
+            "daysAfterInitiation": 7
+          },
+          "expiration": {
+            "expiredObjectDeleteMarker": true
+          },
+          "filter": {
+            "prefix": ""
+          },
+          "id": "housekeeping",
+          "noncurrentVersionExpiration": {
+            "noncurrentDays": 7
+          },
+          "status": "Enabled"
+        }
+      ]
+    }
+  }
+]

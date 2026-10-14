@@ -42,6 +42,13 @@ type (
 		ReaderRole      string
 		ListerRoles     []string
 		ObjectActions   []string
+		// Tenants replace the writer glob when set.
+		Tenants []Tenant
+		// GlobalDenies adds the denies that bind every principal outside the
+		// backup account.
+		GlobalDenies bool
+		// SSES3 adds the upload deny that requires the AES256 header.
+		SSES3 bool
 	}
 
 	policyDocument struct {
@@ -54,10 +61,29 @@ type (
 		Effect    string         `json:"Effect"`
 		Principal map[string]any `json:"Principal"`
 		Action    any            `json:"Action"`
-		Resource  any            `json:"Resource"`
-		Condition map[string]any `json:"Condition,omitempty"`
+		Resource  any            `json:"Resource,omitempty"`
+		// NotResource is used by the tenant deny outside a prefix.
+		NotResource any            `json:"NotResource,omitempty"`
+		Condition   map[string]any `json:"Condition,omitempty"`
 	}
 )
+
+// marshal renders a policy document without HTML escaping: IAM names and
+// ARNs never hold <, > or &, so for them the bytes equal json.MarshalIndent's;
+// a placeholder in a doc or a test stays readable. An empty indent is compact.
+func marshal(v any, indent string) (string, error) {
+	var buf strings.Builder
+
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", indent)
+
+	if err := enc.Encode(v); err != nil {
+		return "", err
+	}
+
+	return strings.TrimSuffix(buf.String(), "\n"), nil
+}
 
 func roleARN(partition, account, role string) string {
 	return fmt.Sprintf("arn:%s:iam::%s:role/%s", partition, account, role)
@@ -89,36 +115,42 @@ func buildBucketPolicy(p bucketPolicyParams) string {
 		"StringLike": map[string]any{condPrincipalARN: roleARN(p.Partition, p.SourceAccountID, p.WriterRole)},
 	}
 
-	statements := []policyStatement{
-		{
-			Sid:       "AllowSourceAccountObjectAccess",
-			Effect:    polAllow,
-			Principal: map[string]any{principalAWS: source},
-			Action:    writerObjectActions(p.ObjectActions),
-			Resource:  bucket + "/*",
-			Condition: roleCondition,
-		},
-		{
-			Sid:       "AllowSourceAccountListBucket",
-			Effect:    polAllow,
-			Principal: map[string]any{principalAWS: source},
-			Action:    []string{actListBucket, "s3:ListBucketMultipartUploads"},
-			Resource:  bucket,
-			Condition: roleCondition,
-		},
-		{
-			// Protects immutability: no external account can permanently
-			// delete a version.
-			Sid:       denySid,
-			Effect:    "Deny",
-			Principal: map[string]any{principalAWS: "*"},
-			Action:    "s3:DeleteObjectVersion",
-			Resource:  bucket + "/*",
-			Condition: map[string]any{
-				"StringNotEquals": map[string]string{"aws:PrincipalAccount": p.BackupAccountID},
+	var statements []policyStatement
+
+	// With tenants the writer glob is not admitted: each tenant carries its
+	// own rights on its own prefix.
+	if len(p.Tenants) == 0 {
+		statements = append(statements,
+			policyStatement{
+				Sid:       "AllowSourceAccountObjectAccess",
+				Effect:    polAllow,
+				Principal: map[string]any{principalAWS: source},
+				Action:    writerObjectActions(p.ObjectActions),
+				Resource:  bucket + "/*",
+				Condition: roleCondition,
 			},
-		},
+			policyStatement{
+				Sid:       "AllowSourceAccountListBucket",
+				Effect:    polAllow,
+				Principal: map[string]any{principalAWS: source},
+				Action:    []string{actListBucket, "s3:ListBucketMultipartUploads"},
+				Resource:  bucket,
+				Condition: roleCondition,
+			})
 	}
+
+	statements = append(statements, policyStatement{
+		// Protects immutability: no external account can permanently
+		// delete a version.
+		Sid:       denySid,
+		Effect:    "Deny",
+		Principal: map[string]any{principalAWS: "*"},
+		Action:    "s3:DeleteObjectVersion",
+		Resource:  bucket + "/*",
+		Condition: map[string]any{
+			"StringNotEquals": map[string]string{"aws:PrincipalAccount": p.BackupAccountID},
+		},
+	})
 
 	// After the deny, so adding a reader only appends statements.
 	if p.ReaderRole != "" {
@@ -137,14 +169,24 @@ func buildBucketPolicy(p bucketPolicyParams) string {
 
 	statements = append(statements, listerStatements(p.Partition, bucket, p.SourceAccountID, p.ListerRoles)...)
 
-	data, _ := json.MarshalIndent(policyDocument{Version: polDocDate, Statement: statements}, "", "  ")
+	if p.GlobalDenies {
+		statements = append(statements, globalDenyStatements(bucket, p.BackupAccountID)...)
+	}
 
-	return string(data)
+	if p.SSES3 {
+		statements = append(statements, sseS3Deny(bucket))
+	}
+
+	statements = append(statements, tenantStatements(p.Partition, bucket, p.Tenants)...)
+
+	data, _ := marshal(policyDocument{Version: polDocDate, Statement: statements}, "  ")
+
+	return data
 }
 
 // buildReplicaPolicy is the replica's resource policy: the delete-version
 // deny and one list-only grant per lister.
-func buildReplicaPolicy(partition, replica, sourceAccountID, backupAccountID string, listers []string) (string, error) {
+func buildReplicaPolicy(partition, replica, sourceAccountID, backupAccountID string, listers []string, globalDenies bool) (string, error) {
 	arn := bucketARN(partition, replica)
 	statements := []policyStatement{{
 		Sid:       denySid,
@@ -158,9 +200,11 @@ func buildReplicaPolicy(partition, replica, sourceAccountID, backupAccountID str
 	}}
 	statements = append(statements, listerStatements(partition, arn, sourceAccountID, listers)...)
 
-	raw, err := json.MarshalIndent(policyDocument{Version: polDocDate, Statement: statements}, "", "  ")
+	if globalDenies {
+		statements = append(statements, globalDenyStatements(arn, backupAccountID)...)
+	}
 
-	return string(raw), err
+	return marshal(policyDocument{Version: polDocDate, Statement: statements}, "  ")
 }
 
 // listerStatements is one list-only grant per lister role. The bucket is the
@@ -227,7 +271,7 @@ func writerObjectActions(override []string) []string {
 // management), the source account's writer roles (encrypt and decrypt) and,
 // when named, one reader role (decrypt only): the second gate on top of the
 // bucket policy.
-func buildKeyPolicy(partition, sourceAccountID, backupAccountID, writerRole, readerRole string) string {
+func buildKeyPolicy(partition, sourceAccountID, backupAccountID, writerRole, readerRole string, tenants []Tenant) string {
 	source := rootARN(partition, sourceAccountID)
 	statements := []map[string]any{
 		{
@@ -237,8 +281,10 @@ func buildKeyPolicy(partition, sourceAccountID, backupAccountID, writerRole, rea
 			polAction:    "kms:*",
 			polResource:  "*",
 		},
-		{
-			polSid:       "WorkloadBackupRolesUseKey",
+	}
+
+	if len(tenants) == 0 {
+		statements = append(statements, map[string]any{polSid: "WorkloadBackupRolesUseKey",
 			polEffect:    polAllow,
 			polPrincipal: map[string]any{principalAWS: source},
 			polAction: []string{
@@ -249,8 +295,10 @@ func buildKeyPolicy(partition, sourceAccountID, backupAccountID, writerRole, rea
 			polCondition: map[string]any{
 				"StringLike": map[string]any{condPrincipalARN: roleARN(partition, sourceAccountID, writerRole)},
 			},
-		},
+		})
 	}
+
+	statements = append(statements, tenantKeyStatements(partition, tenants)...)
 
 	if readerRole != "" {
 		statements = append(statements, map[string]any{
@@ -273,7 +321,7 @@ func buildKeyPolicy(partition, sourceAccountID, backupAccountID, writerRole, rea
 
 // buildReplicationPolicy is the replication role's policy: replicate from
 // the primary to the replica and use both keys, never IAM writes.
-func buildReplicationPolicy(src, dst, srcKey, dstKey string, objectLock bool) (string, error) {
+func buildReplicationPolicy(src, dst, srcKey, dstKey string, objectLock, withKMS bool) (string, error) {
 	doc := map[string]any{
 		polVersion: polDocDate,
 		polStatement: []map[string]any{
@@ -283,6 +331,11 @@ func buildReplicationPolicy(src, dst, srcKey, dstKey string, objectLock bool) (s
 			{polEffect: polAllow, polAction: actKMSDecrypt, polResource: srcKey},
 			{polEffect: polAllow, polAction: []string{"kms:Encrypt", "kms:GenerateDataKey*"}, polResource: dstKey},
 		},
+	}
+	if !withKMS {
+		// SSE-S3: no key on either side.
+		st := doc[polStatement].([]map[string]any)
+		doc[polStatement] = st[:3]
 	}
 	raw, err := json.Marshal(doc)
 
@@ -301,4 +354,56 @@ func replicationSourceActions(objectLock bool) []string {
 	}
 
 	return actions
+}
+
+// tenantKeyStatements admits the tenant roles to the KMS key (KMS mode
+// only): archive roles encrypt and decrypt, restore-only roles decrypt.
+func tenantKeyStatements(partition string, tenants []Tenant) []map[string]any {
+	var out []map[string]any
+
+	for _, group := range []struct {
+		sid     string
+		purpose Purpose
+		actions []string
+	}{
+		{"TenantArchiveRolesUseKey", PurposeArchive, []string{
+			"kms:Encrypt", actKMSDecrypt, "kms:ReEncrypt*", "kms:GenerateDataKey*", "kms:DescribeKey",
+		}},
+		{"TenantRestoreRolesDecrypt", PurposeRestore, []string{actKMSDecrypt, "kms:DescribeKey"}},
+	} {
+		var (
+			roles, accounts []string
+			seenRole        = map[string]bool{}
+			seenAcct        = map[string]bool{}
+		)
+
+		for _, t := range tenants {
+			if t.Purpose != group.purpose || seenRole[t.RoleARN] {
+				continue
+			}
+
+			seenRole[t.RoleARN] = true
+			roles = append(roles, t.RoleARN)
+
+			if a := t.account(); !seenAcct[a] {
+				seenAcct[a] = true
+				accounts = append(accounts, rootARN(partition, a))
+			}
+		}
+
+		if len(roles) == 0 {
+			continue
+		}
+
+		out = append(out, map[string]any{
+			polSid:       group.sid,
+			polEffect:    polAllow,
+			polPrincipal: map[string]any{principalAWS: accounts},
+			polAction:    group.actions,
+			polResource:  "*",
+			polCondition: map[string]any{condStringEquals: map[string]any{condPrincipalARN: roles}},
+		})
+	}
+
+	return out
 }

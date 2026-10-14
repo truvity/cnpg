@@ -1,0 +1,44 @@
+{
+  "Statement": [
+    {
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "s3:x-amz-server-side-encryption": "AES256"
+        }
+      },
+      "Effect": "Allow",
+      "Resource": "arn:testpart:s3:::example-backup/<namespace-a>/<cluster-a>/*",
+      "Sid": "Put1Archive"
+    },
+    {
+      "Action": [
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts",
+        "s3:GetObject",
+        "s3:PutObjectTagging"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:testpart:s3:::example-backup/<namespace-a>/<cluster-a>/*",
+      "Sid": "Object1Archive"
+    },
+    {
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "<namespace-a>/<cluster-a>/*"
+          ]
+        }
+      },
+      "Effect": "Allow",
+      "Resource": "arn:testpart:s3:::example-backup",
+      "Sid": "List1Archive"
+    }
+  ],
+  "Version": "2012-10-17"
+}
