@@ -43,9 +43,15 @@ number is 1. */}}
 {{- dict "Version" "2012-10-17" "Statement" $stmts | toJson -}}
 {{- end -}}
 
-{{/* The trust policy: EKS Pod Identity, pinned to the source account. */}}
+{{/* The trust policy: EKS Pod Identity, pinned to the source account, the
+EKS cluster (aws:SourceArn) and the session tags of the role's one binding
+(namespace and ServiceAccount), as cnpg-projects' backupAccess pins them.
+Called with (dict "g" global "ns" namespace "sa" serviceAccount). */}}
 {{- define "cnpg-backup-access.trust" -}}
-{{- dict "Version" "2012-10-17" "Statement" (list (dict "Effect" "Allow" "Principal" (dict "Service" "pods.eks.amazonaws.com") "Action" (list "sts:AssumeRole" "sts:TagSession") "Condition" (dict "StringEquals" (dict "aws:SourceAccount" .accountID)))) | toJson -}}
+{{- $g := .g }}
+{{- dict "Version" "2012-10-17" "Statement" (list (dict "Effect" "Allow" "Principal" (dict "Service" "pods.eks.amazonaws.com") "Action" (list "sts:AssumeRole" "sts:TagSession") "Condition" (dict
+  "StringEquals" (dict "aws:SourceAccount" $g.accountID "aws:RequestTag/kubernetes-namespace" .ns "aws:RequestTag/kubernetes-service-account" .sa)
+  "ArnEquals" (dict "aws:SourceArn" (printf "arn:%s:eks:%s:%s:cluster/%s" ($g.partition | default "aws") $g.region $g.accountID $g.eksClusterName))))) | toJson -}}
 {{- end -}}
 
 {{/* metadata of an ACK object: name, namespace, common labels and

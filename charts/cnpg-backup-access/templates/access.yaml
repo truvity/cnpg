@@ -21,7 +21,7 @@ metadata:
 spec:
   name: {{ $role }}
   description: {{ printf "CNPG %s access to %s for %s/%s" $p $.Values.bucket.name $c.namespace $c.name | toJson }}
-  assumeRolePolicyDocument: {{ include "cnpg-backup-access.trust" $g | toJson }}
+  assumeRolePolicyDocument: {{ include "cnpg-backup-access.trust" (dict "g" $g "ns" $ns "sa" $sa) | toJson }}
   inlinePolicies:
     cnpg-backup-{{ $p }}: {{ include "cnpg-backup-access.policy" (dict "bucket" $.Values.bucket.name "partition" ($g.partition | default "aws") "prefix" $prefix "purpose" $p) | toJson }}
   {{- with $g.permissionsBoundaryARN }}

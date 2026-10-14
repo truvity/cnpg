@@ -1,6 +1,7 @@
 # One cluster, only the required keys.
 global:
   accountID: "123456789012"
+  region: eu-west-1
   eksClusterName: example-eks
   rolePrefix: example
 bucket:

@@ -1,3 +1,3 @@
-global: {accountID: "123456789012", eksClusterName: "", rolePrefix: example}
+global: {accountID: "123456789012", region: eu-west-1, eksClusterName: "", rolePrefix: example}
 bucket: {name: example-backup}
 clusters: [{name: pg, namespace: a}]

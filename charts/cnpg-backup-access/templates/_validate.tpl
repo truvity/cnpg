@@ -8,6 +8,7 @@ names the key. Every rule has a fixture under tests/invalid/cnpg-backup-access/.
 {{- if not .Values.bucket.name }}{{ fail "bucket.name is required: the project's bucket in the backup account" }}{{ end }}
 {{- if not $g.accountID }}{{ fail "global.accountID is required: the source account the Roles live in" }}{{ end }}
 {{- if not $g.eksClusterName }}{{ fail "global.eksClusterName is required: the EKS cluster of the Pod Identity associations" }}{{ end }}
+{{- if not $g.region }}{{ fail "global.region is required: the region of the EKS cluster, for the aws:SourceArn the trust policy pins" }}{{ end }}
 {{- if not $g.rolePrefix }}{{ fail "global.rolePrefix is required: Role names are <rolePrefix>-<cluster>-archive|restore" }}{{ end }}
 {{- $names := dict }}
 {{- $prefixes := dict }}
