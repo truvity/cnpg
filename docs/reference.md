@@ -118,7 +118,7 @@ Nothing renders until `clusters` is listed.
 | --- | --- | --- | --- |
 | `global.accountID` | string | required | Source account of the Roles; `aws:SourceAccount` in the trust policy. |
 | `global.partition` | string | `aws` | `aws`, `aws-cn` or `aws-us-gov`. |
-| `global.region` | string | `""` | Sets `services.k8s.aws/region` on the associations. |
+| `global.region` | string | required | EKS cluster region: pins `aws:SourceArn` in the trust policy and sets `services.k8s.aws/region`. |
 | `global.eksClusterName` | string | required | `clusterName` of every association. |
 | `global.rolePrefix` | string | required | Role names are `<rolePrefix>-<cluster>-archive` and `-restore`. |
 | `global.permissionsBoundaryARN` | string | `""` | Permissions boundary of every Role. |

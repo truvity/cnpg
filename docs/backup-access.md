@@ -11,7 +11,7 @@ access is declared next to the cluster:
 
 | Object | Per | What |
 | --- | --- | --- |
-| `iam.services.k8s.aws/v1alpha1` `Role` `<rolePrefix>-<cluster>-archive` | cluster | Pod Identity trust (`sts:AssumeRole`, `sts:TagSession`, `aws:SourceAccount`), the archive inline policy, optional permissions boundary, tags |
+| `iam.services.k8s.aws/v1alpha1` `Role` `<rolePrefix>-<cluster>-archive` | cluster | Pod Identity trust (`sts:AssumeRole`, `sts:TagSession`, pinned to the source account, the EKS cluster ARN and the binding's namespace and ServiceAccount), the archive inline policy, optional permissions boundary, tags |
 | `Role` `<rolePrefix>-<cluster>-restore` | cluster with restore on | the same trust, the restore inline policy |
 | `eks.services.k8s.aws/v1alpha1` `PodIdentityAssociation` (archive) | cluster | EKS cluster + namespace + the cluster's own ServiceAccount (named like the cluster) to the archive role |
 | `PodIdentityAssociation` (restore) | cluster with restore on | EKS cluster + restore namespace + `<cluster>-restore` to the restore role |
@@ -23,7 +23,7 @@ access is declared next to the cluster:
 global:
   accountID: "<source-account-id>"      # required: where the Roles live; aws:SourceAccount
   partition: aws
-  region: ""                            # optional: services.k8s.aws/region on the associations
+  region: <region>                      # required: EKS cluster region (aws:SourceArn); also services.k8s.aws/region
   eksClusterName: <eks-cluster>         # required
   rolePrefix: <prefix>                  # required: Role names <prefix>-<cluster>-archive|restore
   permissionsBoundaryARN: ""            # optional
@@ -46,11 +46,20 @@ clusters:
 ```
 
 The render is refused (`templates/_validate.tpl`, fixtures in
-`tests/invalid/cnpg-backup-access/`) for: an empty bucket, source account, EKS
+`tests/invalid/cnpg-backup-access/`) for: an empty bucket, source account, region, EKS
 cluster or role prefix; a cluster named twice; a prefix that does not end in
 `/`, starts with `/` or holds a glob; a prefix used by two clusters; a
 ServiceAccount bound to two roles; an IAM role name over 64 characters; an
 unknown key (schema).
+
+## The trust policy
+
+Per role, as `cnpg-projects`' `backupAccess` pins it: `sts:AssumeRole` and
+`sts:TagSession` for `pods.eks.amazonaws.com`, with `StringEquals`
+`aws:SourceAccount`, `aws:RequestTag/kubernetes-namespace` and
+`aws:RequestTag/kubernetes-service-account` (the namespace and ServiceAccount
+of that role's association), and `ArnEquals` `aws:SourceArn`
+`arn:<partition>:eks:<region>:<account>:cluster/<eksClusterName>`.
 
 ## The policies equal the library's
 

@@ -8,7 +8,8 @@ global:
   accountID: ""
   # The AWS partition in the bucket ARN.
   partition: aws
-  # Optional: set on each PodIdentityAssociation as services.k8s.aws/region.
+  # Required: the EKS cluster's region. Pins aws:SourceArn in the trust
+  # policy and is set on each association as services.k8s.aws/region.
   region: ""
   # The EKS cluster the associations are made on. Required.
   eksClusterName: ""

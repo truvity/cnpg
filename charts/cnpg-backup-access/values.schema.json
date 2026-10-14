@@ -15,7 +15,7 @@
       "properties": {
         "accountID": { "type": "string", "pattern": "^([0-9]{12})?$", "description": "The source account the Roles live in. Required once a cluster is listed." },
         "partition": { "type": "string", "enum": ["aws", "aws-cn", "aws-us-gov"] },
-        "region": { "type": "string", "description": "Optional: services.k8s.aws/region on each association." },
+        "region": { "type": "string", "description": "The EKS cluster's region (aws:SourceArn, services.k8s.aws/region). Required once a cluster is listed." },
         "eksClusterName": { "type": "string", "description": "Required once a cluster is listed." },
         "rolePrefix": { "type": "string", "pattern": "^([A-Za-z0-9+=,.@_-]+)?$", "description": "Required once a cluster is listed." },
         "permissionsBoundaryARN": { "type": "string" },

@@ -55,7 +55,7 @@ func name(o map[string]any) string         { return o["metadata"].(map[string]an
 // library's.
 func TestInlinePolicyEqualsBackupstoreTenantRolePolicy(t *testing.T) {
 	objs := render(t, `
-global: {accountID: "`+account+`", eksClusterName: example-eks, rolePrefix: example}
+global: {accountID: "`+account+`", eksClusterName: example-eks, region: eu-west-1, rolePrefix: example}
 bucket: {name: `+bucket+`}
 clusters:
   - {name: app-pg, namespace: app}
@@ -107,7 +107,7 @@ clusters:
 // TestPartitionFollowsTheValue: the policy takes the partition from values.
 func TestPartitionFollowsTheValue(t *testing.T) {
 	objs := render(t, `
-global: {accountID: "`+account+`", eksClusterName: example-eks, rolePrefix: example, partition: aws-cn}
+global: {accountID: "`+account+`", eksClusterName: example-eks, region: eu-west-1, rolePrefix: example, partition: aws-cn}
 bucket: {name: `+bucket+`}
 clusters: [{name: pg, namespace: ns}]
 `)
@@ -138,7 +138,7 @@ clusters: [{name: pg, namespace: ns}]
 // Pod Identity pinned to the source account.
 func TestNoDeleteAndTrust(t *testing.T) {
 	objs := render(t, `
-global: {accountID: "`+account+`", eksClusterName: example-eks, rolePrefix: example}
+global: {accountID: "`+account+`", eksClusterName: example-eks, region: eu-west-1, rolePrefix: example}
 bucket: {name: `+bucket+`}
 clusters: [{name: pg, namespace: ns}]
 `)
@@ -152,8 +152,16 @@ clusters: [{name: pg, namespace: ns}]
 			assert.NotContains(t, p, "Delete")
 		}
 
+		sa := strings.TrimPrefix(name(o), "example-")
+		sa = strings.TrimSuffix(strings.TrimSuffix(sa, "-archive"), "-restore")
+		if strings.HasSuffix(name(o), "-restore") {
+			sa += "-restore"
+		}
+
 		assert.JSONEq(t, `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"pods.eks.amazonaws.com"},
-"Action":["sts:AssumeRole","sts:TagSession"],"Condition":{"StringEquals":{"aws:SourceAccount":"`+account+`"}}}]}`,
+"Action":["sts:AssumeRole","sts:TagSession"],"Condition":{
+"StringEquals":{"aws:SourceAccount":"`+account+`","aws:RequestTag/kubernetes-namespace":"ns","aws:RequestTag/kubernetes-service-account":"`+sa+`"},
+"ArnEquals":{"aws:SourceArn":"arn:aws:eks:eu-west-1:`+account+`:cluster/example-eks"}}}]}`,
 			spec(o)["assumeRolePolicyDocument"].(string))
 	}
 }
@@ -163,7 +171,7 @@ clusters: [{name: pg, namespace: ns}]
 // disabled restore renders neither Role nor association.
 func TestAssociationsBindTheRightServiceAccounts(t *testing.T) {
 	objs := render(t, `
-global: {accountID: "`+account+`", eksClusterName: example-eks, rolePrefix: example}
+global: {accountID: "`+account+`", eksClusterName: example-eks, region: eu-west-1, rolePrefix: example}
 bucket: {name: `+bucket+`}
 clusters:
   - {name: a, namespace: ns, restore: {namespace: drill, createServiceAccount: true}}

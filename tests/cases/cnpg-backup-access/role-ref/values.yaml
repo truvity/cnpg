@@ -1,6 +1,7 @@
 # The association references the Role object instead of computing the ARN.
 global:
   accountID: "123456789012"
+  region: eu-west-1
   eksClusterName: example-eks
   rolePrefix: example
   useRoleRef: true
