@@ -47,6 +47,8 @@ type (
 		// GlobalDenies adds the denies that bind every principal outside the
 		// backup account.
 		GlobalDenies bool
+		// SingleProject lists the whole bucket for every tenant.
+		SingleProject bool
 		// SSES3 adds the upload deny that requires the AES256 header.
 		SSES3 bool
 	}
@@ -177,7 +179,7 @@ func buildBucketPolicy(p bucketPolicyParams) string {
 		statements = append(statements, sseS3Deny(bucket))
 	}
 
-	statements = append(statements, tenantStatements(p.Partition, bucket, p.Tenants)...)
+	statements = append(statements, tenantStatements(p.Partition, bucket, p.Tenants, p.SingleProject)...)
 
 	data, _ := marshal(policyDocument{Version: polDocDate, Statement: statements}, "  ")
 

@@ -1,0 +1,21 @@
+{
+  "Statement": [
+    {
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:testpart:s3:::example-backup/<namespace>/<cluster-a>/*",
+      "Sid": "Object1Restore"
+    },
+    {
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:testpart:s3:::example-backup",
+      "Sid": "List1Restore"
+    }
+  ],
+  "Version": "2012-10-17"
+}

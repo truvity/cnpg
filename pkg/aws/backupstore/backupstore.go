@@ -56,7 +56,7 @@ type Replica struct {
 	// that role, when the account requires one. Nil sets none.
 	RolePermissionsBoundary pulumi.StringInput
 	// ObjectLockGovernance creates the replica bucket WITH S3 Object Lock and
-	// a GOVERNANCE default retention of ObjectLockDays (Lifecycle.BaseBackupDays
+	// a GOVERNANCE default retention of ObjectLockDays (Lifecycle.RetentionDays
 	// when that is zero), adds the delete-protection bucket policy and, when
 	// Args.Lifecycle is set, the lifecycle rules.
 	//
@@ -67,7 +67,7 @@ type Replica struct {
 	// your own schedule. See docs/backupstore.md.
 	ObjectLockGovernance bool
 	// ObjectLockDays is the governance retention. Zero means
-	// Lifecycle.BaseBackupDays. Ignored without ObjectLockGovernance.
+	// Lifecycle.RetentionDays. Ignored without ObjectLockGovernance.
 	ObjectLockDays int
 }
 
@@ -108,6 +108,16 @@ type Args struct {
 	// bucket configuration for principals outside the backup account.
 	// WriterRoleName and WriterObjectActions must then be empty.
 	Tenants []Tenant
+	// SingleProject declares that the bucket holds ONE project (the standard
+	// shape: a bucket per project per environment). Every tenant then gets
+	// s3:ListBucket on the bucket without an s3:prefix condition, which
+	// barman-cloud's HeadBucket needs (it carries no s3:prefix), and the
+	// list-outside-prefix deny is dropped. Object access stays per prefix:
+	// put and get only on the tenant's own prefix, and the explicit deny of
+	// everything else on the role stays. The cost is that a tenant sees the
+	// key names of the other clusters of the same project, never their
+	// contents. Requires Tenants. See docs/backupstore.md.
+	SingleProject bool
 	// DenyDestructive adds the global denies (delete of objects and versions,
 	// lifecycle, bucket policy, versioning, replication configuration) for
 	// principals outside the backup account without any tenant. Tenants
@@ -255,7 +265,7 @@ func (a *Args) tenantRolePolicies(kmsKeyARN string, strict bool) (map[string]str
 
 		doc, err := TenantRolePolicy(TenantRolePolicyArgs{
 			BucketARN: bucketARN(a.partition(), a.BucketName), Encryption: a.Encryption,
-			KMSKeyARN: kmsKeyARN, Tenants: byRole[arn],
+			KMSKeyARN: kmsKeyARN, Tenants: byRole[arn], SingleProject: a.SingleProject,
 		})
 		if err != nil {
 			return nil, err
@@ -292,6 +302,10 @@ func (a *Args) Validate() error {
 		}
 
 		errs = append(errs, validateTenants(a.Tenants)...)
+	}
+
+	if a.SingleProject && len(a.Tenants) == 0 {
+		errs = append(errs, errors.New("args: SingleProject needs Tenants"))
 	}
 
 	if a.Encryption.kms() {
@@ -342,8 +356,8 @@ func (a *Args) Validate() error {
 			errs = append(errs, fmt.Errorf("args: Replica.ObjectLockDays is %d, want 0 or more", r.ObjectLockDays))
 		}
 
-		if r.ObjectLockGovernance && r.ObjectLockDays == 0 && (a.Lifecycle == nil || a.Lifecycle.BaseBackupDays <= 0) {
-			errs = append(errs, errors.New("args: Replica.ObjectLockGovernance needs Replica.ObjectLockDays or Lifecycle.BaseBackupDays"))
+		if r.ObjectLockGovernance && r.ObjectLockDays == 0 && (a.Lifecycle == nil || a.Lifecycle.RetentionDays <= 0) {
+			errs = append(errs, errors.New("args: Replica.ObjectLockGovernance needs Replica.ObjectLockDays or Lifecycle.RetentionDays"))
 		}
 
 		if r.ObjectLockGovernance && a.ObjectLockDays > 0 {
@@ -604,6 +618,7 @@ func (b *builder) primary() error {
 		ListerRoles:     a.ListerRoleNames,
 		ObjectActions:   a.WriterObjectActions,
 		Tenants:         a.Tenants,
+		SingleProject:   a.SingleProject,
 		GlobalDenies:    a.globalDenies(),
 		SSES3:           !a.Encryption.kms(),
 	})
@@ -650,7 +665,7 @@ func (b *builder) lifecycleRules(primary bool) (s3.BucketLifecycleConfigurationV
 	}
 
 	if a.Lifecycle != nil {
-		gen, err := LifecycleRules(*a.Lifecycle, a.Tenants, primary)
+		gen, err := LifecycleRules(*a.Lifecycle, primary)
 		if err != nil {
 			return nil, fmt.Errorf("lifecycle rules: %w", err)
 		}
@@ -726,7 +741,7 @@ func (b *builder) replica() error {
 	if r.ObjectLockGovernance {
 		days := r.ObjectLockDays
 		if days == 0 {
-			days = a.Lifecycle.BaseBackupDays
+			days = a.Lifecycle.RetentionDays
 		}
 
 		if _, err := s3.NewBucketObjectLockConfigurationV2(b.ctx, rname+"-object-lock", &s3.BucketObjectLockConfigurationV2Args{

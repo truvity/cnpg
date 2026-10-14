@@ -1,0 +1,268 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyDeleteObjectVersionFromExternalAccount",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": "s3:DeleteObjectVersion",
+      "Resource": "arn:testpart:s3:::example-backup/*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:PrincipalAccount": "dst-account"
+        }
+      }
+    },
+    {
+      "Sid": "DenyDeleteObjectsFromExternalAccount",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": [
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion",
+        "s3:BypassGovernanceRetention"
+      ],
+      "Resource": "arn:testpart:s3:::example-backup/*",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:PrincipalAccount": "dst-account"
+        }
+      }
+    },
+    {
+      "Sid": "DenyBucketConfigurationFromExternalAccount",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": [
+        "s3:PutLifecycleConfiguration",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucketPolicy",
+        "s3:PutBucketVersioning",
+        "s3:PutReplicationConfiguration",
+        "s3:PutBucketObjectLockConfiguration"
+      ],
+      "Resource": "arn:testpart:s3:::example-backup",
+      "Condition": {
+        "StringNotEquals": {
+          "aws:PrincipalAccount": "dst-account"
+        }
+      }
+    },
+    {
+      "Sid": "DenyPutObjectWithoutSSES3",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": "s3:PutObject",
+      "Resource": "arn:testpart:s3:::example-backup/*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:x-amz-server-side-encryption": "AES256"
+        }
+      }
+    },
+    {
+      "Sid": "AllowTenant1ArchiveObjects",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:testpart:iam::src-account:root"
+      },
+      "Action": [
+        "s3:PutObject",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts",
+        "s3:GetObject",
+        "s3:PutObjectTagging"
+      ],
+      "Resource": "arn:testpart:s3:::example-backup/<namespace>/<cluster-a>/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-a>-archive"
+        }
+      }
+    },
+    {
+      "Sid": "AllowTenant1ArchiveListBucket",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:testpart:iam::src-account:root"
+      },
+      "Action": "s3:ListBucket",
+      "Resource": "arn:testpart:s3:::example-backup",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-a>-archive"
+        }
+      }
+    },
+    {
+      "Sid": "AllowTenant2RestoreObjects",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:testpart:iam::src-account:root"
+      },
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": "arn:testpart:s3:::example-backup/<namespace>/<cluster-a>/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-a>-restore"
+        }
+      }
+    },
+    {
+      "Sid": "AllowTenant2RestoreListBucket",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:testpart:iam::src-account:root"
+      },
+      "Action": "s3:ListBucket",
+      "Resource": "arn:testpart:s3:::example-backup",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-a>-restore"
+        }
+      }
+    },
+    {
+      "Sid": "AllowTenant3ArchiveObjects",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:testpart:iam::src-account:root"
+      },
+      "Action": [
+        "s3:PutObject",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts",
+        "s3:GetObject",
+        "s3:PutObjectTagging"
+      ],
+      "Resource": "arn:testpart:s3:::example-backup/<namespace>/<cluster-b>/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-b>-archive"
+        }
+      }
+    },
+    {
+      "Sid": "AllowTenant3ArchiveListBucket",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:testpart:iam::src-account:root"
+      },
+      "Action": "s3:ListBucket",
+      "Resource": "arn:testpart:s3:::example-backup",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-b>-archive"
+        }
+      }
+    },
+    {
+      "Sid": "AllowTenant4RestoreObjects",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:testpart:iam::src-account:root"
+      },
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": "arn:testpart:s3:::example-backup/<namespace>/<cluster-b>/*",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-b>-restore"
+        }
+      }
+    },
+    {
+      "Sid": "AllowTenant4RestoreListBucket",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:testpart:iam::src-account:root"
+      },
+      "Action": "s3:ListBucket",
+      "Resource": "arn:testpart:s3:::example-backup",
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-b>-restore"
+        }
+      }
+    },
+    {
+      "Sid": "DenyTenantRole1OutsideItsPrefix",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": "s3:*",
+      "NotResource": [
+        "arn:testpart:s3:::example-backup",
+        "arn:testpart:s3:::example-backup/<namespace>/<cluster-a>/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-a>-archive"
+        }
+      }
+    },
+    {
+      "Sid": "DenyTenantRole2OutsideItsPrefix",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": "s3:*",
+      "NotResource": [
+        "arn:testpart:s3:::example-backup",
+        "arn:testpart:s3:::example-backup/<namespace>/<cluster-a>/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-a>-restore"
+        }
+      }
+    },
+    {
+      "Sid": "DenyTenantRole3OutsideItsPrefix",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": "s3:*",
+      "NotResource": [
+        "arn:testpart:s3:::example-backup",
+        "arn:testpart:s3:::example-backup/<namespace>/<cluster-b>/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-b>-archive"
+        }
+      }
+    },
+    {
+      "Sid": "DenyTenantRole4OutsideItsPrefix",
+      "Effect": "Deny",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": "s3:*",
+      "NotResource": [
+        "arn:testpart:s3:::example-backup",
+        "arn:testpart:s3:::example-backup/<namespace>/<cluster-b>/*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:PrincipalArn": "arn:testpart:iam::src-account:role/<cluster-b>-restore"
+        }
+      }
+    }
+  ]
+}

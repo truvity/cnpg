@@ -46,7 +46,7 @@ func tenantArgs() *backupstore.Args {
 	a.LegacyTopLevel = false
 	a.Encryption = backupstore.EncryptionSSES3
 	a.LifecycleRules = nil
-	a.Lifecycle = &backupstore.Lifecycle{BaseBackupDays: 30}
+	a.Lifecycle = &backupstore.Lifecycle{RetentionDays: 30}
 	a.Tenants = []backupstore.Tenant{archiveTenant(), restoreTenant()}
 	a.ListerRoleNames = nil
 	a.Replica = &backupstore.Replica{
@@ -68,6 +68,7 @@ func indent(t *testing.T, raw string) []byte {
 }
 
 func TestTenantGoldenPolicies(t *testing.T) {
+	// The strict, prefix-limited shape (a bucket shared by projects).
 	regs, err := run(t, tenantArgs())
 	if err != nil {
 		t.Fatal(err)
@@ -86,6 +87,27 @@ func TestTenantGoldenPolicies(t *testing.T) {
 
 	for name, arn := range map[string]string{"archive": role("pg-archive"), "restore": role("pg-restore")} {
 		checkGolden(t, "tenants/role-policy-"+name+".json", indent(t, docs[arn]))
+	}
+}
+
+func TestPerProjectGoldens(t *testing.T) {
+	a := projectArgs()
+
+	regs, err := run(t, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	primary, _ := policyOf(t, regs, bucketPolicyType, bucket+"-policy")
+	checkGolden(t, "tenants/project-primary-policy.json", []byte(primary+"\n"))
+
+	docs, err := a.TenantRolePolicies("")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"<cluster-a>-archive", "<cluster-a>-restore"} {
+		checkGolden(t, "tenants/project-role-policy-"+strings.TrimPrefix(name, "<cluster-a>-")+".json", indent(t, docs[role(name)]))
 	}
 
 	checkGolden(t, "tenants/lifecycle-primary.json", dump(t, []registration{find(t, regs, lifecycleType, bucket+"-lifecycle")}))
@@ -223,7 +245,7 @@ func TestTenantBucketPolicyShape(t *testing.T) {
 	}
 
 	if strings.Contains(raw, "HeadBucket") || strings.Contains(raw, `"Null"`) {
-		t.Error("an unprefixed list is admitted without AllowHeadBucket")
+		t.Error("an unprefixed list is admitted without SingleProject")
 	}
 
 	// The deny outside the prefix keeps the bucket and the prefix.
@@ -238,9 +260,26 @@ func TestTenantBucketPolicyShape(t *testing.T) {
 	}
 }
 
-func TestAllowHeadBucketIsOptIn(t *testing.T) {
+// projectArgs is the standard shape: one bucket for one project, two
+// clusters, each with its own archive and restore roles.
+func projectArgs() *backupstore.Args {
 	a := tenantArgs()
-	a.Tenants[0].AllowHeadBucket = true
+	a.SingleProject = true
+
+	cluster := func(ns, name string) (backupstore.Tenant, backupstore.Tenant) {
+		return backupstore.Tenant{RoleARN: role(name + "-archive"), Prefix: ns + "/" + name + "/", Purpose: backupstore.PurposeArchive},
+			backupstore.Tenant{RoleARN: role(name + "-restore"), Prefix: ns + "/" + name + "/", Purpose: backupstore.PurposeRestore}
+	}
+
+	a1, r1 := cluster("<namespace>", "<cluster-a>")
+	a2, r2 := cluster("<namespace>", "<cluster-b>")
+	a.Tenants = []backupstore.Tenant{a1, r1, a2, r2}
+
+	return a
+}
+
+func TestSingleProjectListsWholeBucketButKeepsObjectSeparation(t *testing.T) {
+	a := projectArgs()
 
 	regs, err := run(t, a)
 	if err != nil {
@@ -248,19 +287,55 @@ func TestAllowHeadBucketIsOptIn(t *testing.T) {
 	}
 
 	raw, _ := policyOf(t, regs, bucketPolicyType, bucket+"-policy")
-	for _, w := range []string{"AllowTenant1ArchiveHeadBucket", `"s3:prefix": "true"`, `"s3:prefix": "false"`} {
-		if !strings.Contains(raw, w) {
-			t.Errorf("policy lacks %s", w)
+	if strings.Contains(raw, "ListOutsideItsPrefix") || strings.Contains(raw, `"s3:prefix"`) || strings.Contains(raw, `"Null"`) {
+		t.Errorf("a per-project policy still conditions the list on a prefix:\n%s", raw)
+	}
+
+	byID := map[string]statement{}
+	for _, s := range statementsOf(t, raw) {
+		byID[s.Sid] = s
+	}
+
+	for i := 1; i <= 4; i++ {
+		for _, p := range []string{"Archive", "Restore"} {
+			sid := fmt.Sprintf("AllowTenant%d%sListBucket", i, p)
+			if s, ok := byID[sid]; ok && len(s.Condition) != 1 {
+				t.Errorf("%s condition = %v, want the identity only", sid, s.Condition)
+			}
 		}
 	}
 
-	docs, err := a.TenantRolePolicies("")
-	if err != nil {
-		t.Fatal(err)
+	if _, ok := byID["AllowTenant1ArchiveListBucket"]; !ok {
+		t.Fatal("no list allow for the first archive tenant")
 	}
 
-	if !strings.Contains(docs[role("pg-archive")], `"Null":{"s3:prefix":"true"}`) {
-		t.Error("role policy lacks the unprefixed list")
+	// Object access and the deny outside the prefix stay per cluster.
+	if got := fmt.Sprint(byID["AllowTenant1ArchiveObjects"].Resource); !strings.HasSuffix(got, "<namespace>/<cluster-a>/*") {
+		t.Errorf("archive objects resource = %s", got)
+	}
+
+	for _, n := range []int{1, 2, 3, 4} {
+		deny := byID[fmt.Sprintf("DenyTenantRole%dOutsideItsPrefix", n)]
+		if deny.Sid == "" || deny.Effect != "Deny" {
+			t.Errorf("no deny outside the prefix for role %d", n)
+		}
+	}
+
+	// No tenant, archive or restore, can delete.
+	for _, s := range statementsOf(t, raw) {
+		if strings.HasPrefix(s.Sid, "AllowTenant") {
+			for _, act := range actionsOf(s) {
+				if strings.Contains(act, "Delete") || strings.Contains(act, "Bypass") {
+					t.Errorf("%s allows %s", s.Sid, act)
+				}
+			}
+		}
+	}
+
+	for arn, doc := range mustPolicies(t, a) {
+		if strings.Contains(doc, "Delete") || strings.Contains(doc, `"s3:prefix"`) {
+			t.Errorf("%s: role policy = %s", arn, doc)
+		}
 	}
 }
 
@@ -454,11 +529,11 @@ func ids(m map[string]map[string]any) []string {
 	return out
 }
 
-func TestLifecycleRulesPerTenantAndMargin(t *testing.T) {
-	a := tenantArgs()
+func TestLifecycleOneAgeForEverything(t *testing.T) {
+	a := projectArgs()
 	a.Lifecycle = &backupstore.Lifecycle{
-		BaseBackupDays: 30,
-		Transitions:    []backupstore.Transition{{Days: 30, StorageClass: "STANDARD_IA"}},
+		RetentionDays: 30,
+		Transitions:   []backupstore.Transition{{Days: 30, StorageClass: "STANDARD_IA"}},
 	}
 
 	regs, err := run(t, a)
@@ -467,32 +542,16 @@ func TestLifecycleRulesPerTenantAndMargin(t *testing.T) {
 	}
 
 	rules := lifecycleRules(t, regs, bucket+"-lifecycle")
-	want := []string{
-		"base-backups/<namespace-a>/<cluster-a>/<cluster-a>/", "housekeeping", "tier-storage-class",
-		"wal/<namespace-a>/<cluster-a>/<cluster-a>/",
+	if got := ids(rules); strings.Join(got, "|") != "housekeeping|managed|tier-storage-class" {
+		t.Fatalf("rule ids = %q: no per-cluster or per-path rules expected", got)
 	}
 
-	if got := ids(rules); strings.Join(got, "|") != strings.Join(want, "|") {
-		t.Fatalf("rule ids = %q, want %q", got, want)
+	if d := rules["managed"]["expiration"].(map[string]any)["days"].(float64); d != 30 {
+		t.Errorf("managed objects expire after %v days, want 30", d)
 	}
 
-	days := func(id string) float64 { return rules[id]["expiration"].(map[string]any)["days"].(float64) }
-
-	if d := days(want[0]); d != 30 {
-		t.Errorf("base backups expire after %v days, want 30", d)
-	}
-
-	if d := days(want[3]); d != 37 {
-		t.Errorf("WAL expires after %v days, want 37 (N+7)", d)
-	}
-
-	and := rules[want[0]]["filter"].(map[string]any)["and"].(map[string]any)
-	if and["prefix"] != "<namespace-a>/<cluster-a>/<cluster-a>/base/" || fmt.Sprint(and["tags"]) != "map[cnpg-backup-retention:managed]" {
-		t.Errorf("base rule filter = %v", and)
-	}
-
-	if p := rules[want[3]]["filter"].(map[string]any)["and"].(map[string]any)["prefix"]; p != "<namespace-a>/<cluster-a>/<cluster-a>/wals/" {
-		t.Errorf("WAL rule prefix = %v", p)
+	if tag := fmt.Sprint(rules["managed"]["filter"].(map[string]any)["tag"]); tag != "map[key:cnpg-backup-retention value:managed]" {
+		t.Errorf("tag filter = %s", tag)
 	}
 
 	hk := rules["housekeeping"]
@@ -504,8 +563,12 @@ func TestLifecycleRulesPerTenantAndMargin(t *testing.T) {
 
 	// The replica has the same expiry and housekeeping, and no tiering.
 	rep := lifecycleRules(t, regs, replica+"-lifecycle")
-	if got := ids(rep); strings.Contains(strings.Join(got, "|"), "tier-storage-class") || len(got) != 3 {
+	if got := ids(rep); strings.Join(got, "|") != "housekeeping|managed" {
 		t.Errorf("replica rule ids = %q", got)
+	}
+
+	if d := rep["managed"]["expiration"].(map[string]any)["days"].(float64); d != 30 {
+		t.Errorf("replica expiry = %v days, want 30", d)
 	}
 }
 
@@ -513,7 +576,7 @@ func TestLifecycleParametersAndFallback(t *testing.T) {
 	a := tenantArgs()
 	a.Tenants = nil
 	a.WriterRoleName = "writer-*"
-	a.Lifecycle = &backupstore.Lifecycle{BaseBackupDays: 14, WALMarginDays: 3, NoncurrentDays: 2, AbortMultipartDays: 1}
+	a.Lifecycle = &backupstore.Lifecycle{RetentionDays: 14, NoncurrentDays: 2, AbortMultipartDays: 1}
 	a.Replica = nil
 
 	regs, err := run(t, a)
@@ -526,8 +589,8 @@ func TestLifecycleParametersAndFallback(t *testing.T) {
 		t.Fatalf("rule ids = %q", got)
 	}
 
-	if d := rules["managed"]["expiration"].(map[string]any)["days"].(float64); d != 17 {
-		t.Errorf("the bucket-wide tag rule expires after %v days, want N+margin = 17", d)
+	if d := rules["managed"]["expiration"].(map[string]any)["days"].(float64); d != 14 {
+		t.Errorf("the bucket-wide tag rule expires after %v days, want N = 14", d)
 	}
 
 	if tag := fmt.Sprint(rules["managed"]["filter"].(map[string]any)["tag"]); tag != "map[key:cnpg-backup-retention value:managed]" {
@@ -543,7 +606,7 @@ func TestLifecycleParametersAndFallback(t *testing.T) {
 
 func TestLifecycleRulesAddToCallerRules(t *testing.T) {
 	a := base()
-	a.Lifecycle = &backupstore.Lifecycle{BaseBackupDays: 10}
+	a.Lifecycle = &backupstore.Lifecycle{RetentionDays: 10}
 
 	regs, err := run(t, a)
 	if err != nil {
@@ -634,7 +697,6 @@ func TestRefusesTenantAndLifecycleMistakes(t *testing.T) {
 		"prefix glob":        {func(a *backupstore.Args) { a.Tenants[0].Prefix = "a/*/" }, "Tenants[0].Prefix"},
 		"prefix leading":     {func(a *backupstore.Args) { a.Tenants[0].Prefix = "/a/b/" }, "Tenants[0].Prefix"},
 		"purpose":            {func(a *backupstore.Args) { a.Tenants[0].Purpose = "delete" }, "Tenants[0].Purpose"},
-		"server name":        {func(a *backupstore.Args) { a.Tenants[0].ServerName = "a/b" }, "Tenants[0].ServerName"},
 		"duplicate":          {func(a *backupstore.Args) { a.Tenants[1] = a.Tenants[0] }, "repeats"},
 		"two archivers": {
 			func(a *backupstore.Args) {
@@ -642,10 +704,10 @@ func TestRefusesTenantAndLifecycleMistakes(t *testing.T) {
 				a.Tenants[1].RoleARN = role("other")
 			}, "second archive tenant",
 		},
-		"no retention":      {func(a *backupstore.Args) { a.Lifecycle.BaseBackupDays = 0 }, "BaseBackupDays"},
-		"negative margin":   {func(a *backupstore.Args) { a.Lifecycle.WALMarginDays = -1 }, "WALMarginDays"},
-		"no rules at all":   {func(a *backupstore.Args) { a.Lifecycle = nil }, "LifecycleRules is empty"},
-		"lock without days": {func(a *backupstore.Args) { a.Lifecycle = &backupstore.Lifecycle{BaseBackupDays: 0} }, "BaseBackupDays"},
+		"no retention":         {func(a *backupstore.Args) { a.Lifecycle.RetentionDays = 0 }, "RetentionDays"},
+		"single project alone": {func(a *backupstore.Args) { a.Tenants = nil; a.WriterRoleName = "w"; a.SingleProject = true }, "SingleProject needs Tenants"},
+		"no rules at all":      {func(a *backupstore.Args) { a.Lifecycle = nil }, "LifecycleRules is empty"},
+		"lock without days":    {func(a *backupstore.Args) { a.Lifecycle = &backupstore.Lifecycle{RetentionDays: 0} }, "RetentionDays"},
 		"lock days unknown": {
 			func(a *backupstore.Args) {
 				a.Lifecycle = nil
