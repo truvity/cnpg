@@ -268,6 +268,56 @@ What a tenant can see in a per-project bucket: the key names of the other
 clusters of the same project. What it cannot do: read, write, tag or delete any
 object outside its prefix, and no tenant can delete anything.
 
+### A bucket set per environment: `NewProjectBuckets`
+
+`ProjectBucketsArgs` builds the standard shape for a list of projects in one
+environment, so a consumer passes facts and not the policy wiring:
+
+```go
+stores, err := backupstore.NewProjectBuckets(ctx, &backupstore.ProjectBucketsArgs{
+    BucketPrefix:       "<stem>",        // required: <stem>-<project>-<env>-<region>
+    Env:                "<env>",
+    Region:             "<region>",
+    SessionClusterName: "<eks-cluster>", // the eks-cluster-name session tag
+    SourceAccountID:    "<source-account-id>",
+    BackupAccountID:    "<backup-account-id>",
+    Lifecycle:          backupstore.Lifecycle{RetentionDays: 30},
+    Projects: []backupstore.Project{{
+        Name:     "<project>",
+        Clusters: []backupstore.ProjectCluster{{Name: "<cluster>", Namespace: "<namespace>"}},
+    }},
+    Tags:            func(project string) map[string]string { return nil },
+    ResourceOptions: []pulumi.ResourceOption{pulumi.Providers(backupAccountProvider)},
+})
+```
+
+Per project it makes one `BackupStore`: SSE-S3 (`Encryption` empty), `SingleProject`,
+`DenyDestructive`, and two tenants per cluster on `<namespace>/<cluster>/`: the
+archive role (session tags: the EKS cluster, the namespace and the ServiceAccount,
+which is the cluster's name unless `ProjectCluster.ServiceAccount` says otherwise)
+and the restore role (no session tags, since its ServiceAccount may move to a
+drill namespace). Role and bucket names come from `pkg/backupnaming`, the same
+rules the `cnpg-backup-access` chart's `global.rolePrefix` follows. `BuildProjectBuckets`
+returns the validated `Args` without registering anything.
+
+**Pulumi identity.** By default each component is named after its bucket and
+registered under the options you pass, the identity of
+`New(ctx, bucketName, args, pulumi.Providers(p))` called once per bucket: a
+caller that registered its buckets that way keeps every URN. A test pins this
+(`testdata/projects/urns.json`, and an equality check against per-bucket `New`).
+A caller with other names, parents or history passes them:
+`ResourceName(bucketName)` renames the component, `ResourceOptions` and
+`ProjectOptions(project, bucketName)` add parents, providers and aliases, and
+`LegacyTopLevel` and `Protect` pass through to every `Args`.
+
+`pkg/backupnaming` (no cloud SDK) holds the naming rules for callers that need only
+the strings: `ProjectBucketName(prefix, project, env, region)` (the prefix is
+required; the result is checked by `ValidateBucketName`), `ClusterPrefix(namespace,
+cluster)` (`<namespace>/<cluster>/`), `RolePrefix(env)` (`<env>-pg`),
+`ArchiveRoleName` and `RestoreRoleName` (`<env>-pg-<cluster>-archive|restore`),
+`RestoreServiceAccount(cluster)` and `ServerName(project, generation)`
+(`<project>-pg-<generation>`).
+
 ### Append-only
 
 Archive roles can put, read back, abort their multipart uploads and tag. They

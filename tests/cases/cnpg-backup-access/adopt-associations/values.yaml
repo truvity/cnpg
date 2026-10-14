@@ -1,0 +1,12 @@
+# Opt in to adopting an existing association (Roles are always adopted).
+global:
+  accountID: "123456789012"
+  region: eu-west-1
+  eksClusterName: example-eks
+  rolePrefix: example
+  adoptAssociations: true
+bucket:
+  name: example-backup
+clusters:
+  - name: example-pg
+    namespace: example

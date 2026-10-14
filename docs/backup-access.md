@@ -29,6 +29,7 @@ global:
   permissionsBoundaryARN: ""            # optional
   objectNamespace: ""                   # where the ACK objects live (default: the release namespace)
   useRoleRef: false                     # association by roleRef instead of the computed roleARN
+  adoptAssociations: false              # true: adopt-or-create on the associations too (Roles always adopt)
   tags: {}                              # on every Role and association
 bucket:
   name: <bucket>                        # required: the project's bucket in the backup account
@@ -108,10 +109,19 @@ the role cannot delete, the bucket lifecycle expires objects), and tag
 
 ## ACK mechanics
 
-- Both kinds carry `services.k8s.aws/adoption-policy: adopt-or-create` (the
-  ACK controllers need the `ResourceAdoption` feature gate), as
-  `cnpg-projects`' `backupAccess` does: an existing role or association with
-  the same identity is adopted. `commonAnnotations` add to it.
+- The Roles carry `services.k8s.aws/adoption-policy: adopt-or-create` (the
+  ACK controllers need the `ResourceAdoption` feature gate): a role name is
+  unique, so adopting an existing role of that name is safe. The
+  PodIdentityAssociations carry **no** adoption policy by default. An
+  association is identified in AWS by (EKS cluster, namespace, ServiceAccount),
+  not by the object: with adoption, a new object adopts the existing
+  association of that triple, and when the legacy object that also owns it is
+  pruned its controller deletes the association in AWS, leaving the database
+  with none while the new object still reports Synced. Without adoption the
+  create is refused while another association holds the triple, which is the
+  cue to remove that one first (docs/moving-to-a-new-backup-bucket.md).
+  `global.adoptAssociations: true` stamps `adopt-or-create` on the
+  associations too. `commonAnnotations` add to either.
 - Create the objects in a namespace the controllers' own identity serves
   (`global.objectNamespace`), not a project namespace.
 - `roleARN` is computed (`arn:<partition>:iam::<account>:role/<name>`), the

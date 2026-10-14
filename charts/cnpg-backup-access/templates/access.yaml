@@ -3,9 +3,17 @@ associations (ACK eks) that bind them. */}}
 {{- include "cnpg-backup-access.validate" . }}
 {{- $g := .Values.global }}
 {{- $objNS := $g.objectNamespace | default .Release.Namespace }}
-{{- /* adopt-or-create, as cnpg-projects' backupAccess: a role or association
-that already exists under the same identity is adopted, not refused. */}}
-{{- $ann := merge (deepCopy (.Values.commonAnnotations | default dict)) (dict "services.k8s.aws/adoption-policy" "adopt-or-create") }}
+{{- /* Roles are adopt-or-create: a role name is unique, so adopting the one
+that already exists under it is safe. PodIdentityAssociations are NOT adopted
+unless global.adoptAssociations is true. WHY: an association is identified in
+AWS by (EKS cluster, namespace, ServiceAccount), not by the object. With
+adoption a new object adopts the existing association of that triple; when the
+legacy object that also owns it is pruned, its controller deletes the
+association in AWS, and the database is left with none while the new object
+still reports Synced. Without adoption the create is refused while another
+association holds the triple, which is the signal to remove that one first. */}}
+{{- $roleAnn := merge (deepCopy (.Values.commonAnnotations | default dict)) (dict "services.k8s.aws/adoption-policy" "adopt-or-create") }}
+{{- $ann := ternary $roleAnn (deepCopy (.Values.commonAnnotations | default dict)) (default false $g.adoptAssociations) }}
 {{- range $c := .Values.clusters }}
 {{- $prefix := include "cnpg-backup-access.prefix" $c }}
 {{- range $p := list "archive" "restore" }}
@@ -17,7 +25,7 @@ that already exists under the same identity is adopted, not refused. */}}
 apiVersion: iam.services.k8s.aws/v1alpha1
 kind: Role
 metadata:
-  {{- include "cnpg-backup-access.metadata" (dict "root" $ "name" $role "namespace" $objNS "annotations" $ann) | nindent 2 }}
+  {{- include "cnpg-backup-access.metadata" (dict "root" $ "name" $role "namespace" $objNS "annotations" $roleAnn) | nindent 2 }}
 spec:
   name: {{ $role }}
   description: {{ printf "CNPG %s access to %s for %s/%s" $p $.Values.bucket.name $c.namespace $c.name | toJson }}

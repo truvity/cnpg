@@ -26,6 +26,14 @@ global:
   # account and role name (the estate pattern of cnpg-projects' backupAccess).
   # true: roleRef to the Role object, resolved by ACK once the Role is synced.
   useRoleRef: false
+  # false (default): the PodIdentityAssociations carry NO adoption policy. A
+  # Role is always adopt-or-create (its name is unique). true stamps
+  # adopt-or-create on the associations too. Why it is off: with adoption a
+  # new object adopts the existing association of the same (EKS cluster,
+  # namespace, ServiceAccount); when the legacy object that also owns it is
+  # pruned, its controller deletes the association in AWS, and the database is
+  # left with none while the new object still reports Synced.
+  adoptAssociations: false
   # Tags on every Role and association (the chart adds none).
   tags: {}
 

@@ -80,7 +80,6 @@ metadata:
   name: example-app-pg-archive
   namespace: ack-system
   annotations:
-    services.k8s.aws/adoption-policy: adopt-or-create
     services.k8s.aws/region: eu-west-1
 spec:
   clusterName: example-eks
@@ -99,7 +98,6 @@ metadata:
   name: example-app-pg-restore
   namespace: ack-system
   annotations:
-    services.k8s.aws/adoption-policy: adopt-or-create
     services.k8s.aws/region: eu-west-1
 spec:
   clusterName: example-eks
@@ -118,7 +116,6 @@ metadata:
   name: example-ledger-pg-archive
   namespace: ack-system
   annotations:
-    services.k8s.aws/adoption-policy: adopt-or-create
     services.k8s.aws/region: eu-west-1
 spec:
   clusterName: example-eks
