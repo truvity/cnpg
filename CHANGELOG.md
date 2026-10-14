@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.23.0
 
 - **Feature (Go, new package `pkg/backupnaming`):** the naming rules of the per-project backup model, with no cloud SDK: `ProjectBucketName(prefix, project, env, region)` (`<prefix>-<project>-<env>-<region>`; the prefix is a required input, the library has no estate stem) with `ValidateBucketName` (3 to 63 characters, `[a-z0-9-]`, no edge hyphen), `ClusterPrefix(namespace, cluster)` (`<namespace>/<cluster>/`), `RolePrefix(env)`, `ArchiveRoleName` and `RestoreRoleName` (`<env>-pg-<cluster>-archive|restore`), `RestoreServiceAccount` and `ServerName(project, generation)` (`<project>-pg-<generation>`).
 - **Feature (Go, `backupstore`):** `NewProjectBuckets(ctx, *ProjectBucketsArgs)` creates one `BackupStore` per project of an environment (SSE-S3, `SingleProject`, `DenyDestructive`, one expiry age; an archive tenant with the association's cluster, namespace and ServiceAccount session tags and a restore tenant per cluster), and `BuildProjectBuckets` returns the validated `Args` without registering. The default registration is a component named after the bucket, directly under the stack, with the options you pass: the same Pulumi identity as `New(ctx, bucketName, args, pulumi.Providers(p))` per bucket (a golden and an equality test pin it). `ResourceName`, `ResourceOptions`, `ProjectOptions` (aliases, parents), `LegacyTopLevel` and `Protect` keep a caller's existing URNs. Opt-in: no existing API changes.
