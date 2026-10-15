@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.27.0
 
 - **Feature (charts `cnpg-cluster`, `cnpg-projects`):** an opt-in backup preset that states the per-project model once, so a consumer passes coordinates instead of repeating the rules. Every value only fills what is left empty (an explicit value wins), and a render that sets none of them is byte-identical (the existing goldens are unchanged; the new case is `backup-preset`).
   - `backup.bucket: {prefix, project, env, region}` computes `bucketName` as `<prefix>-<project>-<env>-<region>`, the rule of `backupnaming.ProjectBucketName` with the same checks (all four required, 3 to 63 characters, `[a-z0-9-]`, no edge hyphen); the render fails on an invalid name. A Go test holds the chart to `ProjectBucketName` over a table of inputs.
