@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.28.0
 
 - **Feature (charts `cnpg-cluster`, `cnpg-projects`):** an opt-in posture profile and an external password role, so a platform stops repeating the same values and one hand-written hba line per project. A render that sets neither is byte-identical (the existing goldens are unchanged; the new cases are `platform-posture`, `platform-posture-explicit` and, for `cnpg-projects`, `posture`).
   - `posture: platform` fills, only while a value is unset, `scheduling.databasePool: durable`, `scheduling.tolerations: [{key: arch, operator: Exists}]`, `trust.namespace: cert-manager`, `trust.ca.enabled`, `trust.policy.enabled` and `trust.bundle.enabled` true, `trust.policy.roles` (the `roles[]` that hold a credential, then the bootstrap owner), `replication.enabled: true` and `monitoring.podMonitor.enabled: false`. An explicit value always wins, `false` included: the five booleans now default to `null` (read as before: `false`, and `true` for the PodMonitor), so "unset" can be told from "set to the old default". It does not invent the caller's inputs: the private PKI roots (`trust.bundle.extraCertificates`), `peopleProject`, `profile`, the backup coordinates and `serverTLS`. An unknown posture fails the render.
