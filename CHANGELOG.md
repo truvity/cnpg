@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Feature (Go, new package `pkg/backupplan`):** the backup cutover plan, with no cloud SDK. `Phase` (`Legacy`, `Prepare`, `Detach`, `Switched`) with `ParsePhase`, `Valid`, `Phases` and the predicates `OnNewPath`, `ArchiveAssociated` and `LegacyBindsDatabase` (the one-association-per-ServiceAccount order of docs/moving-to-a-new-backup-bucket.md), and `BuildAccess(AccessArgs)`, a pure builder of the `cnpg-backup-access` release rows (`AccessRow`: project, bucket via `backupnaming.ProjectBucketName`, role prefix via `backupnaming.RolePrefix`, phase and clusters with `Association = Phase.ArchiveAssociated()`) for every project that is `OnNewPath`. Opt-in: no existing API changes.
+
 ## v2.24.0
 
 - **Feature (Go, `backupstore`):** an opt-in replica for the per-project bucket set. `ProjectBucketsArgs.Replica *ProjectReplica` (`Region`, `Provider`, `ObjectLockGovernance`, `ObjectLockDays`, `RolePermissionsBoundary`, `RoleName`, `KeyDescription`) gives every project's bucket a replica in another region of the same account and maps onto the existing `Args.Replica` per project: replication from the primary, and with `ObjectLockGovernance` the replica is created with Object Lock in GOVERNANCE mode, a default retention of `ObjectLockDays` (default `Lifecycle.RetentionDays`), the delete-protection bucket policy and the lifecycle rules. A caller that leaves `Replica` nil gets byte-identical resources (the `projects/urns.json` golden is unchanged); `projects/urns-replica.json` pins the replica case. Object Lock is creation-time only, and objects that existed before replication need S3 Batch Replication (docs/backupstore.md).

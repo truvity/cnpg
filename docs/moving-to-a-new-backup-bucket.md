@@ -158,3 +158,28 @@ the legacy bucket) and a `recoveryTarget`, as for any recovery drill.
 After the move, restore points since the first new base backup from the new
 `serverName`. Keep the legacy bucket's read access until its oldest needed
 point has aged out.
+
+## Planning the phases in Go: `pkg/backupplan`
+
+The cutover order above is a state per database, and the library names it so
+that a caller's configuration does not have to. `backupplan.Phase` has four
+values, each one merge of the caller's configuration:
+
+| Phase      | `OnNewPath` | `ArchiveAssociated` | `LegacyBindsDatabase` | What changes |
+|------------|-------------|---------------------|-----------------------|--------------|
+| `Legacy`   | no          | no                  | yes                   | nothing; the default |
+| `Prepare`  | yes         | no                  | yes                   | step 0: roles exist, no archive association |
+| `Detach`   | yes         | no                  | no                    | step 1: the legacy association leaves |
+| `Switched` | yes         | yes                 | no                    | step 2: the archive association and the cluster values |
+
+`ArchiveAssociated` is false before `Switched` because EKS allows one
+association per (cluster, namespace, ServiceAccount): the legacy one holds the
+ServiceAccount until `Detach` removes it. `ParsePhase` validates a string from
+a configuration file.
+
+`backupplan.BuildAccess` turns the caller's facts (bucket prefix, environment,
+region, and each project's clusters and phase) into the rows of the
+`cnpg-backup-access` releases: one per project that is `OnNewPath`, with the
+bucket named by `backupnaming.ProjectBucketName`, the role prefix by
+`backupnaming.RolePrefix` and `association` set from the phase. The package
+has no cloud SDK, so a configuration generator can import it.
