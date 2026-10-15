@@ -35,3 +35,15 @@ func TestFlagErrors(t *testing.T) {
 	assert.Error(t, run(context.Background(), []string{"nope"}, &out, &errb, empty{}))
 	assert.NoError(t, run(context.Background(), []string{"version"}, &out, &errb, empty{}))
 }
+
+func TestPoolLabelFlag(t *testing.T) {
+	var out, errb bytes.Buffer
+	err := run(context.Background(), []string{"verify", "--namespace", "a", "--cluster", "b", "--pool-label", "nokey"}, &out, &errb, empty{})
+	assert.ErrorContains(t, err, "--pool-label")
+	// empty{} has no placement support: the assertion is reported as a FAIL.
+	out.Reset()
+	err = run(context.Background(), []string{"verify", "--namespace", "a", "--cluster", "b", "--pool-label", "pool=database", "--check-applied"}, &out, &errb, empty{})
+	assert.ErrorIs(t, err, errFailed)
+	assert.Contains(t, out.String(), "instances on pool")
+	assert.Contains(t, out.String(), "Database/DatabaseRole applied")
+}

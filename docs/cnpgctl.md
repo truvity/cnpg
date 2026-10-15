@@ -39,6 +39,8 @@ Secret the cluster does not use) and never fails the run.
 | `--context` | the current context | kubeconfig context |
 | `--max-backup-age` | `26h` | how old the last successful backup may be |
 | `--min-cert-validity` | `336h` (14 days) | how long each certificate must stay valid |
+| `--pool-label` | off | `key=value`: assert every instance Pod runs on a node carrying this label (see below) |
+| `--check-applied` | off | assert every `Database` and `DatabaseRole` of the cluster reports `status.applied: true` (see below) |
 | `--output` | `text` | `text` or `json` |
 
 `--output json` prints `{namespace, cluster, results: [{name, status, message}]}`.
@@ -59,6 +61,23 @@ Secret the cluster does not use) and never fails the run.
 | pg_hba has no trust | no `spec.postgresql.pg_hba` line uses `trust` |
 | pg_hba maps have pg_ident rows | every `map=NAME` has at least one `spec.postgresql.pg_ident` row for `NAME` |
 | pg_hba catch-all is last | no line follows a catch-all (`all all all`), where it could never match |
+
+Two assertions are opt-in, because they read more than the `Cluster` and its
+Secrets (a `get` of nodes, a `list` of Pods and of `databases` and
+`databaseroles` in the namespace; still read-only):
+
+| assertion | flag | passes when |
+|---|---|---|
+| instances on pool | `--pool-label key=value` | at least one Pod labelled `cnpg.io/cluster=<cluster>` exists, and every one is scheduled on a node whose label `key` equals `value`. The failure names each Pod and the node it is on. Use it where a database pool is tainted and labelled, to catch an instance that landed elsewhere |
+| Database/DatabaseRole applied | `--check-applied` | every `Database` and `DatabaseRole` with `spec.cluster.name` equal to the cluster has `status.applied: true`. A missing `status.applied` fails ("not reported yet"); an `applied: false` fails with the object's `status.message`. SKIP when the cluster has none, or the CRDs are not installed |
+
+In Go, set `verify.Options.PoolLabel` (`"key=value"`, see `verify.ParsePoolLabel`)
+and `verify.Options.CheckApplied`. The data comes from two optional interfaces,
+`verify.PlacementSource` (`InstanceNodes`, `NodeLabels`) and
+`verify.DeclarativeSource` (`DeclarativeObjects`), which `KubeSource`
+implements; `verify.Source` is unchanged, so an existing implementation keeps
+compiling, and with an option set a `Source` that lacks the interface gets a
+FAIL result rather than a panic.
 
 For a CA Secret holding a bundle, the validity check uses the longest-lived
 certificate in it, so a retired root beside the live one does not fail it.

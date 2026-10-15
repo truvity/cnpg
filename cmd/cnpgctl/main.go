@@ -79,6 +79,8 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer, src
 		cluster    = fs.String("cluster", "", "name of the Cluster (required)")
 		backupAge  = fs.Duration("max-backup-age", verify.DefaultMaxBackupAge, "how old the last successful backup may be")
 		certValid  = fs.Duration("min-cert-validity", verify.DefaultMinCertValidity, "how long each certificate must remain valid")
+		poolLabel  = fs.String("pool-label", "", "assert every instance Pod runs on a node labelled key=value (off by default)")
+		applied    = fs.Bool("check-applied", false, "assert every Database and DatabaseRole of the cluster reports status.applied true")
 		output     = fs.String("output", "text", "text or json")
 	)
 	if err := fs.Parse(args); err != nil {
@@ -86,6 +88,11 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer, src
 	}
 	if *namespace == "" || *cluster == "" {
 		return errors.New("--namespace and --cluster are required")
+	}
+	if *poolLabel != "" {
+		if _, _, err := verify.ParsePoolLabel(*poolLabel); err != nil {
+			return fmt.Errorf("--pool-label: %w", err)
+		}
 	}
 	if *output != "text" && *output != "json" {
 		return fmt.Errorf("--output must be text or json, got %q", *output)
@@ -100,6 +107,7 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer, src
 	rep, err := verify.Run(ctx, src, verify.Options{
 		Namespace: *namespace, Cluster: *cluster,
 		MaxBackupAge: *backupAge, MinCertValidity: *certValid,
+		PoolLabel: *poolLabel, CheckApplied: *applied,
 		Now: time.Now(),
 	})
 	if err != nil {
