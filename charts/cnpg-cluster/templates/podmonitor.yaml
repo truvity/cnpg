@@ -1,3 +1,4 @@
+{{- $_ := include "cnpg-cluster.posture" . -}}
 {{- /* PodMonitor for the instance pods' metrics exporter (port `metrics`,
 9187). On by default, but rendered only when the cluster serves the
 monitoring.coreos.com/v1 PodMonitor API (prometheus-operator, or the

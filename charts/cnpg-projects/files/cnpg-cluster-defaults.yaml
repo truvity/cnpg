@@ -19,6 +19,25 @@
 clusterName: ""
 namespace: ""
 
+# posture: an opt-in NAMED set of defaults for the values every platform
+# cluster repeats. "" = off (a render that sets nothing here is unchanged).
+# "platform" fills each of these ONLY while it is unset (null or empty), so
+# an explicit value, `false` included, always wins:
+#   scheduling.databasePool   durable
+#   scheduling.tolerations    [{key: arch, operator: Exists}]
+#   trust.namespace           cert-manager
+#   trust.ca.enabled          true
+#   trust.policy.enabled      true
+#   trust.policy.roles        the roles[] that hold a credential (auth cert or
+#                             password, in order), then the bootstrap owner
+#   trust.bundle.enabled      true
+#   replication.enabled       true
+#   monitoring.podMonitor.enabled  false (the platform scrapes the pods itself)
+# Inputs the posture never invents, because they are the caller's: the
+# private PKI roots (trust.bundle.extraCertificates), peopleProject, the
+# profile, the backup coordinates and serverTLS.
+posture: ""
+
 # ── Platform-injected ────────────────────────────────────────────────
 # profile: "devel" | "prod" — selects the posture. Anything that must
 # survive (staging included) runs "prod"; there is no third profile.
@@ -355,7 +374,7 @@ scheduling:
 monitoring:
   podMonitor:
     # Render the PodMonitor when the PodMonitor API is served.
-    enabled: true
+    enabled: null   # unset = true; posture platform: false
     # e.g. "30s". Empty = the scraper's own default.
     interval: ""
     # Drop the cnpg_pg_settings_* family before it is stored: one series per
@@ -413,7 +432,7 @@ trust:
   # ClusterIssuer named cnpg-<namespace>-<clusterName> that signs with
   # it. The product cannot read the CA key.
   ca:
-    enabled: false
+    enabled: null   # unset = false; posture platform: true
     duration: ""      # default 87600h
     renewBefore: ""
   # An approver-policy CertificateRequestPolicy: only the database
@@ -421,7 +440,7 @@ trust:
   # only; CN in `roles` (plus streaming_replica); ECDSA only. Needs
   # approver-policy with cert-manager's own approver disabled.
   policy:
-    enabled: false
+    enabled: null   # unset = false; posture platform: true
     roles: []         # e.g. [my-app, my-owner]
     # Who asks on behalf of a Certificate: cert-manager itself.
     requester:
@@ -432,7 +451,7 @@ trust:
   # the CA Secret plus extraCertificates. Needs trust-manager with
   # secret targets enabled and authorized for that Secret name.
   bundle:
-    enabled: false
+    enabled: null   # unset = false; posture platform: true
     # Extra PEM roots to trust, e.g. a people root for the pg_ident
     # `people` mapping.
     extraCertificates: []
@@ -441,7 +460,7 @@ trust:
 # spec.certificates.clientCASecret / replicationTLSSecret on the Cluster
 # pointing at {clusterName}-client-ca and the replication Secret below.
 replication:
-  enabled: false
+  enabled: null   # unset = false; posture platform: true
   # Name of the Secret the replication Certificate writes (and the Cluster
   # reads). Empty = {clusterName}-replication-tls. It must not be
   # {clusterName}-replication, -ca or -server: the CNPG operator generates

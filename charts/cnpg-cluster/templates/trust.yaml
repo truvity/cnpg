@@ -1,3 +1,4 @@
+{{- $_ := include "cnpg-cluster.posture" . -}}
 {{- /* Per-database client trust (values.yaml `trust`, `replication`).
 Rendered by the PLATFORM, once per PostgreSQL cluster, because it owns
 cluster-scoped objects and objects in cert-manager's namespace. Every

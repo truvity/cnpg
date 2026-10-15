@@ -1,0 +1,26 @@
+# The platform posture: scheduling, trust, replication and the PodMonitor
+# default come from `posture: platform`; the runtime role is declared by
+# another release (external), and the chart emits its scram hba line itself.
+# The render equals the same values spelled out by hand
+# (platform-posture-explicit) except for the hba line's source.
+clusterName: dms-pg
+namespace: dms
+profile: prod
+posture: platform
+labels:
+  example.com/project: dms
+bootstrap:
+  initdb: {database: dms, owner: dms}
+roles:
+  - {name: dms_app, auth: password, external: true}
+peopleProject: dms
+trust:
+  bundle:
+    extraCertificates:
+      - |
+        -----BEGIN CERTIFICATE-----
+        MIIBexample
+        -----END CERTIFICATE-----
+serverTLS:
+  existingSecret: dms-pg-server-tls
+  existingCASecret: dms-pg-server-ca

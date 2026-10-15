@@ -17,6 +17,11 @@
       "type": "string",
       "description": "Namespace the Cluster and its companion resources are rendered into."
     },
+    "posture": {
+      "type": "string",
+      "enum": ["", "platform"],
+      "description": "Opt-in named defaults for the values a platform cluster repeats (scheduling, trust, replication, podMonitor); each fills only while unset, so an explicit value wins. Empty = off."
+    },
     "profile": {
       "type": "string",
       "enum": ["", "devel", "prod"],
@@ -199,7 +204,8 @@
           "auth": { "type": "string", "enum": ["cert", "password", "none"], "description": "cert = operator-issued mTLS client certificate; password = the compatibility path, which requires passwordSecret; none = no credential of its own (the people_* roles, reached through the people pg_ident map)." },
           "login": { "type": "boolean", "description": "LOGIN attribute of the role. Default true; false makes a group role reachable by membership only." },
           "inRoles": { "type": "array", "items": { "type": "string" } },
-          "passwordSecret": { "type": "string", "description": "Existing kubernetes.io/basic-auth Secret. Required when auth=password on a non-owner role; the chart never generates passwords." }
+          "passwordSecret": { "type": "string", "description": "Existing kubernetes.io/basic-auth Secret. Required when auth=password on a non-owner role; the chart never generates passwords." },
+          "external": { "type": "boolean", "description": "The DatabaseRole and its credential Secret are declared by another release. The chart renders no DatabaseRole and needs no passwordSecret for it, but still emits its `hostssl all <name> all scram-sha-256` line in the place every password role has: after the owner line, before the people and beforeCatchAll lines and the catch-all. auth=password only." }
         }
       }
     },
@@ -274,7 +280,7 @@
         "ca": {
           "type": "object", "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
+            "enabled": { "type": ["boolean", "null"] },
             "duration": { "type": "string" },
             "renewBefore": { "type": "string" }
           }
@@ -282,7 +288,7 @@
         "policy": {
           "type": "object", "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
+            "enabled": { "type": ["boolean", "null"] },
             "roles": { "type": "array", "items": { "type": "string", "pattern": "^[a-z_][a-z0-9_-]{0,62}$" }, "description": "Common names the policy admits, besides streaming_replica." },
             "requester": {
               "type": "object", "additionalProperties": false,
@@ -296,7 +302,7 @@
         "bundle": {
           "type": "object", "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean" },
+            "enabled": { "type": ["boolean", "null"] },
             "extraCertificates": { "type": "array", "items": { "type": "string", "pattern": "BEGIN CERTIFICATE" }, "description": "Extra PEM roots added to the client CA bundle." }
           }
         }
@@ -305,7 +311,7 @@
     "replication": {
       "type": "object", "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean" },
+        "enabled": { "type": ["boolean", "null"] },
         "secretName": { "type": "string", "pattern": "^$|^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$", "description": "Secret written by the replication Certificate and named by spec.certificates.replicationTLSSecret. Empty = <clusterName>-replication-tls." }
       }
     },
@@ -334,7 +340,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "enabled": { "type": "boolean", "description": "Render a monitoring.coreos.com/v1 PodMonitor for the instance pods (port metrics, /metrics) when the cluster serves that API. Default true." },
+            "enabled": { "type": ["boolean", "null"], "description": "Render a monitoring.coreos.com/v1 PodMonitor for the instance pods (port metrics, /metrics) when the cluster serves that API. Default true." },
             "interval": { "type": "string", "description": "Scrape interval, e.g. 30s. Empty = the scraper's default." },
             "dropPgSettings": { "type": "boolean", "description": "Drop the cnpg_pg_settings_* metric family (roughly 500-700 series per instance). Default true." },
             "keepPgSettings": { "type": "array", "items": { "type": "string", "pattern": "^[A-Za-z0-9_.]+$" }, "description": "Settings (the name label of cnpg_pg_settings_setting) kept when dropPgSettings is on. Empty = drop the whole family." },
