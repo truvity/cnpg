@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.29.0
 
 - **Feature (chart `cnpg-database`):** an opt-in generated password for a login role, so a product stops copying the same three objects. `roles[].generatedPassword: {secretName, length, digits, symbols, noUpper, allowRepeat}` renders an External Secrets `Password` generator and a once-only `ExternalSecret` (`refreshInterval: "0"`, a `kubernetes.io/basic-auth` Secret) named `secretName`, and points the `DatabaseRole`'s `passwordSecret` at it. `roles[].objectName` and `roles[].labels` let a product keep the object names and labels it already renders (a renamed Secret would be regenerated and lock out running pods). A render that sets none of them is byte-identical (the existing goldens are unchanged; the new case is `generated-password`). The External Secrets CRDs are needed only by a role that sets `generatedPassword`; the chart does not probe for them. The render fails when `generatedPassword` is combined with a client certificate, a different `passwordSecret` or `disablePassword: true`, or has no `secretName`.
 
