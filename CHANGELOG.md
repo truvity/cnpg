@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.24.0
 
 - **Feature (Go, `backupstore`):** an opt-in replica for the per-project bucket set. `ProjectBucketsArgs.Replica *ProjectReplica` (`Region`, `Provider`, `ObjectLockGovernance`, `ObjectLockDays`, `RolePermissionsBoundary`, `RoleName`, `KeyDescription`) gives every project's bucket a replica in another region of the same account and maps onto the existing `Args.Replica` per project: replication from the primary, and with `ObjectLockGovernance` the replica is created with Object Lock in GOVERNANCE mode, a default retention of `ObjectLockDays` (default `Lifecycle.RetentionDays`), the delete-protection bucket policy and the lifecycle rules. A caller that leaves `Replica` nil gets byte-identical resources (the `projects/urns.json` golden is unchanged); `projects/urns-replica.json` pins the replica case. Object Lock is creation-time only, and objects that existed before replication need S3 Batch Replication (docs/backupstore.md).
 - **Feature (Go, `pkg/backupnaming`):** `ReplicaBucketName(prefix, project, env, region)` (the replica's name; the prefix is still a required input) and `ReplicationRoleName(env, project)` (`<env>-pg-<project>-replication`, the default replication role name).
