@@ -179,3 +179,55 @@ the names but cluster.yaml.
 true
 {{- end -}}
 {{- end -}}
+
+{{/*
+The effective backup values, as JSON: .Values.backup with the opt-in preset
+laid over what is left empty. An explicit value always wins; with none of
+backup.bucket, backup.generation and backup.mode set, the result is
+.Values.backup unchanged.
+  backup.bucket {prefix, project, env, region}: bucketName
+      <prefix>-<project>-<env>-<region> (pkg/backupnaming.ProjectBucketName,
+      same checks), only when bucketName is empty.
+  backup.generation: serverName <project>-pg-<generation>
+      (pkg/backupnaming.ServerName), only when serverName is empty. The
+      project is backup.project, else backup.bucket.project.
+  backup.mode perProjectBucket: the settings of a bucket whose writer roles
+      cannot delete: retentionDays 0 (when left at the chart default 30),
+      tags {cnpg-backup-retention: managed} and historyTags
+      {cnpg-backup-retention: keep} (when empty) and onDemand.name the
+      generation (when empty). Needs backup.generation.
+*/}}
+{{- define "cnpg-cluster.backup" -}}
+{{- $b := deepCopy .Values.backup -}}
+{{- $bk := $b.bucket | default dict -}}
+{{- $project := $b.project | default "" -}}
+{{- if and $project $bk.project (ne $project $bk.project) -}}
+{{- fail (printf "backup.project %q and backup.bucket.project %q differ" $project $bk.project) -}}
+{{- end -}}
+{{- $project = $project | default ($bk.project | default "") -}}
+{{- if and (not $b.bucketName) $bk -}}
+{{- range $k := list "prefix" "project" "env" "region" -}}
+{{- if not (index $bk $k) -}}{{- fail (printf "project bucket name: %s is empty (backup.bucket.%s)" $k $k) -}}{{- end -}}
+{{- end -}}
+{{- $name := printf "%s-%s-%s-%s" $bk.prefix $bk.project $bk.env $bk.region -}}
+{{- if gt (len $name) 63 -}}{{- fail (printf "bucket name %q is %d characters, S3 allows 63" $name (len $name)) -}}{{- end -}}
+{{- if lt (len $name) 3 -}}{{- fail (printf "bucket name %q is %d characters, S3 needs at least 3" $name (len $name)) -}}{{- end -}}
+{{- if not (regexMatch "^[a-z0-9-]+$" $name) -}}{{- fail (printf "bucket name %q is not in [a-z0-9-]" $name) -}}{{- end -}}
+{{- if or (hasPrefix "-" $name) (hasSuffix "-" $name) -}}{{- fail (printf "bucket name %q must not start or end with a hyphen" $name) -}}{{- end -}}
+{{- $_ := set $b "bucketName" $name -}}
+{{- end -}}
+{{- if and (not $b.serverName) $b.generation -}}
+{{- if not $project -}}{{- fail "backup.generation needs backup.project (or backup.bucket.project)" -}}{{- end -}}
+{{- $_ := set $b "serverName" (printf "%s-pg-%s" $project $b.generation) -}}
+{{- end -}}
+{{- if $b.mode -}}
+{{- if ne $b.mode "perProjectBucket" -}}{{- fail (printf "backup.mode %q: only perProjectBucket is known" $b.mode) -}}{{- end -}}
+{{- if not $b.generation -}}{{- fail "backup.mode perProjectBucket needs backup.generation" -}}{{- end -}}
+{{- if eq (int $b.retentionDays) 30 -}}{{- $_ := set $b "retentionDays" 0 -}}{{- end -}}
+{{- if not $b.tags -}}{{- $_ := set $b "tags" (dict "cnpg-backup-retention" "managed") -}}{{- end -}}
+{{- if not $b.historyTags -}}{{- $_ := set $b "historyTags" (dict "cnpg-backup-retention" "keep") -}}{{- end -}}
+{{- $od := $b.onDemand | default dict -}}
+{{- if not $od.name -}}{{- $_ := set $b "onDemand" (merge (dict "name" $b.generation) $od) -}}{{- end -}}
+{{- end -}}
+{{- toJson $b -}}
+{{- end -}}

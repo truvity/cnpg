@@ -1,12 +1,13 @@
-{{- if and .Values.backup.enabled .Values.backup.bucketName .Values.backup.schedule }}
+{{- $backup := include "cnpg-cluster.backup" . | fromJson }}
+{{- if and $backup.enabled $backup.bucketName $backup.schedule }}
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
   name: {{ .Values.clusterName }}-scheduled-backup
   namespace: {{ .Values.namespace }}
 spec:
-  schedule: {{ .Values.backup.schedule | quote }}
-  {{- if .Values.backup.immediate }}
+  schedule: {{ $backup.schedule | quote }}
+  {{- if $backup.immediate }}
   immediate: true
   {{- end }}
   backupOwnerReference: self

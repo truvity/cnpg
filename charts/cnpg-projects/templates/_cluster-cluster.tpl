@@ -6,6 +6,7 @@ project overrides knobs, never the posture. */}}
 {{- if not (has .Values.profile (list "devel" "prod")) }}
 {{- fail (printf "profile must be devel|prod (got %q) — it is platform-injected; a missing profile must never silently render the devel posture" .Values.profile) }}
 {{- end }}
+{{- $backup := include "cnpg-cluster.backup" . | fromJson }}
 {{- $prod := eq .Values.profile "prod" }}
 {{- $instances := .Values.instances | default ($prod | ternary 3 1) }}
 {{- if and $prod (lt (int $instances) 3) }}
@@ -231,7 +232,7 @@ spec:
   {{- end }}
   {{- end }}
 
-  {{- if and .Values.backup.enabled .Values.backup.bucketName }}
+  {{- if and $backup.enabled $backup.bucketName }}
   plugins:
     - name: barman-cloud.cloudnative-pg.io
       enabled: true
@@ -240,7 +241,7 @@ spec:
       isWALArchiver: true
       parameters:
         barmanObjectName: {{ .Values.clusterName }}-objectstore
-        serverName: {{ .Values.backup.serverName | default .Values.clusterName }}
+        serverName: {{ $backup.serverName | default .Values.clusterName }}
   {{- end }}
 
 {{- end -}}
