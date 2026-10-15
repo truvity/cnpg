@@ -83,7 +83,11 @@ Before: the database's ServiceAccount is bound by a legacy Pod Identity
 association object to a legacy role, and the `ObjectStore` points at the legacy
 bucket.
 
-0. Prepare the destination. Deploy the `backupstore` bucket (see
+0. Take a base backup into the OLD location first: a plain one-off `Backup`
+   on the old `ObjectStore`, named for the cutover. After the switch the old
+   location receives no more WAL, so this is the last recent base backup there,
+   and the starting point for restoring customer data from before the move.
+   Then prepare the destination. Deploy the `backupstore` bucket (see
    `backupstore.NewProjectBuckets` for a bucket per project) and
    `cnpg-backup-access` with `clusters[].archive.association: false`: the
    archive and restore roles exist, and no second association is made on the
@@ -113,6 +117,15 @@ bucket.
    `backup.serverName` (the next generation, e.g. `<project>-pg-g2`; barman
    refuses a non-empty directory for a new history), `backup.retentionDays: 0`,
    `backup.tags` and `backup.historyTags`, and a new `backup.onDemand.name`.
+   Then verify in AWS that the association exists (the `aws eks
+   list-pod-identity-associations` call above, now listing one). The ACK
+   controller can report the `PodIdentityAssociation` object Synced while AWS
+   has none; delete the object and let the GitOps tool recreate it (an
+   annotation nudge does not).
+
+   Build this change from the default branch AFTER the detach change has
+   merged. A branch stacked on the unmerged detach conflicts once the detach is
+   squash-merged.
 3. **Recreate EVERY instance, replicas first, then the primary by
    switchover.** Pod Identity credentials are injected when a pod is created.
    A pod created while the ServiceAccount had no association gets no AWS
@@ -120,23 +133,52 @@ bucket.
    old role's cached credentials. Either way each instance must be recreated
    after the new association exists: delete the replicas one at a time, then
    switch over to a recreated replica and delete the old primary's pod. Do not
-   rely on the `ObjectStore` change to roll them.
+   rely on the `ObjectStore` change to roll them. A slow image pull on a fresh
+   node is not a failure: a recreated instance can sit in `ContainerCreating`
+   for minutes. Give it a bounded wait before suspecting the cutover.
+
+   The old primary needs one more step. It keeps the cached credentials of the
+   old role, so as a replica it cannot read WAL from the new location and never
+   rejoins. As soon as it has become a replica after the switchover, delete its
+   pod once more; the volume stays, and the new pod starts with the new
+   association's credentials.
+
+   If the switchover leaves the phase stuck ("Switchover in progress", then
+   "Waiting for the instances to become active") while every instance is ready,
+   that is upstream CloudNativePG issue 11627, a lost configuration reload. Run
+   `SELECT pg_reload_conf();` on each instance (psql in the pod, as the owner).
+   No restart is needed; the Cluster turns healthy within seconds. Until it
+   does, a GitOps sync of the Cluster stays blocked.
 4. Mind the primary's shutdown. A primary that cannot archive WAL (it has no
    working credentials for the new location) blocks its own shutdown until
    `stopDelay` runs out, because the instance manager waits for the archive to
    drain. If the first sync left the primary without credentials, expect the
    delete to take up to `stopDelay`.
-5. **Take a new-named `Backup` after the restarts.** The chart's `onDemand`
-   `Backup` is created at sync, before the instances are restarted, so it runs
-   with the old credentials and fails. Once every instance is back, set a new
-   `backup.onDemand.name` (`g3` if `g2` failed) so a fresh `Backup` runs, and
-   check it reaches `completed` and that WAL appears under the new
-   `serverName`.
+5. **Take the base backup after the restarts, and prove where it landed.** The
+   chart's `onDemand` `Backup` is created at sync, before the instances are
+   restarted. It can run before the `ObjectStore` change reaches the plugin and
+   write into the OLD location while reporting `completed`, or run with the old
+   credentials and fail. Either way a `completed` status does not show that a
+   base backup exists in the new location. Once every instance is back, delete
+   that `Backup` record (the chart recreates it from the values) or set a new
+   `backup.onDemand.name`, so that a fresh one runs, and then check in the
+   bucket: a base backup under `<serverName>/base/` in the NEW bucket, WAL
+   under `<serverName>/wal/`, the timeline history file archived, and the same
+   objects in the replica bucket if there is one.
 6. Expect the plugin to delete Kubernetes `Backup` records that are not in the
    new location's catalog: the records of the old location's base backups
    disappear from the cluster. This is bookkeeping only; nothing in S3 is
    touched, and the old location stays restorable from its bucket and
    `serverName`.
+
+## Verifying the result
+
+`cnpgctl verify` (docs/cnpgctl.md) covers health, archiving, the recoverability
+window and the last backup. Two opt-in flags cover what a cutover leaves
+behind: `--pool-label key=value` fails if an instance runs on a node without
+the label (a recreated pod can land elsewhere), and `--check-applied` fails if
+a `Database` or `DatabaseRole` of the cluster does not report applied. It does
+not read the bucket: step 5's check of the new location stays a manual one.
 
 ## The PITR gap
 
