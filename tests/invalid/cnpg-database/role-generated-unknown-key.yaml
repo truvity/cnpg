@@ -1,0 +1,4 @@
+clusterName: pg
+roles:
+  - name: r
+    generatedPassword: {secretName: s, refreshInterval: 1h}

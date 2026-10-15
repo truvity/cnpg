@@ -1,16 +1,28 @@
 {{- /* DatabaseRole per roles[] entry, and a cert-manager Certificate per
 role that asks for a client certificate (Secret <cluster>-role-<role>,
 commonName = the role name). Underscores in the Secret and object names
-become "-": Kubernetes names may not carry them. */}}
+become "-": Kubernetes names may not carry them.
+
+A role with generatedPassword also renders an External Secrets Password
+generator and a once-only ExternalSecret that fill the basic-auth Secret
+the DatabaseRole reads its passwordSecret from (see docs/reference.md).
+That path alone needs the External Secrets CRDs; a chart without
+generatedPassword renders none of it. */}}
 {{- range .Values.roles }}
+{{- $role := . }}
 {{- $slug := .name | replace "_" "-" }}
 {{- $cc := .clientCertificate | default dict }}
+{{- $gp := .generatedPassword | default dict }}
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: {{ $.Values.clusterName }}-role-{{ $slug }}
+  name: {{ .objectName | default (printf "%s-role-%s" $.Values.clusterName $slug) }}
   namespace: {{ include "cnpg-database.namespace" $ }}
+  {{- with .labels }}
+  labels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   cluster:
     name: {{ $.Values.clusterName }}
@@ -27,7 +39,7 @@ spec:
   {{- if hasKey . "connectionLimit" }}
   connectionLimit: {{ .connectionLimit }}
   {{- end }}
-  {{- with .passwordSecret }}
+  {{- with (.passwordSecret | default $gp.secretName) }}
   passwordSecret:
     name: {{ . }}
   {{- end }}
@@ -43,6 +55,52 @@ spec:
   {{- with .databaseRoleReclaimPolicy }}
   databaseRoleReclaimPolicy: {{ . }}
   {{- end }}
+{{- if $gp.secretName }}
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: {{ $gp.secretName }}
+  namespace: {{ include "cnpg-database.namespace" $ }}
+  {{- with $role.labels }}
+  labels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  length: {{ $gp.length | default 32 }}
+  digits: {{ if hasKey $gp "digits" }}{{ $gp.digits }}{{ else }}5{{ end }}
+  symbols: {{ if hasKey $gp "symbols" }}{{ $gp.symbols }}{{ else }}0{{ end }}
+  noUpper: {{ if hasKey $gp "noUpper" }}{{ $gp.noUpper }}{{ else }}false{{ end }}
+  allowRepeat: {{ if hasKey $gp "allowRepeat" }}{{ $gp.allowRepeat }}{{ else }}true{{ end }}
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $gp.secretName }}
+  namespace: {{ include "cnpg-database.namespace" $ }}
+  {{- with $role.labels }}
+  labels:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  # Generated once and never refreshed: a refresh would mint a new password
+  # and lock out every pod holding the old one.
+  refreshInterval: "0"
+  target:
+    name: {{ $gp.secretName }}
+    template:
+      # basic-auth is what the operator reads a managed role's credential from.
+      type: kubernetes.io/basic-auth
+      data:
+        username: {{ .name | quote }}
+        password: "{{ `{{ .password }}` }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: {{ $gp.secretName }}
+{{- end }}
 {{- if $cc.enabled }}
 {{- $issuer := $cc.issuerRef | default $.Values.clientCertificateIssuerRef | default dict }}
 {{- $algo := $cc.algorithm | default $.Values.clientCertificate.algorithm }}

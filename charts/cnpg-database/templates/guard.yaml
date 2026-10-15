@@ -9,7 +9,9 @@ render instead of surfacing as a Database that never reconciles.
   expect.*      optional exact-match assertions for a product that derives
                 these names from its own install name and wants a mismatch
                 to fail loudly
-  roles[]       never privileged; never pg_*; the client certificate's
+  roles[]       generatedPassword needs a secretName and excludes a client
+                certificate and a different passwordSecret;
+                never privileged; never pg_*; the client certificate's
                 commonName is the role name, so the name must be stable */}}
 {{- $v := .Values }}
 {{- if not $v.clusterName }}
@@ -90,5 +92,20 @@ render instead of surfacing as a Database that never reconciles.
 {{- end }}
 {{- if and $cc.enabled .passwordSecret }}
 {{- fail (printf "role %q: clientCertificate and passwordSecret are alternatives; set one" .name) }}
+{{- end }}
+{{- if .generatedPassword }}
+{{- $gp := .generatedPassword }}
+{{- if not $gp.secretName }}
+{{- fail (printf "role %q: generatedPassword.secretName is the NAME of the basic-auth Secret to generate into; the chart does not invent one" .name) }}
+{{- end }}
+{{- if $cc.enabled }}
+{{- fail (printf "role %q: clientCertificate and generatedPassword are alternatives; set one" .name) }}
+{{- end }}
+{{- if and .passwordSecret (ne .passwordSecret $gp.secretName) }}
+{{- fail (printf "role %q: passwordSecret %q differs from generatedPassword.secretName %q; set one, or make them equal" .name .passwordSecret $gp.secretName) }}
+{{- end }}
+{{- if and (hasKey . "disablePassword") .disablePassword }}
+{{- fail (printf "role %q: disablePassword and generatedPassword contradict each other" .name) }}
+{{- end }}
 {{- end }}
 {{- end }}

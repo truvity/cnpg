@@ -204,6 +204,51 @@
           },
           "createdb": {
             "description": "Refused at render time: a product manages unprivileged roles only."
+          },
+          "objectName": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+            "description": "Overrides the DatabaseRole metadata.name (default <clusterName>-role-<name>), for a product that must keep an existing object name."
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Labels on the DatabaseRole and, when generatedPassword is set, on the Password and ExternalSecret."
+          },
+          "generatedPassword": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "secretName"
+            ],
+            "description": "Opt-in: renders an External Secrets Password generator and a once-only ExternalSecret that fill the basic-auth Secret secretName, and points the DatabaseRole's passwordSecret at it. Needs the External Secrets CRDs.",
+            "properties": {
+              "secretName": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the Secret, the Password and the ExternalSecret."
+              },
+              "length": {
+                "type": "integer",
+                "minimum": 8
+              },
+              "digits": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "symbols": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "noUpper": {
+                "type": "boolean"
+              },
+              "allowRepeat": {
+                "type": "boolean"
+              }
+            }
           }
         }
       }
