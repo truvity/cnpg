@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.25.0
 
 - **Feature (Go, new package `pkg/backupplan`):** the backup cutover plan, with no cloud SDK. `Phase` (`Legacy`, `Prepare`, `Detach`, `Switched`) with `ParsePhase`, `Valid`, `Phases` and the predicates `OnNewPath`, `ArchiveAssociated` and `LegacyBindsDatabase` (the one-association-per-ServiceAccount order of docs/moving-to-a-new-backup-bucket.md), and `BuildAccess(AccessArgs)`, a pure builder of the `cnpg-backup-access` release rows (`AccessRow`: project, bucket via `backupnaming.ProjectBucketName`, role prefix via `backupnaming.RolePrefix`, phase and clusters with `Association = Phase.ArchiveAssociated()`) for every project that is `OnNewPath`. Opt-in: no existing API changes.
 
