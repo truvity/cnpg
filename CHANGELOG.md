@@ -9,7 +9,7 @@ upgrade is expected to clear.
 - **Feature (charts `cnpg-cluster`, `cnpg-projects`):** an opt-in backup preset that states the per-project model once, so a consumer passes coordinates instead of repeating the rules. Every value only fills what is left empty (an explicit value wins), and a render that sets none of them is byte-identical (the existing goldens are unchanged; the new case is `backup-preset`).
   - `backup.bucket: {prefix, project, env, region}` computes `bucketName` as `<prefix>-<project>-<env>-<region>`, the rule of `backupnaming.ProjectBucketName` with the same checks (all four required, 3 to 63 characters, `[a-z0-9-]`, no edge hyphen); the render fails on an invalid name. A Go test holds the chart to `ProjectBucketName` over a table of inputs.
   - `backup.generation: <gN>` computes `serverName` as `<project>-pg-<gN>` (`backupnaming.ServerName`); the project is `backup.project`, else `backup.bucket.project`.
-  - `backup.mode: perProjectBucket` sets what a bucket with no-delete writer roles needs: `retentionDays` 0 (while it is left at the default 30), `tags {cnpg-backup-retention: managed}`, `historyTags {cnpg-backup-retention: keep}` and `onDemand.name` = the generation (each while empty). It requires `backup.generation`. The schedule is not touched.
+  - `backup.mode: perProjectBucket` sets what a bucket with no-delete writer roles needs: `retentionDays` 0 (while it is left at the default 30), `tags {cnpg-backup-retention: managed}`, `historyTags {cnpg-backup-retention: keep}` and `onDemand.name` = the generation (each while empty; `backup.onDemandFromGeneration: false` renders no one-off `Backup`, for a cluster born on its bucket). It requires `backup.generation`. The schedule is not touched.
 
 ## v2.25.0
 

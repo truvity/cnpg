@@ -54,6 +54,7 @@
         },
         "project": { "type": "string", "description": "Project of the serverName preset; defaults to bucket.project." },
         "generation": { "type": "string", "description": "Opt-in preset: with serverName empty, serverName is <project>-pg-<generation>." },
+        "onDemandFromGeneration": { "type": "boolean", "description": "With mode perProjectBucket, name the one-off Backup after the generation (default true). false renders none unless onDemand.name is set." },
         "mode": { "type": "string", "enum": ["", "perProjectBucket"], "description": "Opt-in preset for a per-project bucket whose roles cannot delete: retentionDays 0, managed/keep tags, onDemand.name = generation, each unless set explicitly. Requires generation." },
         "s3Prefix": { "type": "string", "description": "Prefix under the bucket. Defaults to '{namespace}/{clusterName}/' when empty." },
         "serverName": { "type": "string", "description": "Barman server directory under the prefix. Defaults to clusterName. Bump on a recreated (fresh initdb) cluster so it does not reuse its predecessor's archive directory." },
