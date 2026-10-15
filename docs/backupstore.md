@@ -445,6 +445,39 @@ refuses the preview. To adopt it, create a new replica bucket under a new
 name, let replication fill it, then retire the old one on your own schedule.
 It is exclusive with `ObjectLockDays` (COMPLIANCE on both buckets).
 
+### The replica in the bucket set
+
+`ProjectBucketsArgs.Replica` (a `*ProjectReplica`) gives every project's bucket
+its own replica in a second region of the same account. It is opt-in: with
+`Replica` nil the resources are exactly those of a bucket set without it.
+
+```go
+Replica: &backupstore.ProjectReplica{
+	Region:               "eu-north-1",
+	Provider:             replicaProvider, // AWS provider of that region, backup account
+	ObjectLockGovernance: true,            // retention = Lifecycle.RetentionDays
+},
+```
+
+Per project it sets `Args.Replica` with the name from
+`backupnaming.ReplicaBucketName(BucketPrefix, project, Env, Region)`
+(`<prefix>-<project>-<env>-<replica region>`), the replication role
+`backupnaming.ReplicationRoleName(Env, project)` (override with `RoleName`),
+and `ObjectLockGovernance` / `ObjectLockDays` as in "The locked replica". The
+primary has no lock. The replica gets the same expiry (`Lifecycle.RetentionDays`),
+the delete-protection bucket policy and the replication role and
+configuration; the children are those listed under "Children" with `<r>` the
+replica name.
+
+Two things to plan for:
+
+- **Object Lock is creation-time only.** Add the replica to a set before it
+  holds data you care about; turning `ObjectLockGovernance` on for a replica
+  that exists without it is a replacement a protected bucket refuses.
+- **Replication is not retroactive.** S3 replicates objects written after the
+  replication configuration exists. Objects already in the primary need an S3
+  Batch Replication job (or accept that they age out at `RetentionDays`).
+
 ## What stays the same
 
 A caller that sets none of `Encryption`, `Tenants`, `DenyDestructive`,

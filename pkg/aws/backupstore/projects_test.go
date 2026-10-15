@@ -275,3 +275,104 @@ func TestProjectBucketsEqualPerBucketNew(t *testing.T) {
 		t.Error("child inputs differ from per-bucket New")
 	}
 }
+
+func runProjectsReplica(t *testing.T, a *backupstore.ProjectBucketsArgs) []registration {
+	t.Helper()
+
+	rec := &recorder{}
+
+	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
+		p, err := pulumiaws.NewProvider(ctx, "primary", &pulumiaws.ProviderArgs{})
+		if err != nil {
+			return err
+		}
+
+		rp, err := pulumiaws.NewProvider(ctx, "replica", &pulumiaws.ProviderArgs{})
+		if err != nil {
+			return err
+		}
+
+		a.ResourceOptions = append(a.ResourceOptions, pulumi.Providers(p))
+		a.Replica.Provider = rp
+
+		_, err = backupstore.NewProjectBuckets(ctx, a)
+
+		return err
+	}, pulumi.WithMocks("example", "dev", rec))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return rec.regs
+}
+
+func replicaSetArgs() *backupstore.ProjectBucketsArgs {
+	a := bucketSetArgs()
+	a.Replica = &backupstore.ProjectReplica{Region: "eu-north-1", ObjectLockGovernance: true}
+
+	return a
+}
+
+func TestBuildProjectBucketsReplica(t *testing.T) {
+	a := replicaSetArgs()
+	a.Replica.Provider = nil
+
+	if _, err := backupstore.BuildProjectBuckets(a); err == nil || !strings.Contains(err.Error(), "Provider") {
+		t.Errorf("a replica without a provider: %v", err)
+	}
+
+	a = replicaSetArgs()
+	a.Replica.Region = a.Region
+
+	if _, err := backupstore.BuildProjectBuckets(a); err == nil || !strings.Contains(err.Error(), "equals Region") {
+		t.Errorf("a replica in the primary region: %v", err)
+	}
+}
+
+// A replica is the existing Args.Replica per project: derived names, the
+// governance lock, retention from the lifecycle, and an untouched default.
+func TestProjectBucketsReplicaMapping(t *testing.T) {
+	regs := runProjectsReplica(t, replicaSetArgs())
+
+	var lock *registration
+
+	for i, r := range regs {
+		if r.name == "acme-pg-billing-staging-eu-north-1-object-lock" {
+			lock = &regs[i]
+		}
+	}
+
+	if lock == nil {
+		t.Fatal("no replica object lock registered")
+	}
+
+	raw, err := json.Marshal(lock.inputs.Mappable())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, s := range []string{"GOVERNANCE", "30"} {
+		if !strings.Contains(string(raw), s) {
+			t.Errorf("object lock inputs lack %s: %s", s, raw)
+		}
+	}
+
+	names := map[string]bool{}
+	for _, r := range regs {
+		names[r.name] = true
+	}
+
+	for _, n := range []string{
+		"acme-pg-billing-staging-eu-north-1",
+		"acme-pg-ledger-staging-eu-north-1-lifecycle",
+		"acme-pg-ledger-staging-eu-north-1-policy",
+		"acme-pg-billing-staging-eu-west-1-replication",
+		"acme-pg-billing-staging-eu-west-1-replication-role",
+	} {
+		if !names[n] {
+			t.Errorf("resource %s not registered", n)
+		}
+	}
+
+	checkGolden(t, "projects/urns-replica.json", dumpURNs(t, regs))
+}

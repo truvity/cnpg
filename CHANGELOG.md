@@ -4,6 +4,11 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Feature (Go, `backupstore`):** an opt-in replica for the per-project bucket set. `ProjectBucketsArgs.Replica *ProjectReplica` (`Region`, `Provider`, `ObjectLockGovernance`, `ObjectLockDays`, `RolePermissionsBoundary`, `RoleName`, `KeyDescription`) gives every project's bucket a replica in another region of the same account and maps onto the existing `Args.Replica` per project: replication from the primary, and with `ObjectLockGovernance` the replica is created with Object Lock in GOVERNANCE mode, a default retention of `ObjectLockDays` (default `Lifecycle.RetentionDays`), the delete-protection bucket policy and the lifecycle rules. A caller that leaves `Replica` nil gets byte-identical resources (the `projects/urns.json` golden is unchanged); `projects/urns-replica.json` pins the replica case. Object Lock is creation-time only, and objects that existed before replication need S3 Batch Replication (docs/backupstore.md).
+- **Feature (Go, `pkg/backupnaming`):** `ReplicaBucketName(prefix, project, env, region)` (the replica's name; the prefix is still a required input) and `ReplicationRoleName(env, project)` (`<env>-pg-<project>-replication`, the default replication role name).
+
 ## v2.23.0
 
 - **Feature (Go, new package `pkg/backupnaming`):** the naming rules of the per-project backup model, with no cloud SDK: `ProjectBucketName(prefix, project, env, region)` (`<prefix>-<project>-<env>-<region>`; the prefix is a required input, the library has no estate stem) with `ValidateBucketName` (3 to 63 characters, `[a-z0-9-]`, no edge hyphen), `ClusterPrefix(namespace, cluster)` (`<namespace>/<cluster>/`), `RolePrefix(env)`, `ArchiveRoleName` and `RestoreRoleName` (`<env>-pg-<cluster>-archive|restore`), `RestoreServiceAccount` and `ServerName(project, generation)` (`<project>-pg-<generation>`).

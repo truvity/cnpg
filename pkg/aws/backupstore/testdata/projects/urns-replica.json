@@ -1,0 +1,212 @@
+[
+  {
+    "type": "aws:iam/role:Role",
+    "name": "acme-pg-billing-staging-eu-west-1-replication-role",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1"
+  },
+  {
+    "type": "aws:iam/role:Role",
+    "name": "acme-pg-ledger-staging-eu-west-1-replication-role",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1"
+  },
+  {
+    "type": "aws:iam/rolePolicy:RolePolicy",
+    "name": "acme-pg-billing-staging-eu-west-1-replication-policy",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1"
+  },
+  {
+    "type": "aws:iam/rolePolicy:RolePolicy",
+    "name": "acme-pg-ledger-staging-eu-west-1-replication-policy",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucket:Bucket",
+    "name": "acme-pg-billing-staging-eu-west-1",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketV2:BucketV2",
+      "aws:s3/bucketV2:BucketV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucket:Bucket",
+    "name": "acme-pg-ledger-staging-eu-west-1",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketV2:BucketV2",
+      "aws:s3/bucketV2:BucketV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2",
+    "name": "acme-pg-billing-staging-eu-north-1-lifecycle",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2",
+    "name": "acme-pg-billing-staging-eu-west-1-lifecycle",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2",
+    "name": "acme-pg-ledger-staging-eu-north-1-lifecycle",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2",
+    "name": "acme-pg-ledger-staging-eu-west-1-lifecycle",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketObjectLockConfigurationV2:BucketObjectLockConfigurationV2",
+    "name": "acme-pg-billing-staging-eu-north-1-object-lock",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketObjectLockConfigurationV2:BucketObjectLockConfigurationV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketObjectLockConfigurationV2:BucketObjectLockConfigurationV2",
+    "name": "acme-pg-ledger-staging-eu-north-1-object-lock",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketObjectLockConfigurationV2:BucketObjectLockConfigurationV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketPolicy:BucketPolicy",
+    "name": "acme-pg-billing-staging-eu-north-1-policy",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketPolicy:BucketPolicy",
+    "name": "acme-pg-billing-staging-eu-west-1-policy",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketPolicy:BucketPolicy",
+    "name": "acme-pg-ledger-staging-eu-north-1-policy",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketPolicy:BucketPolicy",
+    "name": "acme-pg-ledger-staging-eu-west-1-policy",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock",
+    "name": "acme-pg-billing-staging-eu-north-1-public-access",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock",
+    "name": "acme-pg-billing-staging-eu-west-1-public-access",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock",
+    "name": "acme-pg-ledger-staging-eu-north-1-public-access",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock",
+    "name": "acme-pg-ledger-staging-eu-west-1-public-access",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketReplicationConfig:BucketReplicationConfig",
+    "name": "acme-pg-billing-staging-eu-west-1-replication",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketReplicationConfig:BucketReplicationConfig",
+    "name": "acme-pg-ledger-staging-eu-west-1-replication",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketServerSideEncryptionConfigurationV2:BucketServerSideEncryptionConfigurationV2",
+    "name": "acme-pg-billing-staging-eu-west-1-encryption",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketServerSideEncryptionConfigurationV2:BucketServerSideEncryptionConfigurationV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketServerSideEncryptionConfigurationV2:BucketServerSideEncryptionConfigurationV2",
+    "name": "acme-pg-ledger-staging-eu-west-1-encryption",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketServerSideEncryptionConfigurationV2:BucketServerSideEncryptionConfigurationV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketV2:BucketV2",
+    "name": "acme-pg-billing-staging-eu-north-1",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketV2:BucketV2",
+    "name": "acme-pg-ledger-staging-eu-north-1",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1"
+  },
+  {
+    "type": "aws:s3/bucketVersioningV2:BucketVersioningV2",
+    "name": "acme-pg-billing-staging-eu-north-1-versioning",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketVersioningV2:BucketVersioningV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketVersioningV2:BucketVersioningV2",
+    "name": "acme-pg-billing-staging-eu-west-1-versioning",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-billing-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketVersioningV2:BucketVersioningV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketVersioningV2:BucketVersioningV2",
+    "name": "acme-pg-ledger-staging-eu-north-1-versioning",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketVersioningV2:BucketVersioningV2"
+    ]
+  },
+  {
+    "type": "aws:s3/bucketVersioningV2:BucketVersioningV2",
+    "name": "acme-pg-ledger-staging-eu-west-1-versioning",
+    "parent": "urn:pulumi:dev::example::truvity:cnpg/aws:BackupStore::acme-pg-ledger-staging-eu-west-1",
+    "aliasTypes": [
+      "aws:s3/bucketVersioningV2:BucketVersioningV2"
+    ]
+  },
+  {
+    "type": "truvity:cnpg/aws:BackupStore",
+    "name": "acme-pg-billing-staging-eu-west-1",
+    "parent": "urn:pulumi:dev::example::pulumi:pulumi:Stack::example-dev",
+    "aliasTypes": [
+      "truvity:k8s/aws:BackupBucket"
+    ]
+  },
+  {
+    "type": "truvity:cnpg/aws:BackupStore",
+    "name": "acme-pg-ledger-staging-eu-west-1",
+    "parent": "urn:pulumi:dev::example::pulumi:pulumi:Stack::example-dev",
+    "aliasTypes": [
+      "truvity:k8s/aws:BackupBucket"
+    ]
+  }
+]
