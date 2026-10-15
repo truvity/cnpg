@@ -1,0 +1,21 @@
+# posture: platform per cluster row, two rows: the second keeps its own
+# explicit values (replication off), and the two do not leak into each other.
+clusters:
+  - values:
+      clusterName: alpha-pg
+      namespace: alpha
+      profile: prod
+      posture: platform
+      bootstrap:
+        initdb: {database: alpha, owner: alpha_owner}
+      roles:
+        - {name: alpha_app, auth: password, external: true}
+      peopleProject: alpha
+  - values:
+      clusterName: beta-pg
+      namespace: beta
+      profile: prod
+      posture: platform
+      bootstrap:
+        initdb: {database: beta, owner: beta_owner}
+      replication: {enabled: false}

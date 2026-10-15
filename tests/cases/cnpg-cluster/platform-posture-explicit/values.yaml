@@ -1,0 +1,40 @@
+# platform-posture spelled out by hand, the way a consumer wrote it before
+# the posture existed: the same Cluster, trust objects and PodMonitor
+# setting, with the runtime role's hba line in beforeCatchAll.
+clusterName: dms-pg
+namespace: dms
+profile: prod
+labels:
+  example.com/project: dms
+bootstrap:
+  initdb: {database: dms, owner: dms}
+postgresql:
+  pgHba:
+    beforeCatchAll:
+      - hostssl all dms_app all scram-sha-256
+peopleProject: dms
+scheduling:
+  databasePool: durable
+  tolerations:
+    - {key: arch, operator: Exists}
+monitoring:
+  podMonitor:
+    enabled: false
+replication:
+  enabled: true
+trust:
+  namespace: cert-manager
+  ca: {enabled: true}
+  policy:
+    enabled: true
+    roles: [dms_app, dms]
+  bundle:
+    enabled: true
+    extraCertificates:
+      - |
+        -----BEGIN CERTIFICATE-----
+        MIIBexample
+        -----END CERTIFICATE-----
+serverTLS:
+  existingSecret: dms-pg-server-tls
+  existingCASecret: dms-pg-server-ca

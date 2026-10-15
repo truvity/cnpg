@@ -1,0 +1,348 @@
+---
+# Source: cnpg-cluster/templates/trust.yaml
+# approver-policy approves a request only when its requester may `use`
+# a policy that admits it. The requester of a Certificate is
+# cert-manager itself; bound in this namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cnpg-dms-dms-pg-policy-use
+  labels:
+    example.com/project: dms
+rules:
+  - apiGroups: ["policy.cert-manager.io"]
+    resources: ["certificaterequestpolicies"]
+    verbs: ["use"]
+    resourceNames: ["cnpg-dms-dms-pg"]
+
+---
+# Source: cnpg-cluster/templates/trust.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cnpg-dms-dms-pg-policy-use
+  namespace: dms
+  labels:
+    example.com/project: dms
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cnpg-dms-dms-pg-policy-use
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+
+---
+# Source: cnpg-cluster/templates/trust.yaml
+# trust-manager copies the CA certificate (never its key) into the
+# database namespace as dms-pg-client-ca, where the
+# Cluster's spec.certificates.clientCASecret reads it. A Bundle is
+# cluster-scoped and its target Secret shares its name: the cluster name
+# must therefore be unique across namespaces.
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: dms-pg-client-ca
+  labels:
+    example.com/project: dms
+spec:
+  sources:
+    - secret:
+        name: cnpg-dms-dms-pg-ca
+        key: ca.crt
+    - inLine: |
+        -----BEGIN CERTIFICATE-----
+        MIIBexample
+        -----END CERTIFICATE-----
+  target:
+    secret:
+      key: ca.crt
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: dms
+
+---
+# Source: cnpg-cluster/templates/trust.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cnpg-dms-dms-pg-ca
+  namespace: cert-manager
+  labels:
+    example.com/project: dms
+spec:
+  isCA: true
+  commonName: cnpg-dms-dms-pg client CA
+  secretName: cnpg-dms-dms-pg-ca
+  duration: 87600h
+  privateKey:
+    algorithm: ECDSA
+    size: 384
+    rotationPolicy: Never
+  issuerRef:
+    name: cnpg-dms-dms-pg-selfsigned
+    kind: Issuer
+    group: cert-manager.io
+
+---
+# Source: cnpg-cluster/templates/trust.yaml
+# The replication client certificate, from this database's own CA.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dms-pg-replication-tls
+  namespace: dms
+  labels:
+    example.com/project: dms
+spec:
+  secretName: dms-pg-replication-tls
+  commonName: streaming_replica
+  usages:
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: cnpg-dms-dms-pg
+    kind: ClusterIssuer
+    group: cert-manager.io
+  secretTemplate:
+    labels:
+      cnpg.io/reload: "true"
+
+---
+# Source: cnpg-cluster/templates/trust.yaml
+# approver-policy: the ONLY namespace that may request from this
+# ClusterIssuer is dms, for client-auth certificates
+# whose CN is one of the roles below (or streaming_replica), ECDSA only.
+# Anything else is denied, including DNS/IP/URI/email SANs.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: cnpg-dms-dms-pg
+  labels:
+    example.com/project: dms
+spec:
+  allowed:
+    commonName:
+      required: true
+      validations:
+        - rule: "self in ['dms_app', 'dms', 'streaming_replica']"
+          message: "the common name must be one of the declared roles or streaming_replica"
+    usages:
+      - client auth
+    isCA: false
+  constraints:
+    privateKey:
+      algorithm: ECDSA
+      minSize: 256
+      maxSize: 521
+  selector:
+    issuerRef:
+      name: cnpg-dms-dms-pg
+      kind: ClusterIssuer
+      group: cert-manager.io
+    namespace:
+      matchNames:
+        - dms
+
+---
+# Source: cnpg-cluster/templates/cluster.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: dms-pg
+  namespace: dms
+  annotations:
+    # Quorum-based failover protection is 1.30 ALPHA — enabled via
+    # annotation, not spec (pkg/utils FailoverQuorumAnnotationName;
+    # there is no spec.failoverQuorum field in the CRD).
+    alpha.cnpg.io/failoverQuorum: "true"
+  labels:
+    example.com/project: dms
+spec:
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  # Explicit on both postures: CNPG defaults enablePDB to true, so a
+  # devel single-instance cluster would otherwise get a primary PDB
+  # with 0 allowed disruptions and block node drains until the node
+  # pool's force-drain deadline (devel = no PDB).
+  enablePDB: true
+  certificates:
+    # Secrets that already exist, named by serverTLS.existingSecret /
+    # existingCASecret; the chart renders no object for them.
+    serverTLSSecret: dms-pg-server-tls
+    serverCASecret: dms-pg-server-ca
+    # Per-database client CA (delivered by trust-manager, no ca.key) and
+    # our own replication certificate: the operator accepts a client CA
+    # without its key only when replicationTLSSecret is given too.
+    clientCASecret: dms-pg-client-ca
+    replicationTLSSecret: dms-pg-replication-tls
+  inheritedMetadata:
+    annotations:
+      # Instance pods must never be consolidation victims — Karpenter
+      # moves stateless workloads around them instead.
+      karpenter.sh/do-not-disrupt: "true"
+    labels:
+      example.com/project: dms
+  postgresql:
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+    parameters:
+      max_slot_wal_keep_size: "2GB"
+    pg_hba:
+      - hostssl all dms all scram-sha-256
+      - hostssl all dms_app all scram-sha-256
+      - hostssl all dms_admin,dms_observer,dms_read all cert clientname=DN map=people
+      - hostssl all all all cert
+    pg_ident:
+      - people "/^CN=[^,\\]+,OU=(dms_admin|dms_observer|dms_read)$" \1
+      - people "/^OU=(dms_admin|dms_observer|dms_read),CN=[^,\\]+$" \1
+
+  storage:
+    size: 10Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  walStorage:
+    size: 5Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  resources:
+    limits:
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  affinity:
+    podAntiAffinityType: required
+    nodeSelector:
+      karpenter.sh/nodepool: durable
+    tolerations:
+      - key: arch
+        operator: Exists
+      - effect: NoSchedule
+        key: durable
+        operator: Equal
+        value: "true"
+  probes:
+    liveness:
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6 # ~60s — the 30s default self-fences on AWS blips
+      isolationCheck:
+        enabled: true
+        # Integers per CRD schema (strings fail structured-merge diff).
+        requestTimeout: 2000
+        connectionTimeout: 2000
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: dms-pg
+  bootstrap:
+    initdb:
+      database: dms
+      owner: dms
+
+---
+# Source: cnpg-cluster/templates/trust.yaml
+# Cluster-scoped, so the product namespace can neither read the CA key
+# (it lives in cert-manager) nor sign with it: it can only ask, and the
+# policy below decides.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: cnpg-dms-dms-pg
+  labels:
+    example.com/project: dms
+spec:
+  ca:
+    secretName: cnpg-dms-dms-pg-ca
+
+---
+# Source: cnpg-cluster/templates/databases.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: dms-pg-dms
+  namespace: dms
+spec:
+  name: dms
+  owner: dms
+  ensure: present
+  cluster:
+    name: dms-pg
+
+---
+# Source: cnpg-cluster/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: dms-pg-dms-admin
+  namespace: dms
+spec:
+  cluster:
+    name: dms-pg
+  name: dms_admin
+  ensure: present
+  login: true
+  inRoles:
+    - dms
+  databaseRoleReclaimPolicy: retain
+
+---
+# Source: cnpg-cluster/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: dms-pg-dms-observer
+  namespace: dms
+spec:
+  cluster:
+    name: dms-pg
+  name: dms_observer
+  ensure: present
+  login: true
+  databaseRoleReclaimPolicy: retain
+
+---
+# Source: cnpg-cluster/templates/roles.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: dms-pg-dms-read
+  namespace: dms
+spec:
+  cluster:
+    name: dms-pg
+  name: dms_read
+  ensure: present
+  login: true
+  inRoles:
+    - pg_read_all_data
+  databaseRoleReclaimPolicy: retain
+
+---
+# Source: cnpg-cluster/templates/trust.yaml
+# The root of this database's client trust: a self-signed issuer whose
+# only job is to sign the CA below.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: cnpg-dms-dms-pg-selfsigned
+  namespace: cert-manager
+  labels:
+    example.com/project: dms
+spec:
+  selfSigned: {}

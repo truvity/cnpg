@@ -1,0 +1,557 @@
+---
+# Source: cnpg-projects/templates/clusters.yaml
+# approver-policy approves a request only when its requester may `use`
+# a policy that admits it. The requester of a Certificate is
+# cert-manager itself; bound in this namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cnpg-alpha-alpha-pg-policy-use
+rules:
+  - apiGroups: ["policy.cert-manager.io"]
+    resources: ["certificaterequestpolicies"]
+    verbs: ["use"]
+    resourceNames: ["cnpg-alpha-alpha-pg"]
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+# approver-policy approves a request only when its requester may `use`
+# a policy that admits it. The requester of a Certificate is
+# cert-manager itself; bound in this namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cnpg-beta-beta-pg-policy-use
+rules:
+  - apiGroups: ["policy.cert-manager.io"]
+    resources: ["certificaterequestpolicies"]
+    verbs: ["use"]
+    resourceNames: ["cnpg-beta-beta-pg"]
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cnpg-alpha-alpha-pg-policy-use
+  namespace: alpha
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cnpg-alpha-alpha-pg-policy-use
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cnpg-beta-beta-pg-policy-use
+  namespace: beta
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cnpg-beta-beta-pg-policy-use
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+# trust-manager copies the CA certificate (never its key) into the
+# database namespace as alpha-pg-client-ca, where the
+# Cluster's spec.certificates.clientCASecret reads it. A Bundle is
+# cluster-scoped and its target Secret shares its name: the cluster name
+# must therefore be unique across namespaces.
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: alpha-pg-client-ca
+spec:
+  sources:
+    - secret:
+        name: cnpg-alpha-alpha-pg-ca
+        key: ca.crt
+  target:
+    secret:
+      key: ca.crt
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: alpha
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+# trust-manager copies the CA certificate (never its key) into the
+# database namespace as beta-pg-client-ca, where the
+# Cluster's spec.certificates.clientCASecret reads it. A Bundle is
+# cluster-scoped and its target Secret shares its name: the cluster name
+# must therefore be unique across namespaces.
+apiVersion: trust.cert-manager.io/v1alpha1
+kind: Bundle
+metadata:
+  name: beta-pg-client-ca
+spec:
+  sources:
+    - secret:
+        name: cnpg-beta-beta-pg-ca
+        key: ca.crt
+  target:
+    secret:
+      key: ca.crt
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: beta
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cnpg-alpha-alpha-pg-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: cnpg-alpha-alpha-pg client CA
+  secretName: cnpg-alpha-alpha-pg-ca
+  duration: 87600h
+  privateKey:
+    algorithm: ECDSA
+    size: 384
+    rotationPolicy: Never
+  issuerRef:
+    name: cnpg-alpha-alpha-pg-selfsigned
+    kind: Issuer
+    group: cert-manager.io
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+# The replication client certificate, from this database's own CA.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: alpha-pg-replication-tls
+  namespace: alpha
+spec:
+  secretName: alpha-pg-replication-tls
+  commonName: streaming_replica
+  usages:
+    - client auth
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: cnpg-alpha-alpha-pg
+    kind: ClusterIssuer
+    group: cert-manager.io
+  secretTemplate:
+    labels:
+      cnpg.io/reload: "true"
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: cnpg-beta-beta-pg-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: cnpg-beta-beta-pg client CA
+  secretName: cnpg-beta-beta-pg-ca
+  duration: 87600h
+  privateKey:
+    algorithm: ECDSA
+    size: 384
+    rotationPolicy: Never
+  issuerRef:
+    name: cnpg-beta-beta-pg-selfsigned
+    kind: Issuer
+    group: cert-manager.io
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+# approver-policy: the ONLY namespace that may request from this
+# ClusterIssuer is alpha, for client-auth certificates
+# whose CN is one of the roles below (or streaming_replica), ECDSA only.
+# Anything else is denied, including DNS/IP/URI/email SANs.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: cnpg-alpha-alpha-pg
+spec:
+  allowed:
+    commonName:
+      required: true
+      validations:
+        - rule: "self in ['alpha_app', 'alpha_owner', 'streaming_replica']"
+          message: "the common name must be one of the declared roles or streaming_replica"
+    usages:
+      - client auth
+    isCA: false
+  constraints:
+    privateKey:
+      algorithm: ECDSA
+      minSize: 256
+      maxSize: 521
+  selector:
+    issuerRef:
+      name: cnpg-alpha-alpha-pg
+      kind: ClusterIssuer
+      group: cert-manager.io
+    namespace:
+      matchNames:
+        - alpha
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+# approver-policy: the ONLY namespace that may request from this
+# ClusterIssuer is beta, for client-auth certificates
+# whose CN is one of the roles below (or streaming_replica), ECDSA only.
+# Anything else is denied, including DNS/IP/URI/email SANs.
+apiVersion: policy.cert-manager.io/v1alpha1
+kind: CertificateRequestPolicy
+metadata:
+  name: cnpg-beta-beta-pg
+spec:
+  allowed:
+    commonName:
+      required: true
+      validations:
+        - rule: "self in ['beta_owner', 'streaming_replica']"
+          message: "the common name must be one of the declared roles or streaming_replica"
+    usages:
+      - client auth
+    isCA: false
+  constraints:
+    privateKey:
+      algorithm: ECDSA
+      minSize: 256
+      maxSize: 521
+  selector:
+    issuerRef:
+      name: cnpg-beta-beta-pg
+      kind: ClusterIssuer
+      group: cert-manager.io
+    namespace:
+      matchNames:
+        - beta
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: alpha-pg
+  namespace: alpha
+  annotations:
+    # Quorum-based failover protection is 1.30 ALPHA — enabled via
+    # annotation, not spec (pkg/utils FailoverQuorumAnnotationName;
+    # there is no spec.failoverQuorum field in the CRD).
+    alpha.cnpg.io/failoverQuorum: "true"
+spec:
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  # Explicit on both postures: CNPG defaults enablePDB to true, so a
+  # devel single-instance cluster would otherwise get a primary PDB
+  # with 0 allowed disruptions and block node drains until the node
+  # pool's force-drain deadline (devel = no PDB).
+  enablePDB: true
+  certificates:
+    # Per-database client CA (delivered by trust-manager, no ca.key) and
+    # our own replication certificate: the operator accepts a client CA
+    # without its key only when replicationTLSSecret is given too.
+    clientCASecret: alpha-pg-client-ca
+    replicationTLSSecret: alpha-pg-replication-tls
+  inheritedMetadata:
+    annotations:
+      # Instance pods must never be consolidation victims — Karpenter
+      # moves stateless workloads around them instead.
+      karpenter.sh/do-not-disrupt: "true"
+  postgresql:
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+    parameters:
+      max_slot_wal_keep_size: "2GB"
+    pg_hba:
+      - hostssl all alpha_owner all scram-sha-256
+      - hostssl all alpha_app all scram-sha-256
+      - hostssl all alpha_admin,alpha_observer,alpha_read all cert clientname=DN map=people
+      - hostssl all all all cert
+    pg_ident:
+      - people "/^CN=[^,\\]+,OU=(alpha_admin|alpha_observer|alpha_read)$" \1
+      - people "/^OU=(alpha_admin|alpha_observer|alpha_read),CN=[^,\\]+$" \1
+
+  storage:
+    size: 10Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  walStorage:
+    size: 5Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  resources:
+    limits:
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  affinity:
+    podAntiAffinityType: required
+    nodeSelector:
+      karpenter.sh/nodepool: durable
+    tolerations:
+      - key: arch
+        operator: Exists
+      - effect: NoSchedule
+        key: durable
+        operator: Equal
+        value: "true"
+  probes:
+    liveness:
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6 # ~60s — the 30s default self-fences on AWS blips
+      isolationCheck:
+        enabled: true
+        # Integers per CRD schema (strings fail structured-merge diff).
+        requestTimeout: 2000
+        connectionTimeout: 2000
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: alpha-pg
+  bootstrap:
+    initdb:
+      database: alpha
+      owner: alpha_owner
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: beta-pg
+  namespace: beta
+  annotations:
+    # Quorum-based failover protection is 1.30 ALPHA — enabled via
+    # annotation, not spec (pkg/utils FailoverQuorumAnnotationName;
+    # there is no spec.failoverQuorum field in the CRD).
+    alpha.cnpg.io/failoverQuorum: "true"
+spec:
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  # Explicit on both postures: CNPG defaults enablePDB to true, so a
+  # devel single-instance cluster would otherwise get a primary PDB
+  # with 0 allowed disruptions and block node drains until the node
+  # pool's force-drain deadline (devel = no PDB).
+  enablePDB: true
+  inheritedMetadata:
+    annotations:
+      # Instance pods must never be consolidation victims — Karpenter
+      # moves stateless workloads around them instead.
+      karpenter.sh/do-not-disrupt: "true"
+  postgresql:
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+    parameters:
+      max_slot_wal_keep_size: "2GB"
+    pg_hba:
+      - hostssl all beta_owner all scram-sha-256
+      - hostssl all all all cert
+
+  storage:
+    size: 10Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  walStorage:
+    size: 5Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  resources:
+    limits:
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  affinity:
+    podAntiAffinityType: required
+    nodeSelector:
+      karpenter.sh/nodepool: durable
+    tolerations:
+      - key: arch
+        operator: Exists
+      - effect: NoSchedule
+        key: durable
+        operator: Equal
+        value: "true"
+  probes:
+    liveness:
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6 # ~60s — the 30s default self-fences on AWS blips
+      isolationCheck:
+        enabled: true
+        # Integers per CRD schema (strings fail structured-merge diff).
+        requestTimeout: 2000
+        connectionTimeout: 2000
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: beta-pg
+  bootstrap:
+    initdb:
+      database: beta
+      owner: beta_owner
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+# Cluster-scoped, so the product namespace can neither read the CA key
+# (it lives in cert-manager) nor sign with it: it can only ask, and the
+# policy below decides.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: cnpg-alpha-alpha-pg
+spec:
+  ca:
+    secretName: cnpg-alpha-alpha-pg-ca
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+# Cluster-scoped, so the product namespace can neither read the CA key
+# (it lives in cert-manager) nor sign with it: it can only ask, and the
+# policy below decides.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: cnpg-beta-beta-pg
+spec:
+  ca:
+    secretName: cnpg-beta-beta-pg-ca
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: alpha-pg-alpha
+  namespace: alpha
+spec:
+  name: alpha
+  owner: alpha_owner
+  ensure: present
+  cluster:
+    name: alpha-pg
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: beta-pg-beta
+  namespace: beta
+spec:
+  name: beta
+  owner: beta_owner
+  ensure: present
+  cluster:
+    name: beta-pg
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: alpha-pg-alpha-admin
+  namespace: alpha
+spec:
+  cluster:
+    name: alpha-pg
+  name: alpha_admin
+  ensure: present
+  login: true
+  inRoles:
+    - alpha_owner
+  databaseRoleReclaimPolicy: retain
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: alpha-pg-alpha-observer
+  namespace: alpha
+spec:
+  cluster:
+    name: alpha-pg
+  name: alpha_observer
+  ensure: present
+  login: true
+  databaseRoleReclaimPolicy: retain
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: alpha-pg-alpha-read
+  namespace: alpha
+spec:
+  cluster:
+    name: alpha-pg
+  name: alpha_read
+  ensure: present
+  login: true
+  inRoles:
+    - pg_read_all_data
+  databaseRoleReclaimPolicy: retain
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+# The root of this database's client trust: a self-signed issuer whose
+# only job is to sign the CA below.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: cnpg-alpha-alpha-pg-selfsigned
+  namespace: cert-manager
+spec:
+  selfSigned: {}
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+# The root of this database's client trust: a self-signed issuer whose
+# only job is to sign the CA below.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: cnpg-beta-beta-pg-selfsigned
+  namespace: cert-manager
+spec:
+  selfSigned: {}

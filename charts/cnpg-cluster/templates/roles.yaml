@@ -1,3 +1,4 @@
+{{- $_ := include "cnpg-cluster.posture" . -}}
 {{- /* Application/technical roles. cert = operator-issued mTLS client
 certificate in Secret {name}-client-cert (terminal state for apps).
 password = the compatibility escape hatch: the bootstrap owner already
@@ -12,13 +13,16 @@ values fail the render. */}}
 {{- fail (printf "role %s: auth must be cert|password|none (got %q)" .name $auth) }}
 {{- end }}
 {{- $isOwner := eq .name $.Values.bootstrap.initdb.owner }}
-{{- if and (eq $auth "password") (not $isOwner) (not .passwordSecret) }}
+{{- if and .external (ne $auth "password") }}
+{{- fail (printf "role %s: external is for auth=password only (a role another release declares, which still needs its scram hba line)" .name) }}
+{{- end }}
+{{- if and (eq $auth "password") (not $isOwner) (not .passwordSecret) (not .external) }}
 {{- fail (printf "role %s: auth=password on a non-owner role requires passwordSecret (the chart never generates passwords)" .name) }}
 {{- end }}
 {{- if and $isOwner (eq $auth "none") }}
 {{- fail (printf "role %s: the bootstrap owner cannot be auth=none" .name) }}
 {{- end }}
-{{- if not $isOwner }}
+{{- if and (not $isOwner) (not .external) }}
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
