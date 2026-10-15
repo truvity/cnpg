@@ -67,10 +67,22 @@ func TestRolesPrefixesAndServers(t *testing.T) {
 		{"archive", backupnaming.ArchiveRoleName("staging", "shop-infra-pg"), "staging-pg-shop-infra-pg-archive"},
 		{"restore", backupnaming.RestoreRoleName("staging", "shop-infra-pg"), "staging-pg-shop-infra-pg-restore"},
 		{"restore SA", backupnaming.RestoreServiceAccount("shop-infra-pg"), "shop-infra-pg-restore"},
+		{"replication role", backupnaming.ReplicationRoleName("staging", "shop"), "staging-pg-shop-replication"},
 		{"server", backupnaming.ServerName("shop", "g2"), "shop-pg-g2"},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.name, tc.got, tc.want)
 		}
+	}
+}
+
+func TestReplicaBucketName(t *testing.T) {
+	got, err := backupnaming.ReplicaBucketName("acme-pg", "shop", "staging", "eu-north-1")
+	if err != nil || got != "acme-pg-shop-staging-eu-north-1" {
+		t.Errorf("got %q, %v", got, err)
+	}
+
+	if _, err := backupnaming.ReplicaBucketName("", "shop", "staging", "eu-north-1"); err == nil {
+		t.Error("an empty prefix was accepted")
 	}
 }

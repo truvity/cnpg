@@ -53,6 +53,22 @@ func ProjectBucketName(prefix, project, env, region string) (string, error) {
 	return name, nil
 }
 
+// ReplicaBucketName is the replica of a project's bucket in the replica
+// region: <prefix>-<project>-<env>-<region>, the same rule as
+// ProjectBucketName with the replica's region. It differs from the primary's
+// name by its region only, so the pair is easy to read; the prefix is a
+// required input. The result is checked by ValidateBucketName.
+func ReplicaBucketName(prefix, project, env, region string) (string, error) {
+	return ProjectBucketName(prefix, project, env, region)
+}
+
+// ReplicationRoleName is the IAM role S3 assumes to replicate one project's
+// bucket: <env>-pg-<project>-replication. IAM role names are account-wide,
+// so the environment and the project keep them apart.
+func ReplicationRoleName(env, project string) string {
+	return fmt.Sprintf("%s-%s-replication", RolePrefix(env), project)
+}
+
 // ValidateBucketName reports a bucket name S3 refuses: not 3 to 63
 // characters, outside [a-z0-9-], or starting or ending with a hyphen.
 func ValidateBucketName(name string) error {

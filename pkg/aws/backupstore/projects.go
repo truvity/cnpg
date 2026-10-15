@@ -30,6 +30,36 @@ type Project struct {
 	Clusters []ProjectCluster
 }
 
+// ProjectReplica is the opt-in replica of every bucket of a bucket set: a
+// bucket per project in another region of the same account, filled by S3
+// replication from the project's primary bucket. It maps onto Args.Replica of
+// each project.
+type ProjectReplica struct {
+	// Region is the replica region, the last part of the replica bucket names
+	// (backupnaming.ReplicaBucketName). Required. It must differ from
+	// ProjectBucketsArgs.Region.
+	Region string
+	// Provider is the AWS provider of Region, in the backup account. Required;
+	// the caller creates it so that it keeps its own URN.
+	Provider pulumi.ProviderResource
+	// ObjectLockGovernance creates the replicas with Object Lock in GOVERNANCE
+	// mode, the delete-protection bucket policy and the lifecycle rules (see
+	// Replica.ObjectLockGovernance). Creation-time only.
+	ObjectLockGovernance bool
+	// ObjectLockDays is the governance retention. Zero means
+	// Lifecycle.RetentionDays, the bucket's own expiry age.
+	ObjectLockDays int
+	// RolePermissionsBoundary is the permissions boundary of the replication
+	// roles, when the account requires one.
+	RolePermissionsBoundary pulumi.StringInput
+	// RoleName returns the IAM name of a project's replication role. Nil means
+	// backupnaming.ReplicationRoleName(Env, project).
+	RoleName func(project string) string
+	// KeyDescription returns the description of a replica's KMS key. Used in
+	// KMS mode only; nil leaves it empty (which Validate refuses in KMS mode).
+	KeyDescription func(project, replicaBucketName string) string
+}
+
 // ProjectBucketsArgs describes the bucket of every project of one
 // environment. The shape is the documented standard: a SingleProject bucket
 // per project, append-only (DenyDestructive), the tenants' exact role ARNs,
@@ -69,6 +99,10 @@ type ProjectBucketsArgs struct {
 	Lifecycle Lifecycle
 	// Tags returns the tags of a project's bucket. Nil means none.
 	Tags func(project string) map[string]string
+	// Replica, when set, gives every bucket a replica in another region. Nil
+	// (the default) makes no replica: the resources are exactly those of a
+	// caller that never had this field.
+	Replica *ProjectReplica
 	// Protect and LegacyTopLevel are passed to every Args unchanged.
 	Protect        *bool
 	LegacyTopLevel bool
@@ -96,6 +130,22 @@ func (a *ProjectBucketsArgs) Validate() error {
 	} {
 		if f.v == "" {
 			errs = append(errs, fmt.Errorf("project buckets: %s is empty", f.name))
+		}
+	}
+
+	if r := a.Replica; r != nil {
+		if r.Region == "" {
+			errs = append(errs, errors.New("project buckets: Replica.Region is empty"))
+		} else if r.Region == a.Region {
+			errs = append(errs, errors.New("project buckets: Replica.Region equals Region"))
+		}
+
+		if r.Provider == nil {
+			errs = append(errs, errors.New("project buckets: Replica.Provider is nil"))
+		}
+
+		if r.ObjectLockDays < 0 {
+			errs = append(errs, fmt.Errorf("project buckets: Replica.ObjectLockDays is %d, want 0 or more", r.ObjectLockDays))
 		}
 	}
 
@@ -213,6 +263,34 @@ func BuildProjectBuckets(a *ProjectBucketsArgs) ([]ProjectBucket, error) {
 
 		if a.KeyDescription != nil && encryption == EncryptionKMS {
 			args.KeyDescription = a.KeyDescription(p.Name, name)
+		}
+
+		if r := a.Replica; r != nil {
+			rname, err := backupnaming.ReplicaBucketName(a.BucketPrefix, p.Name, a.Env, r.Region)
+			if err != nil {
+				errs = append(errs, err)
+
+				continue
+			}
+
+			role := backupnaming.ReplicationRoleName(a.Env, p.Name)
+			if r.RoleName != nil {
+				role = r.RoleName(p.Name)
+			}
+
+			rep := &Replica{
+				Provider:                r.Provider,
+				BucketName:              rname,
+				RoleName:                role,
+				RolePermissionsBoundary: r.RolePermissionsBoundary,
+				ObjectLockGovernance:    r.ObjectLockGovernance,
+				ObjectLockDays:          r.ObjectLockDays,
+			}
+			if r.KeyDescription != nil && encryption == EncryptionKMS {
+				rep.KeyDescription = r.KeyDescription(p.Name, rname)
+			}
+
+			args.Replica = rep
 		}
 
 		if err := args.Validate(); err != nil {
