@@ -6,28 +6,28 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: cnpg-dms-dms-pg-policy-use
+  name: cnpg-shop-shop-pg-policy-use
   labels:
-    example.com/project: dms
+    example.com/project: shop
 rules:
   - apiGroups: ["policy.cert-manager.io"]
     resources: ["certificaterequestpolicies"]
     verbs: ["use"]
-    resourceNames: ["cnpg-dms-dms-pg"]
+    resourceNames: ["cnpg-shop-shop-pg"]
 
 ---
 # Source: cnpg-cluster/templates/trust.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: cnpg-dms-dms-pg-policy-use
-  namespace: dms
+  name: cnpg-shop-shop-pg-policy-use
+  namespace: shop
   labels:
-    example.com/project: dms
+    example.com/project: shop
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: cnpg-dms-dms-pg-policy-use
+  name: cnpg-shop-shop-pg-policy-use
 subjects:
   - kind: ServiceAccount
     name: cert-manager
@@ -36,20 +36,20 @@ subjects:
 ---
 # Source: cnpg-cluster/templates/trust.yaml
 # trust-manager copies the CA certificate (never its key) into the
-# database namespace as dms-pg-client-ca, where the
+# database namespace as shop-pg-client-ca, where the
 # Cluster's spec.certificates.clientCASecret reads it. A Bundle is
 # cluster-scoped and its target Secret shares its name: the cluster name
 # must therefore be unique across namespaces.
 apiVersion: trust.cert-manager.io/v1alpha1
 kind: Bundle
 metadata:
-  name: dms-pg-client-ca
+  name: shop-pg-client-ca
   labels:
-    example.com/project: dms
+    example.com/project: shop
 spec:
   sources:
     - secret:
-        name: cnpg-dms-dms-pg-ca
+        name: cnpg-shop-shop-pg-ca
         key: ca.crt
     - inLine: |
         -----BEGIN CERTIFICATE-----
@@ -63,28 +63,28 @@ spec:
           cnpg.io/reload: "true"
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: dms
+        kubernetes.io/metadata.name: shop
 
 ---
 # Source: cnpg-cluster/templates/trust.yaml
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: cnpg-dms-dms-pg-ca
+  name: cnpg-shop-shop-pg-ca
   namespace: cert-manager
   labels:
-    example.com/project: dms
+    example.com/project: shop
 spec:
   isCA: true
-  commonName: cnpg-dms-dms-pg client CA
-  secretName: cnpg-dms-dms-pg-ca
+  commonName: cnpg-shop-shop-pg client CA
+  secretName: cnpg-shop-shop-pg-ca
   duration: 87600h
   privateKey:
     algorithm: ECDSA
     size: 384
     rotationPolicy: Never
   issuerRef:
-    name: cnpg-dms-dms-pg-selfsigned
+    name: cnpg-shop-shop-pg-selfsigned
     kind: Issuer
     group: cert-manager.io
 
@@ -94,12 +94,12 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: dms-pg-replication-tls
-  namespace: dms
+  name: shop-pg-replication-tls
+  namespace: shop
   labels:
-    example.com/project: dms
+    example.com/project: shop
 spec:
-  secretName: dms-pg-replication-tls
+  secretName: shop-pg-replication-tls
   commonName: streaming_replica
   usages:
     - client auth
@@ -107,7 +107,7 @@ spec:
     algorithm: ECDSA
     size: 256
   issuerRef:
-    name: cnpg-dms-dms-pg
+    name: cnpg-shop-shop-pg
     kind: ClusterIssuer
     group: cert-manager.io
   secretTemplate:
@@ -117,21 +117,21 @@ spec:
 ---
 # Source: cnpg-cluster/templates/trust.yaml
 # approver-policy: the ONLY namespace that may request from this
-# ClusterIssuer is dms, for client-auth certificates
+# ClusterIssuer is shop, for client-auth certificates
 # whose CN is one of the roles below (or streaming_replica), ECDSA only.
 # Anything else is denied, including DNS/IP/URI/email SANs.
 apiVersion: policy.cert-manager.io/v1alpha1
 kind: CertificateRequestPolicy
 metadata:
-  name: cnpg-dms-dms-pg
+  name: cnpg-shop-shop-pg
   labels:
-    example.com/project: dms
+    example.com/project: shop
 spec:
   allowed:
     commonName:
       required: true
       validations:
-        - rule: "self in ['dms_app', 'dms', 'streaming_replica']"
+        - rule: "self in ['shop_app', 'shop', 'streaming_replica']"
           message: "the common name must be one of the declared roles or streaming_replica"
     usages:
       - client auth
@@ -143,27 +143,27 @@ spec:
       maxSize: 521
   selector:
     issuerRef:
-      name: cnpg-dms-dms-pg
+      name: cnpg-shop-shop-pg
       kind: ClusterIssuer
       group: cert-manager.io
     namespace:
       matchNames:
-        - dms
+        - shop
 
 ---
 # Source: cnpg-cluster/templates/cluster.yaml
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
-  name: dms-pg
-  namespace: dms
+  name: shop-pg
+  namespace: shop
   annotations:
     # Quorum-based failover protection is 1.30 ALPHA — enabled via
     # annotation, not spec (pkg/utils FailoverQuorumAnnotationName;
     # there is no spec.failoverQuorum field in the CRD).
     alpha.cnpg.io/failoverQuorum: "true"
   labels:
-    example.com/project: dms
+    example.com/project: shop
 spec:
   instances: 3
   primaryUpdateStrategy: unsupervised
@@ -177,20 +177,20 @@ spec:
   certificates:
     # Secrets that already exist, named by serverTLS.existingSecret /
     # existingCASecret; the chart renders no object for them.
-    serverTLSSecret: dms-pg-server-tls
-    serverCASecret: dms-pg-server-ca
+    serverTLSSecret: shop-pg-server-tls
+    serverCASecret: shop-pg-server-ca
     # Per-database client CA (delivered by trust-manager, no ca.key) and
     # our own replication certificate: the operator accepts a client CA
     # without its key only when replicationTLSSecret is given too.
-    clientCASecret: dms-pg-client-ca
-    replicationTLSSecret: dms-pg-replication-tls
+    clientCASecret: shop-pg-client-ca
+    replicationTLSSecret: shop-pg-replication-tls
   inheritedMetadata:
     annotations:
       # Instance pods must never be consolidation victims — Karpenter
       # moves stateless workloads around them instead.
       karpenter.sh/do-not-disrupt: "true"
     labels:
-      example.com/project: dms
+      example.com/project: shop
   postgresql:
     synchronous:
       method: any
@@ -199,13 +199,13 @@ spec:
     parameters:
       max_slot_wal_keep_size: "2GB"
     pg_hba:
-      - hostssl all dms all scram-sha-256
-      - hostssl all dms_app all scram-sha-256
-      - hostssl all dms_admin,dms_observer,dms_read all cert clientname=DN map=people
+      - hostssl all shop all scram-sha-256
+      - hostssl all shop_app all scram-sha-256
+      - hostssl all shop_admin,shop_observer,shop_read all cert clientname=DN map=people
       - hostssl all all all cert
     pg_ident:
-      - people "/^CN=[^,\\]+,OU=(dms_admin|dms_observer|dms_read)$" \1
-      - people "/^OU=(dms_admin|dms_observer|dms_read),CN=[^,\\]+$" \1
+      - people "/^CN=[^,\\]+,OU=(shop_admin|shop_observer|shop_read)$" \1
+      - people "/^OU=(shop_admin|shop_observer|shop_read),CN=[^,\\]+$" \1
 
   storage:
     size: 10Gi
@@ -249,11 +249,11 @@ spec:
       whenUnsatisfiable: DoNotSchedule
       labelSelector:
         matchLabels:
-          cnpg.io/cluster: dms-pg
+          cnpg.io/cluster: shop-pg
   bootstrap:
     initdb:
-      database: dms
-      owner: dms
+      database: shop
+      owner: shop
 
 ---
 # Source: cnpg-cluster/templates/trust.yaml
@@ -263,42 +263,42 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: cnpg-dms-dms-pg
+  name: cnpg-shop-shop-pg
   labels:
-    example.com/project: dms
+    example.com/project: shop
 spec:
   ca:
-    secretName: cnpg-dms-dms-pg-ca
+    secretName: cnpg-shop-shop-pg-ca
 
 ---
 # Source: cnpg-cluster/templates/databases.yaml
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
-  name: dms-pg-dms
-  namespace: dms
+  name: shop-pg-shop
+  namespace: shop
 spec:
-  name: dms
-  owner: dms
+  name: shop
+  owner: shop
   ensure: present
   cluster:
-    name: dms-pg
+    name: shop-pg
 
 ---
 # Source: cnpg-cluster/templates/roles.yaml
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: dms-pg-dms-admin
-  namespace: dms
+  name: shop-pg-shop-admin
+  namespace: shop
 spec:
   cluster:
-    name: dms-pg
-  name: dms_admin
+    name: shop-pg
+  name: shop_admin
   ensure: present
   login: true
   inRoles:
-    - dms
+    - shop
   databaseRoleReclaimPolicy: retain
 
 ---
@@ -306,12 +306,12 @@ spec:
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: dms-pg-dms-observer
-  namespace: dms
+  name: shop-pg-shop-observer
+  namespace: shop
 spec:
   cluster:
-    name: dms-pg
-  name: dms_observer
+    name: shop-pg
+  name: shop_observer
   ensure: present
   login: true
   databaseRoleReclaimPolicy: retain
@@ -321,12 +321,12 @@ spec:
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: dms-pg-dms-read
-  namespace: dms
+  name: shop-pg-shop-read
+  namespace: shop
 spec:
   cluster:
-    name: dms-pg
-  name: dms_read
+    name: shop-pg
+  name: shop_read
   ensure: present
   login: true
   inRoles:
@@ -340,9 +340,9 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
-  name: cnpg-dms-dms-pg-selfsigned
+  name: cnpg-shop-shop-pg-selfsigned
   namespace: cert-manager
   labels:
-    example.com/project: dms
+    example.com/project: shop
 spec:
   selfSigned: {}

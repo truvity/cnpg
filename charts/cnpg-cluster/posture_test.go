@@ -21,18 +21,18 @@ func hbaOf(t *testing.T, docs map[string][]map[string]any) []any {
 
 func hbaValues() map[string]any {
 	return map[string]any{
-		"clusterName":   "dms-pg",
+		"clusterName":   "shop-pg",
 		"profile":       "devel",
-		"namespace":     "dms",
-		"peopleProject": "dms",
-		"bootstrap":     map[string]any{"initdb": map[string]any{"database": "dms", "owner": "dms"}},
+		"namespace":     "shop",
+		"peopleProject": "shop",
+		"bootstrap":     map[string]any{"initdb": map[string]any{"database": "shop", "owner": "shop"}},
 	}
 }
 
 const (
-	hbaOwner  = "hostssl all dms all scram-sha-256"
-	hbaApp    = "hostssl all dms_app all scram-sha-256"
-	hbaPeople = "hostssl all dms_admin,dms_observer,dms_read all cert clientname=DN map=people"
+	hbaOwner  = "hostssl all shop all scram-sha-256"
+	hbaApp    = "hostssl all shop_app all scram-sha-256"
+	hbaPeople = "hostssl all shop_admin,shop_observer,shop_read all cert clientname=DN map=people"
 	hbaCatch  = "hostssl all all all cert"
 )
 
@@ -45,7 +45,7 @@ func TestHBA_PasswordRoleOrder(t *testing.T) {
 	want := []any{hbaOwner, hbaApp, hbaPeople, hbaCatch}
 
 	v := hbaValues()
-	v["roles"] = []any{map[string]any{"name": "dms_app", "auth": "password", "external": true}}
+	v["roles"] = []any{map[string]any{"name": "shop_app", "auth": "password", "external": true}}
 	docs, err := renderDocs(t, v)
 	require.NoError(t, err)
 	assert.Equal(t, want, hbaOf(t, docs), "roles[].auth=password external")
@@ -59,7 +59,7 @@ func TestHBA_PasswordRoleOrder(t *testing.T) {
 
 	// A password role with its own DatabaseRole sits in the same place.
 	v = hbaValues()
-	v["roles"] = []any{map[string]any{"name": "dms_app", "auth": "password", "passwordSecret": "dms-app-pw"}}
+	v["roles"] = []any{map[string]any{"name": "shop_app", "auth": "password", "passwordSecret": "shop-app-pw"}}
 	docs, err = renderDocs(t, v)
 	require.NoError(t, err)
 	assert.Equal(t, want, hbaOf(t, docs), "roles[].auth=password with a Secret")
@@ -67,28 +67,28 @@ func TestHBA_PasswordRoleOrder(t *testing.T) {
 
 func TestHBA_ExternalRoleRules(t *testing.T) {
 	v := hbaValues()
-	v["roles"] = []any{map[string]any{"name": "dms_app", "auth": "cert", "external": true}}
+	v["roles"] = []any{map[string]any{"name": "shop_app", "auth": "cert", "external": true}}
 	_, err := renderDocs(t, v)
 	require.ErrorContains(t, err, "external is for auth=password only")
 
 	// A password role that is not external still needs its Secret.
 	v = hbaValues()
-	v["roles"] = []any{map[string]any{"name": "dms_app", "auth": "password"}}
+	v["roles"] = []any{map[string]any{"name": "shop_app", "auth": "password"}}
 	_, err = renderDocs(t, v)
 	require.ErrorContains(t, err, "passwordSecret")
 
 	// The people line cannot shadow an external role of the same name.
 	v = hbaValues()
-	v["roles"] = []any{map[string]any{"name": "dms_read", "auth": "password", "external": true}}
+	v["roles"] = []any{map[string]any{"name": "shop_read", "auth": "password", "external": true}}
 	_, err = renderDocs(t, v)
-	require.ErrorContains(t, err, "dms_read")
+	require.ErrorContains(t, err, "shop_read")
 }
 
 func postureValues() map[string]any {
 	v := hbaValues()
 	v["profile"] = "prod"
 	v["posture"] = "platform"
-	v["roles"] = []any{map[string]any{"name": "dms_app", "auth": "password", "external": true}}
+	v["roles"] = []any{map[string]any{"name": "shop_app", "auth": "password", "external": true}}
 
 	return v
 }
