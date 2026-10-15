@@ -114,3 +114,79 @@ func TestSchema_RejectsMissingRequired(t *testing.T) {
 	})
 	require.Error(t, err)
 }
+
+// renderAll renders the chart and returns every object, keyed "Kind/name".
+func renderAll(t *testing.T, values map[string]any) map[string]map[string]any {
+	t.Helper()
+
+	raw, err := yaml.Marshal(values)
+	require.NoError(t, err)
+
+	file := filepath.Join(t.TempDir(), "values.yaml")
+	require.NoError(t, os.WriteFile(file, raw, 0o600))
+
+	out, err := exec.CommandContext(t.Context(), "helm", "template", "db", ".", "-f", file).CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	objs := map[string]map[string]any{}
+	for _, doc := range strings.Split(string(out), "\n---") {
+		var obj map[string]any
+		if err := yaml.Unmarshal([]byte(doc), &obj); err != nil || obj == nil {
+			continue
+		}
+		objs[obj["kind"].(string)+"/"+field(obj, "metadata", "name").(string)] = obj
+	}
+	return objs
+}
+
+// TestRole_GeneratedPassword: the opt-in renders the generator, a once-only
+// ExternalSecret and the DatabaseRole that reads the Secret, under exactly
+// the names and labels the caller passes.
+func TestRole_GeneratedPassword(t *testing.T) {
+	objs := renderAll(t, map[string]any{
+		"clusterName": "pg",
+		"roles": []any{map[string]any{
+			"name":                      "shop_app",
+			"objectName":                "shop-role-shop-app",
+			"labels":                    map[string]any{"app.kubernetes.io/name": "shop-infra"},
+			"inherit":                   true,
+			"connectionLimit":           -1,
+			"databaseRoleReclaimPolicy": "retain",
+			"generatedPassword":         map[string]any{"secretName": "shop-app-credentials"},
+		}},
+	})
+	require.Len(t, objs, 3)
+
+	role := objs["DatabaseRole/shop-role-shop-app"]
+	require.NotNil(t, role)
+	assert.Equal(t, "shop-app-credentials", field(role, "spec", "passwordSecret", "name"))
+	assert.Equal(t, "shop-infra", field(role, "metadata", "labels", "app.kubernetes.io/name"))
+	assert.EqualValues(t, -1, field(role, "spec", "connectionLimit"))
+
+	gen := objs["Password/shop-app-credentials"]
+	require.NotNil(t, gen)
+	assert.Equal(t, "generators.external-secrets.io/v1alpha1", gen["apiVersion"])
+	assert.EqualValues(t, 32, field(gen, "spec", "length"))
+	assert.EqualValues(t, 5, field(gen, "spec", "digits"))
+	assert.EqualValues(t, 0, field(gen, "spec", "symbols"), "no symbols: the password goes into a connection string")
+	assert.Equal(t, "shop-infra", field(gen, "metadata", "labels", "app.kubernetes.io/name"))
+
+	es := objs["ExternalSecret/shop-app-credentials"]
+	require.NotNil(t, es)
+	assert.Equal(t, "0", field(es, "spec", "refreshInterval"), "generated once: a refresh would lock out running pods")
+	assert.Equal(t, "kubernetes.io/basic-auth", field(es, "spec", "target", "template", "type"))
+	assert.Equal(t, "shop_app", field(es, "spec", "target", "template", "data", "username"))
+	assert.Equal(t, "{{ .password }}", field(es, "spec", "target", "template", "data", "password"))
+	assert.Equal(t, "shop-app-credentials", field(es, "spec", "target", "name"))
+}
+
+// TestRole_NoGeneratedPassword: without the opt-in nothing of External
+// Secrets is rendered, so a cluster without its CRDs installs as before.
+func TestRole_NoGeneratedPassword(t *testing.T) {
+	objs := renderAll(t, map[string]any{
+		"clusterName": "pg",
+		"roles":       []any{map[string]any{"name": "svc_a", "passwordSecret": "svc-a-password"}},
+	})
+	require.Len(t, objs, 1)
+	assert.NotNil(t, objs["DatabaseRole/pg-role-svc-a"])
+}

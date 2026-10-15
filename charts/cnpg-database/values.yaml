@@ -30,6 +30,15 @@ databases: []
 #   connectionLimit: -1
 #   passwordSecret: svc-a-password   # alternative to a client certificate
 #   disablePassword: false
+#   objectName: ""                   # DatabaseRole metadata.name; default <clusterName>-role-<name>
+#   labels: {}                       # on the DatabaseRole and the generated-password objects
+#   generatedPassword:               # alternative to passwordSecret / a client certificate
+#     secretName: svc-a-password     # required; also the Password and ExternalSecret name
+#     length: 32
+#     digits: 5
+#     symbols: 0
+#     noUpper: false
+#     allowRepeat: true
 #   validUntil: "2030-01-01T00:00:00Z"
 #   comment: ""
 #   ensure: present

@@ -1,0 +1,23 @@
+clusterName: pg
+databaseName: shop
+owner: shop_owner
+roles:
+  # Everything the product used to render itself: its own object name and
+  # labels, a connection limit, retain, inRoles optional.
+  - name: shop_app
+    objectName: shop-role-shop-app
+    labels:
+      app.kubernetes.io/name: shop-infra
+      app.kubernetes.io/instance: shop
+    inherit: true
+    connectionLimit: -1
+    databaseRoleReclaimPolicy: retain
+    inRoles: [shop_readwrite]
+    generatedPassword:
+      secretName: shop-app-credentials
+  # Defaults only, with the generator tuned.
+  - name: acme_worker
+    generatedPassword:
+      secretName: acme-worker-credentials
+      length: 48
+      symbols: 2

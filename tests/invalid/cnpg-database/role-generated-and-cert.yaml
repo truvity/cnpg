@@ -1,0 +1,5 @@
+clusterName: pg
+roles:
+  - name: r
+    generatedPassword: {secretName: s}
+    clientCertificate: {enabled: true}
