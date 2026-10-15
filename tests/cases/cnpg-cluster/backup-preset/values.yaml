@@ -1,0 +1,20 @@
+# The same cluster as backup-cutover, asked for through the opt-in preset:
+# bucket name, serverName, retention, tags and the one-off Backup follow from
+# the project's bucket coordinates and its generation. The render equals
+# backup-cutover except for the bucket and server names the rules produce.
+clusterName: pg
+namespace: app
+profile: devel
+bootstrap:
+  initdb: {database: app, owner: app-owner}
+roles:
+  - {name: my-app, auth: cert}
+backup:
+  enabled: true
+  mode: perProjectBucket
+  bucket:
+    prefix: example-pg
+    project: app
+    env: staging
+    region: eu-west-1
+  generation: g2

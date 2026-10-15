@@ -1,5 +1,6 @@
-{{- with .Values.backup.onDemand }}
-{{- if and $.Values.backup.enabled $.Values.backup.bucketName .name }}
+{{- $backup := include "cnpg-cluster.backup" . | fromJson }}
+{{- with $backup.onDemand }}
+{{- if and $backup.enabled $backup.bucketName .name }}
 apiVersion: postgresql.cnpg.io/v1
 kind: Backup
 metadata:
