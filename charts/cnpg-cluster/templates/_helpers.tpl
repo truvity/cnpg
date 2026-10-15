@@ -195,7 +195,8 @@ backup.bucket, backup.generation and backup.mode set, the result is
       cannot delete: retentionDays 0 (when left at the chart default 30),
       tags {cnpg-backup-retention: managed} and historyTags
       {cnpg-backup-retention: keep} (when empty) and onDemand.name the
-      generation (when empty). Needs backup.generation.
+      generation (when empty and backup.onDemandFromGeneration is true, the
+      default). Needs backup.generation.
 */}}
 {{- define "cnpg-cluster.backup" -}}
 {{- $b := deepCopy .Values.backup -}}
@@ -227,7 +228,7 @@ backup.bucket, backup.generation and backup.mode set, the result is
 {{- if not $b.tags -}}{{- $_ := set $b "tags" (dict "cnpg-backup-retention" "managed") -}}{{- end -}}
 {{- if not $b.historyTags -}}{{- $_ := set $b "historyTags" (dict "cnpg-backup-retention" "keep") -}}{{- end -}}
 {{- $od := $b.onDemand | default dict -}}
-{{- if not $od.name -}}{{- $_ := set $b "onDemand" (merge (dict "name" $b.generation) $od) -}}{{- end -}}
+{{- if and $b.onDemandFromGeneration (not $od.name) -}}{{- $_ := set $b "onDemand" (merge (dict "name" $b.generation) $od) -}}{{- end -}}
 {{- end -}}
 {{- toJson $b -}}
 {{- end -}}

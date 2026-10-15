@@ -135,3 +135,23 @@ func TestBackupPreset_Refusals(t *testing.T) {
 		})
 	}
 }
+
+// TestBackupPreset_OnDemandFromGeneration: mode perProjectBucket names the
+// one-off Backup after the generation, unless onDemandFromGeneration is false.
+func TestBackupPreset_OnDemandFromGeneration(t *testing.T) {
+	for name, tc := range map[string]struct {
+		flag any
+		want int
+	}{"default": {nil, 1}, "true": {true, 1}, "false": {false, 0}} {
+		t.Run(name, func(t *testing.T) {
+			backup := map[string]any{"mode": "perProjectBucket", "generation": "g1", "project": "app", "bucketName": "b"}
+			if tc.flag != nil {
+				backup["onDemandFromGeneration"] = tc.flag
+			}
+
+			docs, err := renderDocs(t, presetValues(backup))
+			require.NoError(t, err)
+			assert.Len(t, docs["Backup"], tc.want)
+		})
+	}
+}

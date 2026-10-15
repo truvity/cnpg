@@ -67,11 +67,15 @@ backup:
   #     retentionDays 0 (while left at the default 30), tags
   #     {cnpg-backup-retention: managed}, historyTags
   #     {cnpg-backup-retention: keep}, onDemand.name = generation (each while
-  #     empty). Requires generation.
+  #     empty; the Backup only while onDemandFromGeneration is true). Requires
+  #     generation.
   bucket: {}
   project: ""
   generation: ""
   mode: ""
+  # false: mode perProjectBucket does not render the one-off Backup (a cluster
+  # born on its bucket has a base backup from its first scheduled run).
+  onDemandFromGeneration: true
   # s3Prefix defaults to {namespace}/{clusterName}/ when empty — the
   # permission-model write scope. Override only for recovery drills.
   s3Prefix: ""
