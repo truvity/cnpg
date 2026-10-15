@@ -134,9 +134,10 @@ func (a *ProjectBucketsArgs) Validate() error {
 	}
 
 	if r := a.Replica; r != nil {
-		if r.Region == "" {
+		switch r.Region {
+		case "":
 			errs = append(errs, errors.New("project buckets: Replica.Region is empty"))
-		} else if r.Region == a.Region {
+		case a.Region:
 			errs = append(errs, errors.New("project buckets: Replica.Region equals Region"))
 		}
 
