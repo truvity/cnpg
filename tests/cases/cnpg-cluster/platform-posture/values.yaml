@@ -3,17 +3,17 @@
 # another release (external), and the chart emits its scram hba line itself.
 # The render equals the same values spelled out by hand
 # (platform-posture-explicit) except for the hba line's source.
-clusterName: dms-pg
-namespace: dms
+clusterName: shop-pg
+namespace: shop
 profile: prod
 posture: platform
 labels:
-  example.com/project: dms
+  example.com/project: shop
 bootstrap:
-  initdb: {database: dms, owner: dms}
+  initdb: {database: shop, owner: shop}
 roles:
-  - {name: dms_app, auth: password, external: true}
-peopleProject: dms
+  - {name: shop_app, auth: password, external: true}
+peopleProject: shop
 trust:
   bundle:
     extraCertificates:
@@ -22,5 +22,5 @@ trust:
         MIIBexample
         -----END CERTIFICATE-----
 serverTLS:
-  existingSecret: dms-pg-server-tls
-  existingCASecret: dms-pg-server-ca
+  existingSecret: shop-pg-server-tls
+  existingCASecret: shop-pg-server-ca
