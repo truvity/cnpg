@@ -4,6 +4,13 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Feature (charts `cnpg-cluster`, `cnpg-projects`):** an opt-in backup preset that states the per-project model once, so a consumer passes coordinates instead of repeating the rules. Every value only fills what is left empty (an explicit value wins), and a render that sets none of them is byte-identical (the existing goldens are unchanged; the new case is `backup-preset`).
+  - `backup.bucket: {prefix, project, env, region}` computes `bucketName` as `<prefix>-<project>-<env>-<region>`, the rule of `backupnaming.ProjectBucketName` with the same checks (all four required, 3 to 63 characters, `[a-z0-9-]`, no edge hyphen); the render fails on an invalid name. A Go test holds the chart to `ProjectBucketName` over a table of inputs.
+  - `backup.generation: <gN>` computes `serverName` as `<project>-pg-<gN>` (`backupnaming.ServerName`); the project is `backup.project`, else `backup.bucket.project`.
+  - `backup.mode: perProjectBucket` sets what a bucket with no-delete writer roles needs: `retentionDays` 0 (while it is left at the default 30), `tags {cnpg-backup-retention: managed}`, `historyTags {cnpg-backup-retention: keep}` and `onDemand.name` = the generation (each while empty). It requires `backup.generation`. The schedule is not touched.
+
 ## v2.25.0
 
 - **Feature (Go, new package `pkg/backupplan`):** the backup cutover plan, with no cloud SDK. `Phase` (`Legacy`, `Prepare`, `Detach`, `Switched`) with `ParsePhase`, `Valid`, `Phases` and the predicates `OnNewPath`, `ArchiveAssociated` and `LegacyBindsDatabase` (the one-association-per-ServiceAccount order of docs/moving-to-a-new-backup-bucket.md), and `BuildAccess(AccessArgs)`, a pure builder of the `cnpg-backup-access` release rows (`AccessRow`: project, bucket via `backupnaming.ProjectBucketName`, role prefix via `backupnaming.RolePrefix`, phase and clusters with `Association = Phase.ArchiveAssociated()`) for every project that is `OnNewPath`. Opt-in: no existing API changes.

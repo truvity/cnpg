@@ -54,6 +54,24 @@ backup:
   expected: true
   notExpectedReason: ""
   bucketName: ""
+  # OPT-IN PRESET for the per-project backup model (pkg/backupnaming). Every
+  # value below only fills what is left empty; an explicit value wins, and
+  # with all four empty the render is the one without them.
+  #   bucket {prefix, project, env, region}: bucketName becomes
+  #     <prefix>-<project>-<env>-<region>, checked like
+  #     backupnaming.ProjectBucketName (all four required, S3 name rules).
+  #   project: the project of the serverName; defaults to bucket.project.
+  #   generation: serverName becomes <project>-pg-<generation>
+  #     (backupnaming.ServerName).
+  #   mode perProjectBucket: for a bucket whose writer roles cannot delete:
+  #     retentionDays 0 (while left at the default 30), tags
+  #     {cnpg-backup-retention: managed}, historyTags
+  #     {cnpg-backup-retention: keep}, onDemand.name = generation (each while
+  #     empty). Requires generation.
+  bucket: {}
+  project: ""
+  generation: ""
+  mode: ""
   # s3Prefix defaults to {namespace}/{clusterName}/ when empty — the
   # permission-model write scope. Override only for recovery drills.
   s3Prefix: ""
