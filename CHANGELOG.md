@@ -4,6 +4,12 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+### Removed
+
+- **Breaking (Go, `backupstore`): the adoption aliases are gone.** `Args.LegacyTopLevel`, `ProjectBucketsArgs.LegacyTopLevel`, the `WithLegacyTopLevel` role option and the `FormerTypeToken` constant are removed, and the component no longer aliases itself from `truvity:k8s/aws:BackupBucket`. They let a state written before the resources were wrapped in the component (loose under the stack, or under the old type) adopt with no replace; once a stack has been applied with the component, its state holds the component URNs and the aliases resolve to nothing. Before upgrading, apply every stack that still sets one of them with your current version, then drop the option: a preview then shows no create or delete. The AWS SDK's own type aliases (the v2 split) still apply beneath the component. A caller that needs an alias now passes it as a resource option (`New`'s options; `WithResourceOptions` for `NewRole`).
+
 ## v2.31.0
 
 ### Added

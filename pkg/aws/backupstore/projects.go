@@ -103,9 +103,8 @@ type ProjectBucketsArgs struct {
 	// (the default) makes no replica: the resources are exactly those of a
 	// caller that never had this field.
 	Replica *ProjectReplica
-	// Protect and LegacyTopLevel are passed to every Args unchanged.
-	Protect        *bool
-	LegacyTopLevel bool
+	// Protect is passed to every Args unchanged.
+	Protect *bool
 
 	// ResourceName returns the logical name of a project's component. Nil
 	// means the bucket's name, which is what a caller that registered the
@@ -256,7 +255,6 @@ func BuildProjectBuckets(a *ProjectBucketsArgs) ([]ProjectBucket, error) {
 			Tenants:         tenants,
 			Lifecycle:       &lc,
 			Protect:         a.Protect,
-			LegacyTopLevel:  a.LegacyTopLevel,
 		}
 		if a.Tags != nil {
 			args.Tags = a.Tags(p.Name)

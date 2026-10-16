@@ -14,11 +14,6 @@ import (
 // TypeToken is the Pulumi type of the component.
 const TypeToken = "truvity:cnpg/aws:BackupStore"
 
-// FormerTypeToken is the type the component had while it lived in
-// truvity/k8s as pkg/aws/backupbucket. New aliases the component from it, so
-// a state written by that version adopts with no replace.
-const FormerTypeToken = "truvity:k8s/aws:BackupBucket"
-
 // DefaultPartition is the AWS partition used in ARNs when Args.Partition is
 // empty.
 const DefaultPartition = "aws"
@@ -146,12 +141,6 @@ type Args struct {
 	// that would delete one refuses. Nil means true: set it to a pointer to
 	// false only to retire a bucket.
 	Protect *bool
-	// LegacyTopLevel makes every child carry the aliases of the URN it has
-	// when registered directly under the stack (no parent): the current type
-	// and name, and for a child whose provider SDK renames its type, the
-	// former type as well. Set it when adopting resources created before
-	// they were wrapped in this component.
-	LegacyTopLevel bool
 }
 
 // BackstopArgs shapes the lifecycle rule Backstop builds.
@@ -388,7 +377,6 @@ func New(ctx *pulumi.Context, name string, args *Args, opts ...pulumi.ResourceOp
 	}
 
 	comp := &BackupStore{}
-	opts = append(opts, pulumi.Aliases([]pulumi.Alias{{Type: pulumi.String(FormerTypeToken)}}))
 	if err := ctx.RegisterComponentResource(TypeToken, name, comp, opts...); err != nil {
 		return nil, err
 	}
@@ -460,32 +448,10 @@ type builder struct {
 	key    *kms.Key
 }
 
-// childOpts is what every child registers with: the component as parent,
-// the caller's extra options, and the adoption aliases when asked for.
-// sdkType is the former type the provider SDK itself aliases this child's
-// type from, or "".
-func (b *builder) childOpts(sdkTypes []string, extra ...pulumi.ResourceOption) []pulumi.ResourceOption {
-	out := append([]pulumi.ResourceOption{pulumi.Parent(b.comp)}, extra...)
-
-	if b.args.LegacyTopLevel {
-		out = append(out, pulumi.Aliases(legacyAliases(sdkTypes)))
-	}
-
-	return out
-}
-
-// legacyAliases is the loose-under-the-stack alias, plus one per former
-// type. The SDK declares its own type aliases without a parent, which
-// resolves them under the NEW parent; a state that still holds the former
-// type at the top level needs the type and no parent together.
-func legacyAliases(formerTypes []string) []pulumi.Alias {
-	out := []pulumi.Alias{{NoParent: pulumi.Bool(true)}}
-
-	for _, t := range formerTypes {
-		out = append(out, pulumi.Alias{Type: pulumi.String(t), NoParent: pulumi.Bool(true)})
-	}
-
-	return out
+// childOpts is what every child registers with: the component as parent and
+// the caller's extra options.
+func (b *builder) childOpts(extra ...pulumi.ResourceOption) []pulumi.ResourceOption {
+	return append([]pulumi.ResourceOption{pulumi.Parent(b.comp)}, extra...)
 }
 
 func (b *builder) protectOpt() []pulumi.ResourceOption {
@@ -495,16 +461,6 @@ func (b *builder) protectOpt() []pulumi.ResourceOption {
 
 	return nil
 }
-
-// Former types the AWS SDK aliases its own resources from. A test pins this
-// list against what the SDK registers, so an SDK that adds one fails it.
-const (
-	formerBucket     = "aws:s3/bucketV2:BucketV2"
-	formerVersioning = "aws:s3/bucketVersioningV2:BucketVersioningV2"
-	formerEncryption = "aws:s3/bucketServerSideEncryptionConfigurationV2:BucketServerSideEncryptionConfigurationV2"
-	formerLifecycle  = "aws:s3/bucketLifecycleConfigurationV2:BucketLifecycleConfigurationV2"
-	formerObjectLock = "aws:s3/bucketObjectLockConfigurationV2:BucketObjectLockConfigurationV2"
-)
 
 func (b *builder) primary() error {
 	a := b.args
@@ -519,7 +475,7 @@ func (b *builder) primary() error {
 			Description:       pulumi.String(a.KeyDescription),
 			EnableKeyRotation: pulumi.Bool(true),
 			Policy:            pulumi.String(buildKeyPolicy(part, a.SourceAccountID, a.BackupAccountID, a.WriterRoleName, a.ReaderRoleName, a.Tenants)),
-		}, b.childOpts(nil, append(b.protectOpt(), pulumi.RetainOnDelete(true))...)...)
+		}, b.childOpts(append(b.protectOpt(), pulumi.RetainOnDelete(true))...)...)
 		if err != nil {
 			return fmt.Errorf("create KMS key: %w", err)
 		}
@@ -529,7 +485,7 @@ func (b *builder) primary() error {
 		if _, err := kms.NewAlias(b.ctx, name+"-kms-alias", &kms.AliasArgs{
 			Name:        pulumi.String("alias/" + name),
 			TargetKeyId: key.KeyId,
-		}, b.childOpts(nil)...); err != nil {
+		}, b.childOpts()...); err != nil {
 			return fmt.Errorf("create KMS alias: %w", err)
 		}
 	}
@@ -542,9 +498,7 @@ func (b *builder) primary() error {
 		bucketArgs.ObjectLockEnabled = pulumi.Bool(true)
 	}
 
-	// The SDK aliases this type from BucketV2 twice; one alias resolves to
-	// the same URN, so the legacy set below carries it once.
-	bucket, err := s3.NewBucket(b.ctx, name, bucketArgs, b.childOpts([]string{formerBucket}, b.protectOpt()...)...)
+	bucket, err := s3.NewBucket(b.ctx, name, bucketArgs, b.childOpts(b.protectOpt()...)...)
 	if err != nil {
 		return fmt.Errorf("create backup bucket: %w", err)
 	}
@@ -556,7 +510,7 @@ func (b *builder) primary() error {
 		VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
 			Status: pulumi.String("Enabled"),
 		},
-	}, b.childOpts([]string{formerVersioning})...); err != nil {
+	}, b.childOpts()...); err != nil {
 		return fmt.Errorf("enable bucket versioning: %w", err)
 	}
 
@@ -574,7 +528,7 @@ func (b *builder) primary() error {
 				BlockedEncryptionTypes: pulumi.StringArray{pulumi.String("SSE-C")},
 			},
 		},
-	}, b.childOpts([]string{formerEncryption})...); err != nil {
+	}, b.childOpts()...); err != nil {
 		return fmt.Errorf("configure bucket encryption: %w", err)
 	}
 
@@ -586,7 +540,7 @@ func (b *builder) primary() error {
 	if _, err := s3.NewBucketLifecycleConfigurationV2(b.ctx, name+"-lifecycle", &s3.BucketLifecycleConfigurationV2Args{
 		Bucket: bucket.ID(),
 		Rules:  rules,
-	}, b.childOpts([]string{formerLifecycle})...); err != nil {
+	}, b.childOpts()...); err != nil {
 		return fmt.Errorf("configure bucket lifecycle: %w", err)
 	}
 
@@ -599,12 +553,12 @@ func (b *builder) primary() error {
 					Days: pulumi.Int(a.ObjectLockDays),
 				},
 			},
-		}, b.childOpts([]string{formerObjectLock})...); err != nil {
+		}, b.childOpts()...); err != nil {
 			return fmt.Errorf("configure object lock: %w", err)
 		}
 	}
 
-	if _, err := s3.NewBucketPublicAccessBlock(b.ctx, name+"-public-access", blockPublicAccess(bucket.ID()), b.childOpts(nil)...); err != nil {
+	if _, err := s3.NewBucketPublicAccessBlock(b.ctx, name+"-public-access", blockPublicAccess(bucket.ID()), b.childOpts()...); err != nil {
 		return fmt.Errorf("configure bucket public access block: %w", err)
 	}
 
@@ -626,7 +580,7 @@ func (b *builder) primary() error {
 	if _, err := s3.NewBucketPolicy(b.ctx, name+"-policy", &s3.BucketPolicyArgs{
 		Bucket: bucket.ID(),
 		Policy: pulumi.String(policy),
-	}, b.childOpts(nil)...); err != nil {
+	}, b.childOpts()...); err != nil {
 		return fmt.Errorf("attach bucket policy: %w", err)
 	}
 
@@ -695,8 +649,8 @@ func (b *builder) replica() error {
 	name := a.BucketName
 	rname := r.BucketName
 	part := a.partition()
-	ropts := func(sdkTypes []string, extra ...pulumi.ResourceOption) []pulumi.ResourceOption {
-		return b.childOpts(sdkTypes, append([]pulumi.ResourceOption{pulumi.Provider(r.Provider)}, extra...)...)
+	ropts := func(extra ...pulumi.ResourceOption) []pulumi.ResourceOption {
+		return b.childOpts(append([]pulumi.ResourceOption{pulumi.Provider(r.Provider)}, extra...)...)
 	}
 
 	var replicaKey *kms.Key
@@ -707,7 +661,7 @@ func (b *builder) replica() error {
 		replicaKey, err = kms.NewKey(b.ctx, rname+"-kms", &kms.KeyArgs{
 			Description:       pulumi.String(r.KeyDescription),
 			EnableKeyRotation: pulumi.Bool(true),
-		}, ropts(nil, append(b.protectOpt(), pulumi.RetainOnDelete(true))...)...)
+		}, ropts(append(b.protectOpt(), pulumi.RetainOnDelete(true))...)...)
 		if err != nil {
 			return fmt.Errorf("create replica KMS key: %w", err)
 		}
@@ -720,7 +674,7 @@ func (b *builder) replica() error {
 		replicaArgs.ObjectLockEnabled = pulumi.Bool(true)
 	}
 
-	replica, err := s3.NewBucketV2(b.ctx, rname, replicaArgs, ropts(nil, b.protectOpt()...)...)
+	replica, err := s3.NewBucketV2(b.ctx, rname, replicaArgs, ropts(b.protectOpt()...)...)
 	if err != nil {
 		return fmt.Errorf("create replica bucket: %w", err)
 	}
@@ -730,11 +684,11 @@ func (b *builder) replica() error {
 		VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
 			Status: pulumi.String("Enabled"),
 		},
-	}, ropts([]string{formerVersioning})...); err != nil {
+	}, ropts()...); err != nil {
 		return fmt.Errorf("replica versioning: %w", err)
 	}
 
-	if _, err := s3.NewBucketPublicAccessBlock(b.ctx, rname+"-public-access", blockPublicAccess(replica.ID()), ropts(nil)...); err != nil {
+	if _, err := s3.NewBucketPublicAccessBlock(b.ctx, rname+"-public-access", blockPublicAccess(replica.ID()), ropts()...); err != nil {
 		return fmt.Errorf("replica public access block: %w", err)
 	}
 
@@ -752,7 +706,7 @@ func (b *builder) replica() error {
 					Days: pulumi.Int(days),
 				},
 			},
-		}, ropts([]string{formerObjectLock})...); err != nil {
+		}, ropts()...); err != nil {
 			return fmt.Errorf("replica object lock: %w", err)
 		}
 	}
@@ -766,7 +720,7 @@ func (b *builder) replica() error {
 		if _, err := s3.NewBucketLifecycleConfigurationV2(b.ctx, rname+"-lifecycle", &s3.BucketLifecycleConfigurationV2Args{
 			Bucket: replica.ID(),
 			Rules:  rules,
-		}, ropts([]string{formerLifecycle})...); err != nil {
+		}, ropts()...); err != nil {
 			return fmt.Errorf("replica lifecycle: %w", err)
 		}
 	}
@@ -785,7 +739,7 @@ func (b *builder) replica() error {
 		if _, err := s3.NewBucketPolicy(b.ctx, rname+"-policy", &s3.BucketPolicyArgs{
 			Bucket: replica.ID(),
 			Policy: pulumi.String(doc),
-		}, ropts(nil)...); err != nil {
+		}, ropts()...); err != nil {
 			return fmt.Errorf("attach replica bucket policy: %w", err)
 		}
 	}
@@ -798,7 +752,7 @@ func (b *builder) replica() error {
 		roleArgs.PermissionsBoundary = r.RolePermissionsBoundary
 	}
 
-	role, err := iam.NewRole(b.ctx, name+"-replication-role", roleArgs, b.childOpts(nil)...)
+	role, err := iam.NewRole(b.ctx, name+"-replication-role", roleArgs, b.childOpts()...)
 	if err != nil {
 		return fmt.Errorf("replication role: %w", err)
 	}
@@ -817,7 +771,7 @@ func (b *builder) replica() error {
 	if _, err := iam.NewRolePolicy(b.ctx, name+"-replication-policy", &iam.RolePolicyArgs{
 		Role:   role.Name,
 		Policy: policy,
-	}, b.childOpts(nil)...); err != nil {
+	}, b.childOpts()...); err != nil {
 		return fmt.Errorf("replication policy: %w", err)
 	}
 
@@ -855,7 +809,7 @@ func (b *builder) replica() error {
 		Bucket: b.bucket.ID(),
 		Role:   role.Arn,
 		Rules:  s3.BucketReplicationConfigRuleArray{rule},
-	}, b.childOpts(nil)...); err != nil {
+	}, b.childOpts()...); err != nil {
 		return fmt.Errorf("replication config: %w", err)
 	}
 

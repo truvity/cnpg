@@ -43,7 +43,6 @@ func tenantArgs() *backupstore.Args {
 	a := base()
 	a.WriterRoleName = ""
 	a.KeyDescription = ""
-	a.LegacyTopLevel = false
 	a.Encryption = backupstore.EncryptionSSES3
 	a.LifecycleRules = nil
 	a.Lifecycle = &backupstore.Lifecycle{RetentionDays: 30}

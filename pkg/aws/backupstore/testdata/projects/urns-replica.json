@@ -196,17 +196,11 @@
   {
     "type": "truvity:cnpg/aws:BackupStore",
     "name": "acme-pg-billing-staging-eu-west-1",
-    "parent": "urn:pulumi:dev::example::pulumi:pulumi:Stack::example-dev",
-    "aliasTypes": [
-      "truvity:k8s/aws:BackupBucket"
-    ]
+    "parent": "urn:pulumi:dev::example::pulumi:pulumi:Stack::example-dev"
   },
   {
     "type": "truvity:cnpg/aws:BackupStore",
     "name": "acme-pg-ledger-staging-eu-west-1",
-    "parent": "urn:pulumi:dev::example::pulumi:pulumi:Stack::example-dev",
-    "aliasTypes": [
-      "truvity:k8s/aws:BackupBucket"
-    ]
+    "parent": "urn:pulumi:dev::example::pulumi:pulumi:Stack::example-dev"
   }
 ]
