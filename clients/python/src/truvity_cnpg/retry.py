@@ -41,7 +41,7 @@ def retry(
         try:
             return fn()
         except Exception as err:
-            if not is_retryable(err) or attempt >= policy.attempts:
+            if not is_retryable(err) or (policy.attempts > 0 and attempt >= policy.attempts):
                 raise
             delay = backoff(policy, attempt)
             if clock() - start + delay > policy.budget:

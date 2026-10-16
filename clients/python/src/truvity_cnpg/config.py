@@ -17,13 +17,13 @@ T = TypeVar("T")
 class RetryPolicy:
     """Bounds the retry of connection-class failures."""
 
-    attempts: int = 5
-    """Total tries, including the first."""
+    attempts: int = 0
+    """Total tries, including the first; 0 = no cap, ``budget`` alone bounds the retry."""
     initial_delay: float = 0.2
     """Ceiling of the first sleep, seconds."""
-    max_delay: float = 5.0
+    max_delay: float = 2.0
     """Ceiling of any sleep, seconds."""
-    budget: float = 30.0
+    budget: float = 45.0
     """Total time that may be spent waiting, seconds."""
 
 
@@ -130,8 +130,8 @@ class CnpgConfig:
         if self.health_period < 0:
             p.append("health_period must not be negative")
         r = self.retry
-        if not (r.attempts >= 1 and 0 < r.initial_delay <= r.max_delay and r.budget > 0):
-            p.append("retry: attempts>=1, 0<initial_delay<=max_delay, budget>0")
+        if not (r.attempts >= 0 and 0 < r.initial_delay <= r.max_delay and r.budget > 0):
+            p.append("retry: attempts>=0 (0 = no cap), 0<initial_delay<=max_delay, budget>0")
         if p:
             raise ConfigError(p)
 

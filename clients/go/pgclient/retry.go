@@ -17,10 +17,10 @@ import (
 )
 
 // RetryPolicy bounds the retry of connection-class failures: exponential
-// backoff with full jitter, stopping at Attempts or Budget, whichever is
-// first.
+// backoff with full jitter, stopping at Budget or, when Attempts is set,
+// at Attempts, whichever is first.
 type RetryPolicy struct {
-	Attempts     int           // total tries, including the first
+	Attempts     int           // total tries, including the first; 0 = no cap, Budget alone bounds the retry
 	InitialDelay time.Duration // ceiling of the first sleep
 	MaxDelay     time.Duration // ceiling of any sleep
 	Budget       time.Duration // total time that may be spent waiting
@@ -31,14 +31,18 @@ type RetryPolicy struct {
 	OnRetry func(attempt int, err error, delay time.Duration)
 }
 
-// DefaultRetryPolicy is 5 tries, 200ms doubling to 5s, 30s of waiting.
+// DefaultRetryPolicy has no attempt cap: it retries for up to 45s, backing off
+// from 200ms to a 2s ceiling. A CloudNativePG switchover or failover leaves the
+// primary unreachable for 10 to 30s, so the time budget, not a try count, is the
+// binding limit (a count of 5 was spent in about 1.5s of jittered back-off). The
+// caller's context deadline still ends the retry sooner.
 func DefaultRetryPolicy() RetryPolicy {
-	return RetryPolicy{Attempts: 5, InitialDelay: 200 * time.Millisecond, MaxDelay: 5 * time.Second, Budget: 30 * time.Second}
+	return RetryPolicy{Attempts: 0, InitialDelay: 200 * time.Millisecond, MaxDelay: 2 * time.Second, Budget: 45 * time.Second}
 }
 
 func (p RetryPolicy) validate() error {
-	if p.Attempts < 1 || p.InitialDelay <= 0 || p.MaxDelay < p.InitialDelay || p.Budget <= 0 {
-		return fmt.Errorf("pgclient: retry policy %+v: Attempts>=1, 0<InitialDelay<=MaxDelay, Budget>0", p)
+	if p.Attempts < 0 || p.InitialDelay <= 0 || p.MaxDelay < p.InitialDelay || p.Budget <= 0 {
+		return fmt.Errorf("pgclient: retry policy %+v: Attempts>=0 (0 = no cap), 0<InitialDelay<=MaxDelay, Budget>0", p)
 	}
 	return nil
 }
@@ -57,7 +61,7 @@ func Retry(ctx context.Context, p RetryPolicy, fn func(context.Context) error) e
 		if err = fn(ctx); err == nil {
 			return nil
 		}
-		if ctx.Err() != nil || !IsRetryable(err) || attempt >= p.Attempts {
+		if ctx.Err() != nil || !IsRetryable(err) || (p.Attempts > 0 && attempt >= p.Attempts) {
 			return err
 		}
 		delay := backoff(p, attempt)

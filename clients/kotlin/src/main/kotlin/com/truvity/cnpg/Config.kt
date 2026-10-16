@@ -2,14 +2,14 @@ package com.truvity.cnpg
 
 /** Bounds the retry of connection-class failures. */
 data class RetryPolicy(
-    /** Total tries, including the first. */
-    val attempts: Int = 5,
+    /** Total tries, including the first; 0 = no cap, [budgetMs] alone bounds the retry. */
+    val attempts: Int = 0,
     /** Ceiling of the first sleep, ms. */
     val initialDelayMs: Long = 200,
     /** Ceiling of any sleep, ms. */
-    val maxDelayMs: Long = 5_000,
+    val maxDelayMs: Long = 2_000,
     /** Total time that may be spent waiting, ms. */
-    val budgetMs: Long = 30_000,
+    val budgetMs: Long = 45_000,
 )
 
 /** Every problem with a configuration, at once. */
@@ -94,8 +94,8 @@ data class CnpgConfig(
             p += "healthPeriodMs must be 0 (off) or at least ${MIN_IDLE_MS}ms (HikariCP's floor)"
         }
         val r = retry
-        if (!(r.attempts >= 1 && r.initialDelayMs > 0 && r.maxDelayMs >= r.initialDelayMs && r.budgetMs > 0)) {
-            p += "retry: attempts>=1, 0<initialDelayMs<=maxDelayMs, budgetMs>0"
+        if (!(r.attempts >= 0 && r.initialDelayMs > 0 && r.maxDelayMs >= r.initialDelayMs && r.budgetMs > 0)) {
+            p += "retry: attempts>=0 (0 = no cap), 0<initialDelayMs<=maxDelayMs, budgetMs>0"
         }
         if (p.isNotEmpty()) throw ConfigError(p)
     }

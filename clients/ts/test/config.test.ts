@@ -37,7 +37,7 @@ describe("configFromEnv", () => {
       poolMax: 10,
       maxConnLifetimeMs: 30 * 60_000,
       maxConnIdleMs: 5 * 60_000,
-      retry: { attempts: 5, initialDelayMs: 200, maxDelayMs: 5_000, budgetMs: 30_000 },
+      retry: { attempts: 0, initialDelayMs: 200, maxDelayMs: 2_000, budgetMs: 45_000 },
     });
     expect(c.applicationName).not.toBe("");
   });

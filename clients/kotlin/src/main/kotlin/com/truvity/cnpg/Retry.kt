@@ -33,7 +33,7 @@ fun <T> retry(policy: RetryPolicy, fn: () -> T): T {
         try {
             return fn()
         } catch (e: Exception) {
-            if (Thread.currentThread().isInterrupted || !isRetryable(e) || attempt >= policy.attempts) throw e
+            if (Thread.currentThread().isInterrupted || !isRetryable(e) || (policy.attempts > 0 && attempt >= policy.attempts)) throw e
             val delay = backoffMs(policy, attempt)
             val waited = (System.nanoTime() - start) / 1_000_000
             if (waited + delay > policy.budgetMs) throw e

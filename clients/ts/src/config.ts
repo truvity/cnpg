@@ -2,7 +2,7 @@ import { basename } from "node:path";
 
 /** Bounds the retry of connection-class failures. */
 export interface RetryPolicy {
-  /** Total tries, including the first. */
+  /** Total tries, including the first; 0 = no cap, `budgetMs` alone bounds the retry. */
   attempts: number;
   /** Ceiling of the first sleep, ms. */
   initialDelayMs: number;
@@ -55,11 +55,16 @@ export class ConfigError extends Error {
   }
 }
 
+/**
+ * No attempt cap: retry for up to 45s, backing off from 200ms to a 2s ceiling.
+ * A CloudNativePG failover leaves the primary unreachable for 10 to 30s, so
+ * time, not a try count, is the binding limit.
+ */
 export const defaultRetryPolicy = (): RetryPolicy => ({
-  attempts: 5,
+  attempts: 0,
   initialDelayMs: 200,
-  maxDelayMs: 5_000,
-  budgetMs: 30_000,
+  maxDelayMs: 2_000,
+  budgetMs: 45_000,
 });
 
 /** The contract's defaults; fill host, database, user and sslRootCert. */
@@ -120,8 +125,8 @@ export function validateConfig(c: CnpgConfig): void {
   if (!(c.maxConnLifetimeMs > 0 && c.maxConnIdleMs > 0))
     p.push("maxConnLifetimeMs and maxConnIdleMs must be positive");
   const r = c.retry;
-  if (!(r.attempts >= 1 && r.initialDelayMs > 0 && r.maxDelayMs >= r.initialDelayMs && r.budgetMs > 0)) {
-    p.push("retry: attempts>=1, 0<initialDelayMs<=maxDelayMs, budgetMs>0");
+  if (!(r.attempts >= 0 && r.initialDelayMs > 0 && r.maxDelayMs >= r.initialDelayMs && r.budgetMs > 0)) {
+    p.push("retry: attempts>=0 (0 = no cap), 0<initialDelayMs<=maxDelayMs, budgetMs>0");
   }
   if (p.length > 0) throw new ConfigError(p);
 }

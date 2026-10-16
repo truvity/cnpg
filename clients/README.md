@@ -43,7 +43,7 @@ takes the same values programmatically.
 | `CNPG_CLIENT_CONN_MAX_LIFETIME` | keep below the client certificate's life | `30m` |
 | `CNPG_CLIENT_CONN_MAX_IDLE` | | `5m` |
 | `CNPG_CLIENT_HEALTH_PERIOD` | background pool health check, where the driver has one | `30s` |
-| `CNPG_CLIENT_RETRY_ATTEMPTS`, `_RETRY_MAX_DELAY`, `_RETRY_BUDGET` | see below | `5`, `5s`, `30s` |
+| `CNPG_CLIENT_RETRY_ATTEMPTS`, `_RETRY_MAX_DELAY`, `_RETRY_BUDGET` | `ATTEMPTS`: total tries, first included; `0` or unset = no cap, the budget alone stops the retry. `MAX_DELAY`: ceiling of one sleep. `BUDGET`: total time spent retrying. See Failover | `0`, `2s`, `45s` |
 
 There is no free-form DSN. A parameter passed through a string can be dropped
 on the way to the driver, and a dropped `sslrootcert` turns `verify-full`
@@ -74,14 +74,25 @@ into a connection that does not verify. The adapters take parts.
 - The retry helper (`Retry` / `pool.Do` in Go, `retry` / `pool.do` in
   TypeScript) retries **only** connection-class errors (above, plus `57P03`
   and `53300`), with exponential backoff and full jitter (200ms doubling to
-  the max delay), stopping at the attempt count or the waiting budget and
-  honouring cancellation. It never retries constraint, syntax, permission,
+  the max delay), stopping at the waiting budget (and at the attempt count,
+  when the caller sets one) and honouring cancellation. It never retries constraint, syntax, permission,
   authentication or certificate errors, a statement timeout, or a
   serialization failure (`40001` and `40P01` are the caller's transaction
   retry). The unit of retry is the caller's function, which must be safe to
   run again: a statement that may have committed before the connection broke
   is the caller's to reason about.
 - The first connection retries the same way (a startup race with the Service).
+- **The default retry is bounded by time, not by a count.** A switchover or
+  failover leaves the primary unreachable for 10 to 30 seconds, and jittered
+  back-off spends a handful of tries in a second or two, so a try-count cap
+  gives up long before the new primary is up. The default policy therefore has
+  no attempt cap (`attempts` = 0) and stops when the budget is spent: initial
+  delay 200ms, max delay 2s, budget 45s (the longest failover plus a margin
+  for the tries themselves, which take time to fail). Setting `attempts`
+  above 0 (or `CNPG_CLIENT_RETRY_ATTEMPTS=N`) caps the tries as well, and the
+  budget still applies; a negative value is a configuration error. The
+  caller's context deadline or abort signal always ends the retry first when it
+  is sooner. The first connection uses the same policy.
 
 ### Health and observability
 

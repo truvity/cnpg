@@ -64,6 +64,34 @@ class RetryTest {
     }
 
     @Test
+    fun `the default policy has no attempt cap and stops on the budget`() {
+        val d = RetryPolicy()
+        assertEquals(RetryPolicy(0, 200, 2_000, 45_000), d)
+        val p = d.copy(initialDelayMs = 5, maxDelayMs = 20, budgetMs = 600)
+        var n = 0
+        val start = System.nanoTime()
+        assertThrows(SQLException::class.java) { retry(p) { n++; throw SQLException("gone", "08006") } }
+        val ms = (System.nanoTime() - start) / 1_000_000
+        assertTrue(n > 5, "the old cap of 5 must be gone: $n")
+        assertTrue(ms in 300..2_000, "stopped on the budget: ${ms}ms")
+    }
+
+    @Test
+    fun `explicit attempts still cap before the budget`() {
+        var n = 0
+        val p = RetryPolicy(attempts = 3, initialDelayMs = 1, maxDelayMs = 1, budgetMs = 60_000)
+        assertThrows(SQLException::class.java) { retry(p) { n++; throw SQLException("gone", "08006") } }
+        assertEquals(3, n)
+    }
+
+    @Test
+    fun `the default policy does not repeat a permanent error`() {
+        var n = 0
+        assertThrows(SQLException::class.java) { retry(RetryPolicy()) { n++; throw SQLException("bad password", "28P01") } }
+        assertEquals(1, n)
+    }
+
+    @Test
     fun `an interrupt stops the retry`() {
         var n = 0
         Thread.currentThread().interrupt()

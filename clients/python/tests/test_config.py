@@ -20,7 +20,7 @@ def test_defaults_follow_the_contract() -> None:
     assert c.max_conn_lifetime == 30 * 60
     assert c.max_conn_idle == 5 * 60
     assert c.health_period == 30
-    assert c.retry == RetryPolicy(5, 0.2, 5.0, 30.0)
+    assert c.retry == RetryPolicy(0, 0.2, 2.0, 45.0)
 
 
 def test_every_cnpg_client_variable_is_read() -> None:
@@ -99,7 +99,7 @@ def test_limits_are_validated() -> None:
         ok.with_(pool_min=11),
         ok.with_(connect_timeout=0),
         ok.with_(max_conn_lifetime=0),
-        ok.with_(retry=RetryPolicy(attempts=0)),
+        ok.with_(retry=RetryPolicy(attempts=-1)),
         ok.with_(retry=RetryPolicy(initial_delay=10, max_delay=0.1)),
     ):
         with pytest.raises(ConfigError):
