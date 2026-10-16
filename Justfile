@@ -207,10 +207,6 @@ crd-charts-lint:
       echo "$chart: lint, schema and CRD-only render OK"
     done
 
-# DEPRECATED: alias for `charts`, kept for anyone with the old name
-# muscle-memoried in. Remove after the next tagged release.
-chart-lint: charts
-
 # Parse every VMRule expression in the golden renders with the real
 # VictoriaMetrics binary (truvity/observability rulecheck, pinned), so an
 # expression the parser refuses can never ship. PrometheusRule goldens are
@@ -346,6 +342,3 @@ package:
     helm package charts/cnpg-backup-access --destination dist/
     helm package charts/cnpg-client --destination dist/
     for chart in {{ crd-charts }}; do helm package "charts/$chart" --destination dist/; done
-
-# DEPRECATED: alias for `package`. Remove after the next tagged release.
-helm-package: package
