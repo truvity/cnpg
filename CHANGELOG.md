@@ -4,7 +4,7 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
-## Unreleased
+## v2.30.0
 
 - **Fixed (Go, TypeScript, Python and Kotlin clients):** the default retry now rides out a switchover or failover. It used to stop after 5 tries, and with jittered back-off from 200ms those tries were spent in about 1.5 seconds, so the 30 second budget never applied; a CloudNativePG switchover leaves the primary unreachable for 10 to 30 seconds, and every call on the defaults (`Retry`/`Do`, `retry`, `withRetry`, and the first connection in `New`) failed in the middle of it. The default policy now has no attempt cap and is bounded by time: initial delay 200ms, max delay 2s (was 5s), budget 45s (was 30s). `RetryPolicy.Attempts` (`attempts`) of 0 means no cap and is the new default; a value above 0 still caps the tries, and a negative one is refused. `CNPG_CLIENT_RETRY_ATTEMPTS` unset or `0` means no cap, `CNPG_CLIENT_RETRY_BUDGET` and `CNPG_CLIENT_RETRY_MAX_DELAY` set the budget and the sleep ceiling. The caller's context deadline or abort signal still ends the retry sooner. A process that pinned all three values keeps its behaviour; one that relied on the defaults now waits up to 45 seconds before a persistent connection failure is returned (set `CNPG_CLIENT_RETRY_BUDGET` lower to fail faster). `IsRetryable` is unchanged. This changes default behaviour, so it is a minor release (v2.30.0).
 
