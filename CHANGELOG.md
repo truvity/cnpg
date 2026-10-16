@@ -4,6 +4,12 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+### Removed
+
+- **Development only: the deprecated `just chart-lint` and `just helm-package` aliases.** Use `just charts` and `just package`, which they pointed at. CI's recipe list runs `charts`. No chart, module or client changes.
+
 ## v2.31.0
 
 ### Added
