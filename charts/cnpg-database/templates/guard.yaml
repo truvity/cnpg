@@ -11,6 +11,9 @@ render instead of surfacing as a Database that never reconciles.
                 to fail loudly
   roles[]       generatedPassword needs a secretName and excludes a client
                 certificate and a different passwordSecret;
+                databaseRole: false (no DatabaseRole rendered) needs
+                generatedPassword and refuses everything that only
+                configures a DatabaseRole;
                 never privileged; never pg_*; the client certificate's
                 commonName is the role name, so the name must be stable */}}
 {{- $v := .Values }}
@@ -92,6 +95,22 @@ render instead of surfacing as a Database that never reconciles.
 {{- end }}
 {{- if and $cc.enabled .passwordSecret }}
 {{- fail (printf "role %q: clientCertificate and passwordSecret are alternatives; set one" .name) }}
+{{- end }}
+{{- if and (hasKey . "databaseRole") (not .databaseRole) }}
+{{- if not .generatedPassword }}
+{{- fail (printf "role %q: databaseRole: false renders only the generated password, so it needs generatedPassword" .name) }}
+{{- end }}
+{{- if $cc.enabled }}
+{{- fail (printf "role %q: databaseRole: false renders no DatabaseRole, so clientCertificate is refused" .name) }}
+{{- end }}
+{{- if .passwordSecret }}
+{{- fail (printf "role %q: databaseRole: false renders no DatabaseRole, so passwordSecret is refused (the Secret is generatedPassword.secretName)" .name) }}
+{{- end }}
+{{- range $k := list "login" "inherit" "inRoles" "connectionLimit" "disablePassword" "validUntil" "comment" "ensure" "databaseRoleReclaimPolicy" "objectName" }}
+{{- if hasKey $role $k }}
+{{- fail (printf "role %q: %s only configures a DatabaseRole, and databaseRole: false renders none" $role.name $k) }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- if .generatedPassword }}
 {{- $gp := .generatedPassword }}

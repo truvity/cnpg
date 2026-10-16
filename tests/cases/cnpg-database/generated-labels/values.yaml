@@ -1,0 +1,27 @@
+clusterName: pg
+databaseName: shop
+owner: shop_owner
+roles:
+  # Generator objects carry their own labels; the DatabaseRole keeps its.
+  - name: shop_app
+    objectName: shop-role-shop-app
+    labels:
+      app.kubernetes.io/name: shop-infra
+      app.kubernetes.io/instance: shop
+    inherit: true
+    connectionLimit: -1
+    databaseRoleReclaimPolicy: retain
+    inRoles: [shop_readwrite]
+    generatedPassword:
+      secretName: shop-app-credentials
+      labels:
+        app.kubernetes.io/name: shop-credentials
+        app.kubernetes.io/managed-by: shop
+  # No generatedPassword.labels: the role's labels, as before.
+  - name: acme_worker
+    labels:
+      team: acme
+    generatedPassword:
+      secretName: acme-worker-credentials
+      length: 48
+      symbols: 2

@@ -215,7 +215,12 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "Labels on the DatabaseRole and, when generatedPassword is set, on the Password and ExternalSecret."
+            "description": "Labels on the DatabaseRole and, when generatedPassword is set, on the Password and ExternalSecret (unless generatedPassword.labels is set, which then wins for those two)."
+          },
+          "databaseRole": {
+            "type": "boolean",
+            "default": true,
+            "description": "Render the DatabaseRole (default true). false renders only the generated Password and ExternalSecret, for a consumer whose own Cluster declares the managed role. It requires generatedPassword and is refused together with clientCertificate, passwordSecret, objectName and every other field that only configures the DatabaseRole (login, inherit, inRoles, connectionLimit, disablePassword, validUntil, comment, ensure, databaseRoleReclaimPolicy)."
           },
           "generatedPassword": {
             "type": "object",
@@ -229,6 +234,13 @@
                 "type": "string",
                 "minLength": 1,
                 "description": "Name of the Secret, the Password and the ExternalSecret."
+              },
+              "labels": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Labels on the Password and the ExternalSecret. When unset (or empty), the role's labels are used, as before. Lets a consumer keep generator labels that differ from the DatabaseRole's."
               },
               "length": {
                 "type": "integer",

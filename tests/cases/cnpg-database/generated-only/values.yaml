@@ -1,0 +1,24 @@
+clusterName: pg
+databaseName: shop
+owner: shop_owner
+roles:
+  # The consumer's own Cluster declares these managed roles; the chart
+  # renders only the generated password Secret for each.
+  - name: shop_app
+    databaseRole: false
+    labels:
+      app.kubernetes.io/name: shop-infra
+      app.kubernetes.io/instance: shop
+    generatedPassword:
+      secretName: shop-app-credentials
+  - name: acme_worker
+    databaseRole: false
+    generatedPassword:
+      secretName: acme-worker-credentials
+      length: 48
+      symbols: 2
+      labels:
+        team: acme
+  # A role the chart still renders, beside them.
+  - name: shop_reader
+    passwordSecret: shop-reader-password

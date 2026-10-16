@@ -4,6 +4,14 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+### Added
+
+- **Feature (chart `cnpg-database`):** two opt-in options for a role with a generated password, for a consumer that already has its own objects. A render that sets neither is byte-identical (the existing goldens are unchanged; the new cases are `generated-labels` and `generated-only`).
+  - `roles[].generatedPassword.labels` puts labels on the `Password` generator and the `ExternalSecret` only. Unset (or empty), they carry the role's `labels` as before; set, they carry these instead, and the `DatabaseRole` keeps the role's `labels`. Use it when your generator objects have labels that differ from the role's, so adopting the chart causes no label change.
+  - `roles[].databaseRole: false` renders only the `Password` and the `ExternalSecret`, no `DatabaseRole`, for a consumer whose own `Cluster` declares the managed role and only needs the password Secret. The two objects are identical to the default case. It requires `generatedPassword`; the render fails when it is combined with `clientCertificate`, `passwordSecret`, `objectName` or any field that only configures a `DatabaseRole` (`login`, `inherit`, `inRoles`, `connectionLimit`, `disablePassword`, `validUntil`, `comment`, `ensure`, `databaseRoleReclaimPolicy`). The default is `true`.
+
 ## v2.30.0
 
 - **Fixed (Go, TypeScript, Python and Kotlin clients):** the default retry now rides out a switchover or failover. It used to stop after 5 tries, and with jittered back-off from 200ms those tries were spent in about 1.5 seconds, so the 30 second budget never applied; a CloudNativePG switchover leaves the primary unreachable for 10 to 30 seconds, and every call on the defaults (`Retry`/`Do`, `retry`, `withRetry`, and the first connection in `New`) failed in the middle of it. The default policy now has no attempt cap and is bounded by time: initial delay 200ms, max delay 2s (was 5s), budget 45s (was 30s). `RetryPolicy.Attempts` (`attempts`) of 0 means no cap and is the new default; a value above 0 still caps the tries, and a negative one is refused. `CNPG_CLIENT_RETRY_ATTEMPTS` unset or `0` means no cap, `CNPG_CLIENT_RETRY_BUDGET` and `CNPG_CLIENT_RETRY_MAX_DELAY` set the budget and the sleep ceiling. The caller's context deadline or abort signal still ends the retry sooner. A process that pinned all three values keeps its behaviour; one that relied on the defaults now waits up to 45 seconds before a persistent connection failure is returned (set `CNPG_CLIENT_RETRY_BUDGET` lower to fail faster). `IsRetryable` is unchanged. This changes default behaviour, so it is a minor release (v2.30.0).

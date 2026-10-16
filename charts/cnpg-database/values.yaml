@@ -32,8 +32,10 @@ databases: []
 #   disablePassword: false
 #   objectName: ""                   # DatabaseRole metadata.name; default <clusterName>-role-<name>
 #   labels: {}                       # on the DatabaseRole and the generated-password objects
+#   databaseRole: true               # false: render only the generated password (needs generatedPassword)
 #   generatedPassword:               # alternative to passwordSecret / a client certificate
 #     secretName: svc-a-password     # required; also the Password and ExternalSecret name
+#     labels: {}                     # on the Password and ExternalSecret only; unset = the role's labels
 #     length: 32
 #     digits: 5
 #     symbols: 0
