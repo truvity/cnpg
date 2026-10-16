@@ -29,7 +29,8 @@ export async function retry<T>(policy: RetryPolicy, fn: () => Promise<T>, signal
     try {
       return await fn();
     } catch (err) {
-      if (signal?.aborted || !isRetryable(err) || attempt >= policy.attempts) throw err;
+      if (signal?.aborted || !isRetryable(err) || (policy.attempts > 0 && attempt >= policy.attempts))
+        throw err;
       const delay = backoffMs(policy, attempt);
       if (Date.now() - start + delay > policy.budgetMs) throw err;
       policy.onRetry?.(attempt, err as Error, delay);

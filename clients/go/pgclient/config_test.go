@@ -143,3 +143,19 @@ func TestConnURLCarriesNoPasswordAndEveryTLSFile(t *testing.T) {
 		assert.Contains(t, u, want)
 	}
 }
+
+func TestFromEnvRetryAttempts(t *testing.T) {
+	e := chartEnv()
+	c, err := FromEnv(env(e))
+	require.NoError(t, err)
+	assert.Zero(t, c.Retry.Attempts, "unset: no cap, the budget binds")
+
+	e["CNPG_CLIENT_RETRY_ATTEMPTS"] = "0"
+	c, err = FromEnv(env(e))
+	require.NoError(t, err)
+	assert.Zero(t, c.Retry.Attempts)
+
+	e["CNPG_CLIENT_RETRY_ATTEMPTS"] = "-1"
+	_, err = FromEnv(env(e))
+	assert.Error(t, err)
+}

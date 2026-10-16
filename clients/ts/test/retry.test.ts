@@ -46,6 +46,54 @@ describe("isRetryable", () => {
 });
 
 describe("retry", () => {
+  it("the default policy has no attempt cap and stops on the budget", async () => {
+    const d = defaultRetryPolicy();
+    expect(d).toEqual({ attempts: 0, initialDelayMs: 200, maxDelayMs: 2_000, budgetMs: 45_000 });
+    const p = { ...d, initialDelayMs: 5, maxDelayMs: 20, budgetMs: 600 };
+    const start = Date.now();
+    let n = 0;
+    await retry(p, async () => {
+      n++;
+      throw sqlState("ECONNREFUSED");
+    }).catch(() => undefined);
+    const elapsed = Date.now() - start;
+    expect(n, "the old cap of 5 must be gone").toBeGreaterThan(5);
+    expect(elapsed, "stopped on the budget, not early").toBeGreaterThan(300);
+    expect(elapsed).toBeLessThan(2_000);
+  });
+
+  it("an explicit attempts still caps before the budget", async () => {
+    let n = 0;
+    await retry({ attempts: 3, initialDelayMs: 1, maxDelayMs: 1, budgetMs: 60_000 }, async () => {
+      n++;
+      throw sqlState("ECONNREFUSED");
+    }).catch(() => undefined);
+    expect(n).toBe(3);
+  });
+
+  it("the default policy stops at the abort signal", async () => {
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 100);
+    const start = Date.now();
+    await retry(
+      defaultRetryPolicy(),
+      async () => {
+        throw sqlState("ECONNREFUSED");
+      },
+      ac.signal,
+    ).catch(() => undefined);
+    expect(Date.now() - start).toBeLessThan(2_000);
+  });
+
+  it("the default policy does not repeat a permanent error", async () => {
+    let n = 0;
+    await retry(defaultRetryPolicy(), async () => {
+      n++;
+      throw sqlState("28P01");
+    }).catch(() => undefined);
+    expect(n).toBe(1);
+  });
+
   it("stops at the attempt count", async () => {
     let n = 0;
     await expect(

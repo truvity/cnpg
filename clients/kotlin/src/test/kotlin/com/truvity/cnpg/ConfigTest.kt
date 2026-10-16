@@ -26,7 +26,7 @@ class ConfigTest {
         assertEquals(30 * 60_000L, c.maxConnLifetimeMs)
         assertEquals(5 * 60_000L, c.maxConnIdleMs)
         assertEquals(30_000, c.healthPeriodMs)
-        assertEquals(RetryPolicy(5, 200, 5_000, 30_000), c.retry)
+        assertEquals(RetryPolicy(0, 200, 2_000, 45_000), c.retry)
     }
 
     @Test
@@ -113,7 +113,7 @@ class ConfigTest {
         bad(ok.copy(maxConnLifetimeMs = 1_000))
         bad(ok.copy(maxConnIdleMs = 1_000))
         bad(ok.copy(healthPeriodMs = 1_000))
-        bad(ok.copy(retry = RetryPolicy(attempts = 0)))
+        bad(ok.copy(retry = RetryPolicy(attempts = -1)))
         bad(ok.copy(retry = RetryPolicy(initialDelayMs = 10_000, maxDelayMs = 100)))
     }
 

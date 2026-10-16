@@ -84,6 +84,57 @@ def test_the_waiting_budget_bounds_the_retry() -> None:
     assert 2 <= n <= 20
 
 
+def test_the_default_policy_has_no_attempt_cap_and_stops_on_the_budget() -> None:
+    d = RetryPolicy()
+    assert (d.attempts, d.initial_delay, d.max_delay, d.budget) == (0, 0.2, 2.0, 45.0)
+    now = 0.0
+    n = 0
+
+    def sleep(s: float) -> None:
+        nonlocal now
+        now += s
+
+    def fn() -> None:
+        nonlocal n
+        n += 1
+        raise psycopg.OperationalError("connection refused")
+
+    with pytest.raises(psycopg.OperationalError):
+        retry(d, fn, sleep=sleep, clock=lambda: now)
+    assert n > 5, "the old cap of 5 must be gone"
+    assert 40.0 <= now <= 45.0, "stopped on the budget"
+
+
+def test_explicit_attempts_still_cap_before_the_budget() -> None:
+    n = 0
+
+    def fn() -> None:
+        nonlocal n
+        n += 1
+        raise psycopg.OperationalError("gone")
+
+    with pytest.raises(psycopg.OperationalError):
+        retry(
+            RetryPolicy(attempts=3, initial_delay=0.001, max_delay=0.001, budget=60.0),
+            fn,
+            sleep=lambda _: None,
+        )
+    assert n == 3
+
+
+def test_the_default_policy_does_not_repeat_a_permanent_error() -> None:
+    n = 0
+
+    def fn() -> None:
+        nonlocal n
+        n += 1
+        raise with_state(pe.Error, "28P01")
+
+    with pytest.raises(pe.Error):
+        retry(RetryPolicy(), fn, sleep=lambda _: None)
+    assert n == 1
+
+
 @pytest.mark.parametrize(
     "state", ["57P01", "57P02", "57P03", "25006", "53300", "08000", "08001", "08006", "08P01"]
 )

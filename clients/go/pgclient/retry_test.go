@@ -147,3 +147,57 @@ func TestStartupAttemptTimeoutIsRetried(t *testing.T) {
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Equal(t, 4, n)
 }
+
+func TestDefaultRetryPolicyIsBoundedByTimeNotCount(t *testing.T) {
+	d := DefaultRetryPolicy()
+	assert.Zero(t, d.Attempts, "the default has no attempt cap")
+	assert.Equal(t, 200*time.Millisecond, d.InitialDelay)
+	assert.Equal(t, 2*time.Second, d.MaxDelay)
+	assert.Equal(t, 45*time.Second, d.Budget)
+	require.NoError(t, d.validate())
+	assert.Error(t, RetryPolicy{Attempts: -1, InitialDelay: time.Millisecond, MaxDelay: time.Millisecond, Budget: time.Second}.validate())
+
+	// A failover keeps the primary away far longer than 5 jittered tries
+	// last: the default must keep going until the budget, whatever the count.
+	p := d
+	p.Budget = time.Second
+	p.InitialDelay = 10 * time.Millisecond
+	p.MaxDelay = 50 * time.Millisecond
+	n := 0
+	start := time.Now()
+	connErr := &pgconn.ConnectError{Config: &pgconn.Config{}}
+	err := Retry(context.Background(), p, func(context.Context) error { n++; return connErr })
+	elapsed := time.Since(start)
+	require.Error(t, err)
+	assert.True(t, IsRetryable(err))
+	assert.Greater(t, n, 5, "the old cap of 5 must be gone")
+	assert.Greater(t, elapsed, 500*time.Millisecond, "stopped on the budget, not early")
+	assert.LessOrEqual(t, elapsed, 2*time.Second)
+}
+
+func TestRetryExplicitAttemptsStillCapBeforeBudget(t *testing.T) {
+	p := RetryPolicy{Attempts: 3, InitialDelay: time.Millisecond, MaxDelay: time.Millisecond, Budget: time.Minute}
+	n := 0
+	err := Retry(context.Background(), p, func(context.Context) error { n++; return &pgconn.ConnectError{Config: &pgconn.Config{}} })
+	require.Error(t, err)
+	assert.Equal(t, 3, n)
+}
+
+func TestRetryDefaultStopsAtCallerDeadline(t *testing.T) {
+	p := DefaultRetryPolicy() // 45s budget: only the context can end this in time
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	n := 0
+	err := Retry(ctx, p, func(context.Context) error { n++; return &pgconn.ConnectError{Config: &pgconn.Config{}} })
+	require.Error(t, err)
+	assert.Less(t, time.Since(start), 2*time.Second)
+	assert.GreaterOrEqual(t, n, 1)
+}
+
+func TestRetryDefaultDoesNotRepeatAPermanentError(t *testing.T) {
+	n := 0
+	err := Retry(context.Background(), DefaultRetryPolicy(), func(context.Context) error { n++; return &pgconn.PgError{Code: "28P01"} })
+	require.Error(t, err)
+	assert.Equal(t, 1, n)
+}
