@@ -123,7 +123,6 @@ func TestNewRoleAdoptionOptions(t *testing.T) {
 	const c = "pg-backup/env-pg-backup-proj"
 
 	regs := runRole(t,
-		backupstore.WithLegacyTopLevel(),
 		backupstore.WithChildNames(func(ch podidentity.Child) string {
 			switch ch.Kind {
 			case podidentity.KindRolePolicy:
@@ -148,8 +147,8 @@ func TestNewRoleAdoptionOptions(t *testing.T) {
 			continue
 		}
 
-		if len(r.aliases) != 1 || !r.aliases[0].noParent {
-			t.Errorf("%s: want one no-parent alias, got %+v", r.name, r.aliases)
+		if len(r.aliases) != 0 {
+			t.Errorf("%s: want no alias, got %+v", r.name, r.aliases)
 		}
 	}
 }

@@ -45,7 +45,6 @@ b, err := backupstore.New(ctx, "backup", &backupstore.Args{
 | `ObjectLockDays` | `int` | Above zero: Object Lock with a COMPLIANCE default retention of that many days, on the bucket and the replica. Negative is refused. |
 | `Replica` | `*Replica` | Replicates to another region; see below. |
 | `Protect` | `*bool` | Protect the buckets and the KMS keys. Nil means true; point it at false only to retire a bucket. |
-| `LegacyTopLevel` | `bool` | Alias every child from the URN it has as a loose resource directly under the stack. For adopting existing resources. |
 
 `Replica` takes `Provider` (the AWS provider of the replica's region, created
 by the caller so it keeps its own URN), `BucketName`, `KeyDescription`,
@@ -95,22 +94,11 @@ destruction is a break-glass act in the accounts this is built for.
 
 ### Aliases
 
-The component itself carries an alias from its former type, `truvity:k8s/aws:BackupBucket`, so a state written when it lived in `truvity/k8s` adopts it with no replace.
-
-With `LegacyTopLevel` every child carries
-`pulumi.Aliases([]pulumi.Alias{{NoParent: pulumi.Bool(true)}})`: the same
-name and type, no parent.
-
-The AWS SDK also aliases some of its own types from the type they had before
-the v2 split: the bucket from `aws:s3/bucketV2:BucketV2` (twice, an
-identical pair), and versioning, encryption, lifecycle and object lock each
-from their own type. The SDK declares those with no parent, so under a
-component they resolve beneath the component, not the stack. To keep a state
-that still holds the former type at the top level resolvable, `LegacyTopLevel`
-adds, for each of those children, one alias with that former type and no
-parent. The SDK's identical pair on the bucket resolves to one URN, so the
-component declares it once. A test fails when an SDK upgrade declares an
-alias the component does not mirror.
+The component declares none of its own. A caller that adopts resources
+registered elsewhere passes its aliases as resource options (`pulumi.Aliases`
+on `New`'s options for the component; `WithResourceOptions` on `NewRole`). The
+AWS SDK's own type aliases (the v2 split: `aws:s3/bucketV2:BucketV2` and its
+siblings) still apply beneath the component as the SDK declares them.
 
 ### Outputs
 
@@ -146,8 +134,7 @@ test: an adopted role keeps its policy only while the string is unchanged.
 Bucket and key ARNs, both prefixes, the role and policy names, the namespace
 and the service accounts are inputs. Options adjust the registration without
 the library knowing any estate's names: `WithChildNames` (the logical names of
-the role, policy and associations), `WithLegacyTopLevel` (alias each child
-from the URN it has directly under the stack), `WithProtect`,
+the role, policy and associations), `WithProtect`,
 `WithIgnoreAssociationTags` and `WithResourceOptions` (aliases, parent,
 dependsOn on the component).
 
@@ -308,7 +295,7 @@ caller that registered its buckets that way keeps every URN. A test pins this
 A caller with other names, parents or history passes them:
 `ResourceName(bucketName)` renames the component, `ResourceOptions` and
 `ProjectOptions(project, bucketName)` add parents, providers and aliases, and
-`LegacyTopLevel` and `Protect` pass through to every `Args`.
+`Protect` passes through to every `Args`.
 
 `pkg/backupnaming` (no cloud SDK) holds the naming rules for callers that need only
 the strings: `ProjectBucketName(prefix, project, env, region)` (the prefix is

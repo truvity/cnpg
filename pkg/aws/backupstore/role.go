@@ -153,15 +153,14 @@ type RoleArgs struct {
 
 // RoleOption adjusts how NewRole registers its resources. The library never
 // names an estate's resources: a caller that adopts existing ones passes the
-// logical names and aliases they already have.
+// logical names they already have (and any alias, WithResourceOptions).
 type RoleOption func(*roleConfig)
 
 type roleConfig struct {
-	names          podidentity.NameFunc
-	legacyTopLevel bool
-	protect        bool
-	ignoreTags     bool
-	resourceOpts   []pulumi.ResourceOption
+	names        podidentity.NameFunc
+	protect      bool
+	ignoreTags   bool
+	resourceOpts []pulumi.ResourceOption
 }
 
 // WithChildNames sets the logical names of the role, its policy and its
@@ -169,13 +168,6 @@ type roleConfig struct {
 // are named from the component name by podidentity.DefaultName.
 func WithChildNames(f podidentity.NameFunc) RoleOption {
 	return func(c *roleConfig) { c.names = f }
-}
-
-// WithLegacyTopLevel gives every child an alias from the URN it has when
-// registered directly under the stack, for resources created before they
-// were wrapped in the component.
-func WithLegacyTopLevel() RoleOption {
-	return func(c *roleConfig) { c.legacyTopLevel = true }
 }
 
 // WithProtect protects the role and the associations.
@@ -247,7 +239,6 @@ func (a *RoleArgs) podIdentity(doc *string, cfg roleConfig) *podidentity.Args {
 		InlinePolicy:          &podidentity.InlinePolicy{Name: policyName, Document: document},
 		IgnoreAssociationTags: cfg.ignoreTags,
 		Names:                 cfg.names,
-		LegacyTopLevel:        cfg.legacyTopLevel,
 		Protect:               cfg.protect,
 	}
 }

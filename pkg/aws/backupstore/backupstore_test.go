@@ -82,7 +82,6 @@ func base() *backupstore.Args {
 		KeyDescription:  "backups " + bucket,
 		Tags:            map[string]string{"Owner": "someone"},
 		LifecycleRules:  backupstore.Backstop(backupstore.BackstopArgs{ExpireDays: 30, NoncurrentDays: 7}),
-		LegacyTopLevel:  true,
 	}
 }
 
@@ -256,85 +255,10 @@ func TestEveryChildIsUnderTheComponent(t *testing.T) {
 	}
 }
 
-// The AWS SDK declares aliases of its own on some of these types, from the
-// type they had before the v2 split, without a parent. Under a component
-// that resolves beneath the NEW parent, so a state still holding the former
-// type at the top level would not be found. Whatever the SDK aliases, the
-// legacy set must repeat it with no parent. This is the test that goes red
-// when an SDK upgrade adds one.
-func TestLegacyAliasSetCoversEverythingTheSDKAliases(t *testing.T) {
+// No child carries an alias from a top-level URN: adoption aliases are the
+// caller's (WithResourceOptions), never the component's.
+func TestNoChildCarriesANoParentAlias(t *testing.T) {
 	regs, err := run(t, full())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sdkAliased := 0
-
-	for _, r := range children(regs) {
-		var plain, sdk, legacyTyped []string
-
-		for _, a := range r.aliases {
-			switch {
-			case a.noParent && a.typ == "":
-				plain = append(plain, "noParent")
-			case a.noParent:
-				legacyTyped = append(legacyTyped, a.typ)
-			default:
-				sdk = append(sdk, a.typ)
-			}
-		}
-
-		if len(plain) != 1 {
-			t.Errorf("%s %s: want exactly one plain NoParent alias, got %d", r.typ, r.name, len(plain))
-		}
-
-		for _, typ := range sdk {
-			sdkAliased++
-
-			if !slices.Contains(legacyTyped, typ) {
-				t.Errorf("%s %s: the SDK aliases from %s but no NoParent alias does", r.typ, r.name, typ)
-			}
-		}
-
-		// One legacy type alias per distinct former type, never a duplicate.
-		seen := map[string]bool{}
-		for _, typ := range legacyTyped {
-			if seen[typ] {
-				t.Errorf("%s %s: duplicate NoParent alias from %s", r.typ, r.name, typ)
-			}
-
-			seen[typ] = true
-
-			if !slices.Contains(sdk, typ) {
-				t.Errorf("%s %s: NoParent alias from %s that the SDK does not declare", r.typ, r.name, typ)
-			}
-		}
-	}
-
-	if sdkAliased == 0 {
-		t.Fatal("the mock saw no SDK aliases at all; this test is not testing anything")
-	}
-
-	b := find(t, regs, "aws:s3/bucket:Bucket", bucket)
-
-	var former []string
-
-	for _, a := range b.aliases {
-		if a.noParent && a.typ != "" {
-			former = append(former, a.typ)
-		}
-	}
-
-	if !slices.Equal(former, []string{"aws:s3/bucketV2:BucketV2"}) {
-		t.Errorf("bucket legacy type aliases = %q, want the one BucketV2 alias", former)
-	}
-}
-
-func TestWithoutLegacyTopLevelNoChildCarriesANoParentAlias(t *testing.T) {
-	a := full()
-	a.LegacyTopLevel = false
-
-	regs, err := run(t, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +266,7 @@ func TestWithoutLegacyTopLevelNoChildCarriesANoParentAlias(t *testing.T) {
 	for _, r := range children(regs) {
 		for _, al := range r.aliases {
 			if al.noParent {
-				t.Errorf("%s %s carries a NoParent alias without LegacyTopLevel", r.typ, r.name)
+				t.Errorf("%s %s carries a NoParent alias", r.typ, r.name)
 			}
 		}
 	}
