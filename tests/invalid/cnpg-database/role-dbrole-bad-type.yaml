@@ -1,0 +1,5 @@
+clusterName: pg
+roles:
+  - name: r
+    databaseRole: "no"
+    generatedPassword: {secretName: s}

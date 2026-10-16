@@ -190,3 +190,83 @@ func TestRole_NoGeneratedPassword(t *testing.T) {
 	require.Len(t, objs, 1)
 	assert.NotNil(t, objs["DatabaseRole/pg-role-svc-a"])
 }
+
+func shopRole(extra map[string]any) map[string]any {
+	role := map[string]any{
+		"name":              "shop_app",
+		"labels":            map[string]any{"app.kubernetes.io/name": "shop-infra"},
+		"generatedPassword": map[string]any{"secretName": "shop-app-credentials"},
+	}
+	for k, v := range extra {
+		role[k] = v
+	}
+	return role
+}
+
+// TestRole_GeneratedPasswordLabels: generatedPassword.labels replaces the
+// role's labels on the Password and ExternalSecret only; unset keeps the
+// role's labels (the behaviour before the option existed).
+func TestRole_GeneratedPasswordLabels(t *testing.T) {
+	base := renderAll(t, map[string]any{"clusterName": "pg", "roles": []any{shopRole(nil)}})
+
+	gp := map[string]any{
+		"secretName": "shop-app-credentials",
+		"labels":     map[string]any{"app.kubernetes.io/name": "shop-credentials"},
+	}
+	got := renderAll(t, map[string]any{"clusterName": "pg", "roles": []any{shopRole(map[string]any{"generatedPassword": gp})}})
+
+	require.Len(t, got, 3)
+	assert.Equal(t, base["DatabaseRole/pg-role-shop-app"], got["DatabaseRole/pg-role-shop-app"], "DatabaseRole keeps the role labels")
+	for _, key := range []string{"Password/shop-app-credentials", "ExternalSecret/shop-app-credentials"} {
+		assert.Equal(t, "shop-infra", field(base[key], "metadata", "labels", "app.kubernetes.io/name"))
+		assert.Equal(t, "shop-credentials", field(got[key], "metadata", "labels", "app.kubernetes.io/name"))
+		assert.Equal(t, field(base[key], "spec"), field(got[key], "spec"), "only the labels differ")
+	}
+
+	// Generator labels without any role labels still render.
+	noLabels := shopRole(map[string]any{"generatedPassword": gp})
+	delete(noLabels, "labels")
+	only := renderAll(t, map[string]any{"clusterName": "pg", "roles": []any{noLabels}})
+	assert.Nil(t, field(only["DatabaseRole/pg-role-shop-app"], "metadata", "labels"))
+	assert.Equal(t, "shop-credentials", field(only["Password/shop-app-credentials"], "metadata", "labels", "app.kubernetes.io/name"))
+}
+
+// TestRole_DatabaseRoleFalse: no DatabaseRole, and the Password and
+// ExternalSecret are exactly the ones the default renders.
+func TestRole_DatabaseRoleFalse(t *testing.T) {
+	with := renderAll(t, map[string]any{"clusterName": "pg", "roles": []any{shopRole(nil)}})
+	without := renderAll(t, map[string]any{"clusterName": "pg", "roles": []any{shopRole(map[string]any{"databaseRole": false})}})
+
+	require.Len(t, without, 2)
+	assert.Nil(t, without["DatabaseRole/pg-role-shop-app"])
+	for _, key := range []string{"Password/shop-app-credentials", "ExternalSecret/shop-app-credentials"} {
+		require.NotNil(t, without[key])
+		assert.Equal(t, with[key], without[key])
+	}
+
+	explicit := renderAll(t, map[string]any{"clusterName": "pg", "roles": []any{shopRole(map[string]any{"databaseRole": true})}})
+	assert.Equal(t, with, explicit, "databaseRole: true is the default")
+}
+
+// TestRole_DatabaseRoleFalseGuard: databaseRole: false needs
+// generatedPassword and refuses what only configures a DatabaseRole.
+func TestRole_DatabaseRoleFalseGuard(t *testing.T) {
+	cases := map[string]map[string]any{
+		"needs generatedPassword":  {"name": "r", "databaseRole": false},
+		"refuses clientCert":       shopRole(map[string]any{"databaseRole": false, "clientCertificate": map[string]any{"enabled": true}}),
+		"refuses passwordSecret":   shopRole(map[string]any{"databaseRole": false, "passwordSecret": "shop-app-credentials"}),
+		"refuses objectName":       shopRole(map[string]any{"databaseRole": false, "objectName": "x"}),
+		"refuses connectionLimit":  shopRole(map[string]any{"databaseRole": false, "connectionLimit": 5}),
+		"refuses disablePassword":  shopRole(map[string]any{"databaseRole": false, "disablePassword": false}),
+		"refuses a non-bool value": shopRole(map[string]any{"databaseRole": "no"}),
+	}
+	for name, role := range cases {
+		t.Run(name, func(t *testing.T) {
+			if role["generatedPassword"] == nil {
+				delete(role, "labels")
+			}
+			_, err := renderDatabase(t, map[string]any{"clusterName": "pg", "databaseName": "shop", "roles": []any{role}})
+			require.Error(t, err)
+		})
+	}
+}

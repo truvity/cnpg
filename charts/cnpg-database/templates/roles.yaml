@@ -7,12 +7,19 @@ A role with generatedPassword also renders an External Secrets Password
 generator and a once-only ExternalSecret that fill the basic-auth Secret
 the DatabaseRole reads its passwordSecret from (see docs/reference.md).
 That path alone needs the External Secrets CRDs; a chart without
-generatedPassword renders none of it. */}}
+generatedPassword renders none of it. The Password and ExternalSecret carry
+generatedPassword.labels when set, else the role's labels.
+
+databaseRole: false renders the Password and ExternalSecret only, for a
+consumer whose own Cluster declares the managed role (the guard makes it
+require generatedPassword). */}}
 {{- range .Values.roles }}
 {{- $role := . }}
 {{- $slug := .name | replace "_" "-" }}
 {{- $cc := .clientCertificate | default dict }}
 {{- $gp := .generatedPassword | default dict }}
+{{- $genLabels := $gp.labels | default $role.labels }}
+{{- if or (not (hasKey . "databaseRole")) .databaseRole }}
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
@@ -55,6 +62,7 @@ spec:
   {{- with .databaseRoleReclaimPolicy }}
   databaseRoleReclaimPolicy: {{ . }}
   {{- end }}
+{{- end }}
 {{- if $gp.secretName }}
 ---
 apiVersion: generators.external-secrets.io/v1alpha1
@@ -62,7 +70,7 @@ kind: Password
 metadata:
   name: {{ $gp.secretName }}
   namespace: {{ include "cnpg-database.namespace" $ }}
-  {{- with $role.labels }}
+  {{- with $genLabels }}
   labels:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -78,7 +86,7 @@ kind: ExternalSecret
 metadata:
   name: {{ $gp.secretName }}
   namespace: {{ include "cnpg-database.namespace" $ }}
-  {{- with $role.labels }}
+  {{- with $genLabels }}
   labels:
     {{- toYaml . | nindent 4 }}
   {{- end }}

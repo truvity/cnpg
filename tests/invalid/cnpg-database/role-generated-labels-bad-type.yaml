@@ -1,0 +1,6 @@
+clusterName: pg
+roles:
+  - name: r
+    generatedPassword:
+      secretName: s
+      labels: {a: 1}
