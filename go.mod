@@ -9,7 +9,7 @@ require (
 	github.com/pulumi/pulumi-aws/sdk/v7 v7.48.0
 	github.com/pulumi/pulumi/sdk/v3 v3.267.0
 	github.com/stretchr/testify v1.12.1
-	github.com/truvity/k8s v0.28.0
+	github.com/truvity/k8s v0.29.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
