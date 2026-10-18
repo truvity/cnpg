@@ -255,23 +255,30 @@ func TestIdentityCheckPerRow(t *testing.T) {
 	}
 }
 
-// TestIdentityCheckExpectAccount: expectAccount is accepted by the schema and
-// forwarded to service-lib; the dependency pinned today does not pass it on, and
-// the render says so instead of dropping it. When service-lib learns the flag,
-// this test turns into an assertion on "-expect-account".
+// TestIdentityCheckExpectAccount: expectAccount reaches the check as
+// "-expect-account <id>" after "-expect-role <role>", and only on the rows that
+// set it. The id is built at run time: this repo is public and its leak canary
+// rejects a literal 12-digit run.
 func TestIdentityCheckExpectAccount(t *testing.T) {
-	values := fmt.Sprintf(identityRows,
-		`    identityCheck: {enabled: true, expectRole: role-alpha, expectAccount: "123456789012"}`, "")
+	account := strings.Repeat("7", 12)
+	objs := objects(t, ".", fmt.Sprintf(identityRows,
+		fmt.Sprintf(`    identityCheck: {enabled: true, expectRole: role-alpha, expectAccount: %q}`, account),
+		`    identityCheck: {enabled: true, expectRole: role-beta}`))
 
-	cmd := exec.CommandContext(t.Context(), "helm", "template", "x", ".", "-f", "-")
-	cmd.Stdin = strings.NewReader(values)
+	args := func(name string) any {
+		spec := objs[name]["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
 
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		assert.Contains(t, string(out), "-expect-account")
-
-		return
+		return spec["containers"].([]any)[0].(map[string]any)["args"]
 	}
 
-	assert.Contains(t, string(out), "does not pass it on")
+	assert.Equal(t, []any{"-expect-role", "role-alpha", "-expect-account", account}, args("Job/x-alpha-pg-identity-check"))
+	assert.Equal(t, []any{"-expect-role", "role-beta"}, args("Job/x-beta-pg-identity-check"), "a row without expectAccount passes no flag")
+
+	// anything but 12 digits is refused
+	cmd := exec.CommandContext(t.Context(), "helm", "template", "x", ".", "-f", "-")
+	cmd.Stdin = strings.NewReader(fmt.Sprintf(identityRows,
+		`    identityCheck: {enabled: true, expectRole: role-alpha, expectAccount: "12345"}`, ""))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err)
+	assert.Contains(t, string(out), "expectAccount")
 }

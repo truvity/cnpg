@@ -161,10 +161,10 @@ clusters:
   The pod is labelled `app.kubernetes.io/name: cnpg-projects-identity-check`
   and `app.kubernetes.io/component: <cluster>-identity-check`, which no CNPG
   (`cnpg.io/cluster`) or application selector matches.
-- **`expectAccount`** (12 digits, quoted) is forwarded to service-lib, which
-  passes `-expect-account` to the check once its release supports it (it needs
-  `images.identity-check` from truvity/k8s v0.34.0 or later). The dependency
-  pinned today does not, and the render then **fails** for a row that sets it
-  rather than check nothing; bump `service-lib` and the image pin first.
+- **`expectAccount`** (12 digits, quoted, optional) is forwarded to service-lib,
+  which passes `-expect-account` to the check: it fails unless the pod runs in
+  that AWS account, not only under that role name. It needs
+  `images.identity-check` from truvity/k8s v0.34.0 or later (pinned in the
+  chart). Anything but 12 digits is refused at render time.
 - Running pods are checked by the other half: `cnpgctl verify
   --check-identity` ([cnpgctl.md](cnpgctl.md)).
