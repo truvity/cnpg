@@ -47,3 +47,15 @@ func TestPoolLabelFlag(t *testing.T) {
 	assert.Contains(t, out.String(), "instances on pool")
 	assert.Contains(t, out.String(), "Database/DatabaseRole applied")
 }
+
+func TestCheckIdentityFlag(t *testing.T) {
+	var out, errb bytes.Buffer
+	// empty{} cannot read Pods: the assertion is reported as a FAIL, not skipped.
+	err := run(context.Background(), []string{"verify", "--namespace", "a", "--cluster", "b", "--check-identity"}, &out, &errb, empty{})
+	assert.ErrorIs(t, err, errFailed)
+	assert.Contains(t, out.String(), "backup sidecar has Pod Identity")
+
+	out.Reset()
+	_ = run(context.Background(), []string{"verify", "--namespace", "a", "--cluster", "b"}, &out, &errb, empty{})
+	assert.NotContains(t, out.String(), "backup sidecar has Pod Identity")
+}
