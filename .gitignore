@@ -20,3 +20,6 @@ vendor/
 
 # CRD mirror cache (crdctl)
 .cache/
+
+# Chart dependencies (helm dependency build)
+charts/*/charts/

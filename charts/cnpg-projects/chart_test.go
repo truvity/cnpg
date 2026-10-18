@@ -9,6 +9,7 @@
 package chart_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -185,4 +186,92 @@ func TestBackupCutoverOptions(t *testing.T) {
 	assert.Equal(t, map[string]any{"cnpg-backup-retention": "managed"}, conf["tags"])
 	assert.Equal(t, map[string]any{"cnpg-backup-retention": "keep"}, conf["historyTags"])
 	assert.NotNil(t, objs["Backup/pg-g2"])
+}
+
+const identityRows = `
+clusters:
+  - values: {clusterName: alpha-pg, namespace: alpha, profile: devel}
+%s
+  - values: {clusterName: beta-pg, namespace: beta, profile: devel}
+%s
+`
+
+func jobs(objs map[string]map[string]any) []string {
+	var names []string
+
+	for k := range objs {
+		if strings.HasPrefix(k, "Job/") {
+			names = append(names, k)
+		}
+	}
+
+	return names
+}
+
+// TestIdentityCheckIsOffByDefault: a row without identityCheck, or with it
+// disabled, renders no Job (and the chart never renders a ServiceAccount: the
+// CNPG operator owns the Cluster's).
+func TestIdentityCheckIsOffByDefault(t *testing.T) {
+	objs := objects(t, ".", fmt.Sprintf(identityRows, "", "    identityCheck: {enabled: false, expectRole: r}"))
+
+	assert.Empty(t, jobs(objs))
+
+	for k := range objs {
+		assert.False(t, strings.HasPrefix(k, "ServiceAccount/"), k)
+	}
+}
+
+// TestIdentityCheckPerRow: each enabled row gets one hook Job in its own
+// namespace, as its ServiceAccount (the Cluster's name unless named), with the
+// expected role, and a pod no CNPG or application selector can match.
+func TestIdentityCheckPerRow(t *testing.T) {
+	objs := objects(t, ".", fmt.Sprintf(identityRows,
+		"    identityCheck: {enabled: true, expectRole: role-alpha}",
+		"    identityCheck: {enabled: true, expectRole: role-beta, serviceAccount: beta-sa}"))
+
+	assert.ElementsMatch(t, []string{"Job/x-alpha-pg-identity-check", "Job/x-beta-pg-identity-check"}, jobs(objs))
+
+	for name, want := range map[string]struct{ ns, sa, role string }{
+		"Job/x-alpha-pg-identity-check": {"alpha", "alpha-pg", "role-alpha"},
+		"Job/x-beta-pg-identity-check":  {"beta", "beta-sa", "role-beta"},
+	} {
+		job := objs[name]
+		meta := job["metadata"].(map[string]any)
+		assert.Equal(t, want.ns, meta["namespace"], name)
+		assert.Equal(t, "pre-install,pre-upgrade", meta["annotations"].(map[string]any)["helm.sh/hook"], name)
+
+		pod := job["spec"].(map[string]any)["template"].(map[string]any)
+		spec := pod["spec"].(map[string]any)
+		assert.Equal(t, "Never", spec["restartPolicy"], name)
+		assert.Equal(t, want.sa, spec["serviceAccountName"], name)
+
+		c := spec["containers"].([]any)[0].(map[string]any)
+		assert.Equal(t, []any{"-expect-role", want.role}, c["args"], name)
+		assert.Contains(t, c["image"], "@sha256:", name)
+
+		labels := pod["metadata"].(map[string]any)["labels"].(map[string]any)
+		assert.Equal(t, "cnpg-projects-identity-check", labels["app.kubernetes.io/name"], name)
+		assert.NotContains(t, labels, "cnpg.io/cluster", name)
+	}
+}
+
+// TestIdentityCheckExpectAccount: expectAccount is accepted by the schema and
+// forwarded to service-lib; the dependency pinned today does not pass it on, and
+// the render says so instead of dropping it. When service-lib learns the flag,
+// this test turns into an assertion on "-expect-account".
+func TestIdentityCheckExpectAccount(t *testing.T) {
+	values := fmt.Sprintf(identityRows,
+		`    identityCheck: {enabled: true, expectRole: role-alpha, expectAccount: "123456789012"}`, "")
+
+	cmd := exec.CommandContext(t.Context(), "helm", "template", "x", ".", "-f", "-")
+	cmd.Stdin = strings.NewReader(values)
+
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		assert.Contains(t, string(out), "-expect-account")
+
+		return
+	}
+
+	assert.Contains(t, string(out), "does not pass it on")
 }

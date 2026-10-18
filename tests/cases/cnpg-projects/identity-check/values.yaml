@@ -1,0 +1,32 @@
+# The identity check, per row: alpha and beta are checked (each in its own
+# namespace, as its own ServiceAccount), gamma is not (off by default). beta
+# names a ServiceAccount other than its Cluster's. No ServiceAccount is
+# rendered: the CNPG operator owns the Cluster's.
+clusters:
+  - values:
+      clusterName: alpha-pg
+      namespace: alpha
+      profile: prod
+      bootstrap:
+        initdb: {database: alpha, owner: alpha_owner}
+    identityCheck:
+      enabled: true
+      expectRole: example-alpha-pg-archive
+  - values:
+      clusterName: beta-pg
+      namespace: beta
+      profile: prod
+      bootstrap:
+        initdb: {database: beta, owner: beta_owner}
+    identityCheck:
+      enabled: true
+      serviceAccount: beta-sa
+      expectRole: example-beta-pg-archive
+  - values:
+      clusterName: gamma-pg
+      namespace: gamma
+      profile: prod
+      bootstrap:
+        initdb: {database: gamma, owner: gamma_owner}
+    identityCheck:
+      enabled: false

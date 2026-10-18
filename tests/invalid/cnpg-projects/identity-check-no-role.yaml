@@ -1,0 +1,10 @@
+# identityCheck.enabled without expectRole: refused (schema).
+clusters:
+  - values:
+      clusterName: alpha-pg
+      namespace: alpha
+      profile: prod
+      bootstrap:
+        initdb: {database: alpha, owner: alpha_owner}
+    identityCheck:
+      enabled: true

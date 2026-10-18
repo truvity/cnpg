@@ -1,0 +1,51 @@
+{{- /*
+The identity check, one Job per clusters[] entry that sets
+identityCheck.enabled (truvity/policy service-lib's identityCheck; decision
+0013, pods are admitted with their identity).
+
+A pre-install,pre-upgrade hook that runs as the entry's ServiceAccount and
+fails until a pod admitted now carries the cloud identity of
+identityCheck.expectRole. The ServiceAccount is the CNPG operator's: it creates
+and owns the one named like the Cluster, so this chart renders NO
+ServiceAccount and the check must be enabled only once the Cluster exists (a
+hook that runs before the ServiceAccount does can never succeed).
+
+The library puts no namespace on the Job and labels the pod from the chart name
+and `<name>-identity-check`; the namespace is the entry's, and the chart name
+is given a name of its own (`cnpg-projects-identity-check`) so that no CNPG
+(cnpg.io/cluster) or application selector, PodDisruptionBudget or NetworkPolicy
+selects the check pod: a Job pod with no readiness probe is Ready while it runs.
+
+expectAccount is forwarded as service-lib takes it. A service-lib that does not
+know it would drop it without a word, so the render fails when the Job comes
+back without `-expect-account`: a check that was asked for and is not made is
+worse than none.
+*/ -}}
+{{- $seen := dict }}
+{{- range $i, $c := .Values.clusters }}
+{{- $ic := $c.identityCheck | default dict }}
+{{- if $ic.enabled }}
+{{- $values := required (printf "clusters[%d].values is required" $i) $c.values }}
+{{- $cluster := required (printf "clusters[%d].values.clusterName is required" $i) $values.clusterName }}
+{{- $ns := required (printf "clusters[%d].values.namespace is required" $i) $values.namespace }}
+{{- $role := required (printf "clusters[%d].identityCheck.expectRole is required when identityCheck.enabled" $i) $ic.expectRole }}
+{{- $key := printf "%s/%s" $ns $cluster }}
+{{- if hasKey $seen $key }}
+{{- fail (printf "identityCheck: %q appears twice" $key) }}
+{{- end }}
+{{- $_ := set $seen $key true }}
+{{- $ctx := dict "Release" $.Release "Values" $.Values "Chart" (dict "Name" "cnpg-projects-identity-check" "AppVersion" $.Chart.AppVersion) }}
+{{- $platform := dict "serviceAccount" (dict "name" ($ic.serviceAccount | default $cluster)) }}
+{{- $spec := dict "context" $ctx "name" $cluster "platform" $platform "cloudIdentity" true "expectRole" $role }}
+{{- if $ic.expectAccount }}
+{{- $_ := set $spec "expectAccount" ($ic.expectAccount | toString) }}
+{{- end }}
+{{- $job := fromYaml (include "service-lib.identityCheck" $spec) }}
+{{- if and $ic.expectAccount (not (has "-expect-account" (index $job.spec.template.spec.containers 0).args)) }}
+{{- fail (printf "clusters[%d].identityCheck.expectAccount is set, but the service-lib dependency does not pass it on: move service-lib and images.identity-check (truvity/k8s v0.34.0 or later) first" $i) }}
+{{- end }}
+{{- $_ := set $job.metadata "namespace" $ns }}
+---
+{{ toYaml $job }}
+{{- end }}
+{{- end }}

@@ -128,3 +128,43 @@ the role cannot delete, the bucket lifecycle expires objects), and tag
   pattern `cnpg-projects` uses, so the association does not wait for the Role to
   sync. `useRoleRef: true` writes `roleRef` (the ACK EKS CRD supports it)
   instead; ACK then resolves the ARN once the Role is ready.
+
+## Proving the identity before the release (cnpg-projects)
+
+A Pod Identity association is `Synced` seconds before EKS's pod-admission
+webhook can see it, and credentials are injected only when a pod is admitted.
+A database pod created in that gap archives nothing for its whole life, and
+restarting its containers does not admit it again. `cnpg-projects` can run the
+platform's standard check (`service-lib.identityCheck` from truvity/policy,
+image `ghcr.io/truvity/k8s/identity-check`, pinned by digest in `images`) per
+cluster row, as a `pre-install,pre-upgrade` hook Job that asks STS who it is,
+as the Cluster's ServiceAccount, until the answer is the expected role:
+
+```yaml
+clusters:
+  - values: {clusterName: example-pg, namespace: example, profile: prod}
+    identityCheck:
+      enabled: true                  # default false: nothing is rendered
+      expectRole: <rolePrefix>-example-pg-archive   # required when enabled: the role NAME
+      serviceAccount: example-pg     # default: values.clusterName
+      expectAccount: "<account-id>"  # optional, see below
+```
+
+- **The ServiceAccount is the operator's.** CloudNativePG creates and owns the
+  ServiceAccount named like the Cluster; the chart renders none. A hook runs
+  before anything else in the release, so enable the check for a row only once
+  its Cluster exists (a first install with the check on can never pass). The
+  usual order is: apply the Cluster and the associations, wait for the
+  Cluster, then set `identityCheck.enabled` on its row.
+- **Network.** The check pod needs egress to the cloud API (STS). A namespace
+  that denies egress by default needs a policy for it; the chart renders none.
+  The pod is labelled `app.kubernetes.io/name: cnpg-projects-identity-check`
+  and `app.kubernetes.io/component: <cluster>-identity-check`, which no CNPG
+  (`cnpg.io/cluster`) or application selector matches.
+- **`expectAccount`** (12 digits, quoted) is forwarded to service-lib, which
+  passes `-expect-account` to the check once its release supports it (it needs
+  `images.identity-check` from truvity/k8s v0.34.0 or later). The dependency
+  pinned today does not, and the render then **fails** for a row that sets it
+  rather than check nothing; bump `service-lib` and the image pin first.
+- Running pods are checked by the other half: `cnpgctl verify
+  --check-identity` ([cnpgctl.md](cnpgctl.md)).

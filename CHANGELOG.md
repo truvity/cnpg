@@ -4,6 +4,14 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## v2.33.0
+
+### Added
+
+- **Feature (chart `cnpg-projects`): an opt-in identity check per cluster row.** `clusters[].identityCheck: {enabled, expectRole, serviceAccount, expectAccount}` (a sibling of `values`) renders, for each enabled row, the platform's standard check (`service-lib.identityCheck` from truvity/policy): a `pre-install,pre-upgrade` hook Job in the row's namespace that runs as the row's ServiceAccount (default: the Cluster's name) with `-expect-role` and fails until a pod admitted now has the archive role's Pod Identity, so a database pod is not created in the gap where the association is `Synced` but EKS's webhook cannot yet see it. Off by default: a render that sets nothing is byte-identical (the existing goldens are unchanged; the new case is `identity-check`). `enabled` without `expectRole` is refused. The chart still renders no ServiceAccount: the CNPG operator creates and owns the Cluster's, so enable the check for a row only after its Cluster exists. The check pod carries a chart name and component of its own, which no CNPG or application selector matches.
+  - The chart gains a dependency on `service-lib` 1.53.0 (`oci://ghcr.io/truvity/charts`, `Chart.lock` committed, `charts/*/charts/` ignored) and a digest-pinned `images.identity-check` (truvity/k8s 0.33.0); `cnpg-cluster` does not depend on it. `just test`, `just golden` and `just charts` run `hack/chart-deps.sh` first.
+  - `expectAccount` is accepted (12 digits) and forwarded to service-lib, which does not pass it to the check yet; the render fails for a row that sets it instead of checking nothing, until `service-lib` and `images.identity-check` (truvity/k8s v0.34.0) are moved.
+
 ## v2.32.0
 
 ### Removed

@@ -14,11 +14,13 @@ fmt:
 # and the golden renders of the charts that use tests/cases: cnpg-platform and
 # cnpg-project-platform and cnpg-backup-access.
 test:
+    hack/chart-deps.sh
     hack/golden.sh
     go test ./... -coverprofile=coverage.out
 
 # Regenerate the golden renders — review the diff before committing.
 golden:
+    hack/chart-deps.sh
     hack/golden.sh update
 
 # The kind conformance suite: cert-manager, approver-policy, trust-manager
@@ -43,6 +45,8 @@ lint:
 charts:
     #!/usr/bin/env bash
     set -euo pipefail
+    # cnpg-projects depends on service-lib (oci); its archive is git-ignored.
+    hack/chart-deps.sh
     helm lint charts/cnpg-cluster --set clusterName=pg --set namespace=default --set profile=devel
     helm template pg charts/cnpg-cluster \
         --set clusterName=pg --set namespace=default --set profile=devel >/dev/null
