@@ -63,6 +63,10 @@ type Options struct {
 	// of the cluster reports status.applied true. The Source must
 	// implement DeclarativeSource.
 	CheckApplied bool
+	// CheckIdentity makes Run assert that the backup sidecar
+	// (plugin-barman-cloud) of every instance Pod has the Pod Identity
+	// environment. The Source must implement IdentitySource.
+	CheckIdentity bool
 	// Now is the clock; zero means time.Now.
 	Now time.Time
 }
@@ -122,6 +126,7 @@ func Run(ctx context.Context, src Source, opt Options) (Report, error) {
 	rep.Results = append(rep.Results, checkHBA(c)...)
 	rep.Results = append(rep.Results, checkPlacement(ctx, src, opt)...)
 	rep.Results = append(rep.Results, checkApplied(ctx, src, opt)...)
+	rep.Results = append(rep.Results, checkIdentity(ctx, src, opt)...)
 	return rep, nil
 }
 

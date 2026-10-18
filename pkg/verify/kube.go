@@ -74,6 +74,15 @@ func (k *KubeSource) InstanceNodes(ctx context.Context, namespace, cluster strin
 	return out, nil
 }
 
+// InstancePods implements IdentitySource.
+func (k *KubeSource) InstancePods(ctx context.Context, namespace, cluster string) ([]corev1.Pod, error) {
+	l, err := k.core.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "cnpg.io/cluster=" + cluster})
+	if err != nil {
+		return nil, err
+	}
+	return l.Items, nil
+}
+
 // NodeLabels implements PlacementSource.
 func (k *KubeSource) NodeLabels(ctx context.Context, node string) (map[string]string, error) {
 	n, err := k.core.CoreV1().Nodes().Get(ctx, node, metav1.GetOptions{})

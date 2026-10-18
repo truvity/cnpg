@@ -81,6 +81,7 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer, src
 		certValid  = fs.Duration("min-cert-validity", verify.DefaultMinCertValidity, "how long each certificate must remain valid")
 		poolLabel  = fs.String("pool-label", "", "assert every instance Pod runs on a node labelled key=value (off by default)")
 		applied    = fs.Bool("check-applied", false, "assert every Database and DatabaseRole of the cluster reports status.applied true")
+		identity   = fs.Bool("check-identity", false, "assert the backup sidecar of every instance Pod has Pod Identity credentials (env)")
 		output     = fs.String("output", "text", "text or json")
 	)
 	if err := fs.Parse(args); err != nil {
@@ -107,7 +108,7 @@ func runVerify(ctx context.Context, args []string, stdout, stderr io.Writer, src
 	rep, err := verify.Run(ctx, src, verify.Options{
 		Namespace: *namespace, Cluster: *cluster,
 		MaxBackupAge: *backupAge, MinCertValidity: *certValid,
-		PoolLabel: *poolLabel, CheckApplied: *applied,
+		PoolLabel: *poolLabel, CheckApplied: *applied, CheckIdentity: *identity,
 		Now: time.Now(),
 	})
 	if err != nil {

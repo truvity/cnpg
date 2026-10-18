@@ -143,6 +143,15 @@ bucket.
    pod once more; the volume stays, and the new pod starts with the new
    association's credentials.
 
+   **Gate before step 4:** once every instance is recreated, run
+   `cnpgctl verify --namespace <ns> --cluster <name> --check-identity`. It
+   fails for any instance whose `plugin-barman-cloud` sidecar lacks
+   `AWS_CONTAINER_CREDENTIALS_FULL_URI` or
+   `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`, i.e. a pod admitted before the
+   association was visible to EKS; delete that pod and run it again. It proves
+   the pod was admitted with an identity, not which role it is bound to, so
+   step 5's check of where the backup landed stays.
+
    If the switchover leaves the phase stuck ("Switchover in progress", then
    "Waiting for the instances to become active") while every instance is ready,
    that is upstream CloudNativePG issue 11627, a lost configuration reload. Run
@@ -177,7 +186,8 @@ bucket.
 window and the last backup. Two opt-in flags cover what a cutover leaves
 behind: `--pool-label key=value` fails if an instance runs on a node without
 the label (a recreated pod can land elsewhere), and `--check-applied` fails if
-a `Database` or `DatabaseRole` of the cluster does not report applied. It does
+a `Database` or `DatabaseRole` of the cluster does not report applied. A third,
+`--check-identity`, is the gate after recreating the instances (step 3). It does
 not read the bucket: step 5's check of the new location stays a manual one.
 
 ## The PITR gap
