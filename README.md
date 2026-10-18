@@ -8,7 +8,7 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
 |---|---|---|
 | `cnpg-platform` | the platform | once per Kubernetes cluster |
 | `cnpg-cluster` | the platform | once per PostgreSQL cluster |
-| `cnpg-projects` | the platform | once per Kubernetes cluster: every project's `Cluster` (cnpg-cluster per row), its backups, server TLS and archive role |
+| `cnpg-projects` | the platform | once per Kubernetes cluster: every project's `Cluster` (cnpg-cluster per row), its backups, server TLS and archive role; optionally a per-row Pod Identity check hook |
 | `cnpg-project-platform` | the platform | once per Kubernetes cluster, for the projects whose `Cluster` another chart renders |
 | `cnpg-backup-access` | the platform | once per project bucket: the ACK IAM roles and Pod Identity associations of each cluster's archive and restore access |
 | `cnpg-database` | a product | once per product (its databases, roles, client certificates) |

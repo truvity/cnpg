@@ -44,9 +44,68 @@
         "properties": {
           "values": {
             "type": "object"
+          },
+          "identityCheck": {
+            "type": "object",
+            "description": "The pre-install identity check of this row's ServiceAccount (the operator's). Enable it once the Cluster exists.",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "serviceAccount": {
+                "$ref": "#/definitions/k8sName"
+              },
+              "expectRole": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The IAM role NAME the pod must have assumed."
+              },
+              "expectAccount": {
+                "type": "string",
+                "pattern": "^[0-9]{12}$",
+                "description": "Optional 12-digit AWS account id the pod must run in; needs a service-lib and identity-check image that support it."
+              }
+            },
+            "if": {
+              "properties": {
+                "enabled": {
+                  "const": true
+                }
+              },
+              "required": [
+                "enabled"
+              ]
+            },
+            "then": {
+              "required": [
+                "expectRole"
+              ]
+            }
           }
         }
       }
+    },
+    "images": {
+      "type": "object",
+      "description": "The images the chart's own hooks run; identity-check is read by service-lib.",
+      "additionalProperties": false,
+      "properties": {
+        "identity-check": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "registry": {"type": "string"},
+            "repository": {"type": "string"},
+            "tag": {"type": "string"},
+            "digest": {"type": "string"}
+          }
+        }
+      }
+    },
+    "service-lib": {
+      "type": "object",
+      "description": "Admitted so the dependency's (empty) values key is not an unknown key; nothing is set under it."
     },
     "scheduledBackups": {
       "type": "array",

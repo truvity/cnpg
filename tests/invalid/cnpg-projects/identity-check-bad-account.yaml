@@ -1,0 +1,12 @@
+# expectAccount must be 12 digits (schema).
+clusters:
+  - values:
+      clusterName: alpha-pg
+      namespace: alpha
+      profile: prod
+      bootstrap:
+        initdb: {database: alpha, owner: alpha_owner}
+    identityCheck:
+      enabled: true
+      expectRole: example-alpha-pg-archive
+      expectAccount: "12345"
