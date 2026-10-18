@@ -16,10 +16,10 @@ is given a name of its own (`cnpg-projects-identity-check`) so that no CNPG
 (cnpg.io/cluster) or application selector, PodDisruptionBudget or NetworkPolicy
 selects the check pod: a Job pod with no readiness probe is Ready while it runs.
 
-expectAccount is forwarded as service-lib takes it. A service-lib that does not
-know it would drop it without a word, so the render fails when the Job comes
-back without `-expect-account`: a check that was asked for and is not made is
-worse than none.
+expectAccount (12 digits; the schema and service-lib both refuse anything else)
+is forwarded to service-lib, which passes `-expect-account` to the check: it
+fails unless the pod runs in that AWS account. It needs images.identity-check
+from truvity/k8s v0.34.0 or later.
 */ -}}
 {{- $seen := dict }}
 {{- range $i, $c := .Values.clusters }}
@@ -41,9 +41,6 @@ worse than none.
 {{- $_ := set $spec "expectAccount" ($ic.expectAccount | toString) }}
 {{- end }}
 {{- $job := fromYaml (include "service-lib.identityCheck" $spec) }}
-{{- if and $ic.expectAccount (not (has "-expect-account" (index $job.spec.template.spec.containers 0).args)) }}
-{{- fail (printf "clusters[%d].identityCheck.expectAccount is set, but the service-lib dependency does not pass it on: move service-lib and images.identity-check (truvity/k8s v0.34.0 or later) first" $i) }}
-{{- end }}
 {{- $_ := set $job.metadata "namespace" $ns }}
 ---
 {{ toYaml $job }}

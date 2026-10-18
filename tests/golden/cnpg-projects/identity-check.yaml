@@ -305,7 +305,7 @@ spec:
       - args:
         - -expect-role
         - example-alpha-pg-archive
-        image: ghcr.io/truvity/k8s/identity-check@sha256:0fe29cb14dee31d219fa571152e42ab6d7ec53b423b3695d1096ed8d4e6ffd24
+        image: ghcr.io/truvity/k8s/identity-check@sha256:9fc40a066f5455eb807f0826f7083b0ead46924956af3c8ed5e2c381233d1a38
         imagePullPolicy: IfNotPresent
         name: identity-check
         resources:
@@ -364,7 +364,7 @@ spec:
       - args:
         - -expect-role
         - example-beta-pg-archive
-        image: ghcr.io/truvity/k8s/identity-check@sha256:0fe29cb14dee31d219fa571152e42ab6d7ec53b423b3695d1096ed8d4e6ffd24
+        image: ghcr.io/truvity/k8s/identity-check@sha256:9fc40a066f5455eb807f0826f7083b0ead46924956af3c8ed5e2c381233d1a38
         imagePullPolicy: IfNotPresent
         name: identity-check
         resources:

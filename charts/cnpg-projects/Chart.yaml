@@ -22,7 +22,7 @@ dependencies:
   # Only for the identity check (templates/identity-check.yaml). cnpg-cluster,
   # whose templates are carried here, does not depend on it.
   - name: service-lib
-    version: 1.53.0
+    version: 1.54.0
     repository: oci://ghcr.io/truvity/charts
 maintainers:
   - name: Truvity
