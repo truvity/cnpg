@@ -1,0 +1,699 @@
+---
+# Source: cnpg-restore-drill/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cnpg-restore-drill-drill-instances
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: drill
+    example.com/part-of: databases
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/podRole: instance
+    matchExpressions:
+      - key: cnpg.io/cluster
+        operator: In
+        values: ["shop-pg-restore","ledger-drill"]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cnpg-restore-drill
+              app.kubernetes.io/instance: cnpg-restore-drill
+              app.kubernetes.io/component: runner
+      ports:
+        - port: 5432
+          protocol: TCP
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudnative-pg
+      ports:
+        - port: 8000
+          protocol: TCP
+
+---
+# Source: cnpg-restore-drill/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cnpg-restore-drill-exporter
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: exporter
+    example.com/part-of: databases
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cnpg-restore-drill
+      app.kubernetes.io/instance: cnpg-restore-drill
+      app.kubernetes.io/component: exporter
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
+          protocol: TCP
+
+---
+# Source: cnpg-restore-drill/templates/serviceaccounts.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shop-pg-restore-runner
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/drill-name: shop-pg-restore
+
+---
+# Source: cnpg-restore-drill/templates/serviceaccounts.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ledger-drill-runner
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/drill-name: ledger-drill
+
+---
+# Source: cnpg-restore-drill/templates/serviceaccounts.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cnpg-restore-drill-exporter
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: exporter
+    example.com/part-of: databases
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shop-pg-restore-runner
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/drill-name: shop-pg-restore
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [create]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get, delete]
+    resourceNames: [shop-pg-restore]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [create]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get, delete]
+    resourceNames: [shop-pg-restore-source]
+  # The drill's pods, events and logs, for the progress and the diagnostics;
+  # its volume claims, to wait for the teardown.
+  - apiGroups: [""]
+    resources: [pods, events, persistentvolumeclaims]
+    verbs: [list]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  # The superuser and CA Secrets the operator creates for the drill Cluster.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
+    resourceNames: [shop-pg-restore-superuser, shop-pg-restore-ca]
+  # The result ConfigMap.
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, update]
+    resourceNames: [shop-pg-restore-result]
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shop-pg-restore-runner-source
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/drill-name: shop-pg-restore
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get]
+    resourceNames: [shop-pg]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [databases]
+    verbs: [list]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [list]
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ledger-drill-runner
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/drill-name: ledger-drill
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [create]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get, delete]
+    resourceNames: [ledger-drill]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [create]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get, delete]
+    resourceNames: [ledger-drill-source]
+  # The drill's pods, events and logs, for the progress and the diagnostics;
+  # its volume claims, to wait for the teardown.
+  - apiGroups: [""]
+    resources: [pods, events, persistentvolumeclaims]
+    verbs: [list]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  # The superuser and CA Secrets the operator creates for the drill Cluster.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
+    resourceNames: [ledger-drill-superuser, ledger-drill-ca]
+  # The result ConfigMap.
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, update]
+    resourceNames: [ledger-drill-result]
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ledger-drill-runner-source
+  namespace: ledger
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/drill-name: ledger-drill
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get]
+    resourceNames: [ledger-pg]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [databases]
+    verbs: [list]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [list]
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cnpg-restore-drill-exporter
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: exporter
+    example.com/part-of: databases
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get]
+    resourceNames: ["shop-pg-restore-result","ledger-drill-result"]
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shop-pg-restore-runner
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/drill-name: shop-pg-restore
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: shop-pg-restore-runner
+subjects:
+  - kind: ServiceAccount
+    name: shop-pg-restore-runner
+    namespace: drills
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shop-pg-restore-runner-source
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/drill-name: shop-pg-restore
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: shop-pg-restore-runner-source
+subjects:
+  - kind: ServiceAccount
+    name: shop-pg-restore-runner
+    namespace: drills
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ledger-drill-runner
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/drill-name: ledger-drill
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ledger-drill-runner
+subjects:
+  - kind: ServiceAccount
+    name: ledger-drill-runner
+    namespace: drills
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ledger-drill-runner-source
+  namespace: ledger
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/drill-name: ledger-drill
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ledger-drill-runner-source
+subjects:
+  - kind: ServiceAccount
+    name: ledger-drill-runner
+    namespace: drills
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cnpg-restore-drill-exporter
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: exporter
+    example.com/part-of: databases
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cnpg-restore-drill-exporter
+subjects:
+  - kind: ServiceAccount
+    name: cnpg-restore-drill-exporter
+    namespace: drills
+
+---
+# Source: cnpg-restore-drill/templates/exporter.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cnpg-restore-drill-exporter
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: exporter
+    example.com/part-of: databases
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cnpg-restore-drill
+      app.kubernetes.io/instance: cnpg-restore-drill
+      app.kubernetes.io/component: exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cnpg-restore-drill
+        app.kubernetes.io/instance: cnpg-restore-drill
+        app.kubernetes.io/component: exporter
+        example.com/team: platform
+      annotations:
+        example.com/note: exporter
+    spec:
+      serviceAccountName: cnpg-restore-drill-exporter
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      imagePullSecrets:
+        - name: registry-example
+      nodeSelector:
+        example.com/pool: system
+      containers:
+        - name: exporter
+          image: registry.example.com/cnpgctl:9.9.9@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: Always
+          args:
+            - drill-metrics
+            - --namespace=drills
+            - --listen=:8080
+            - --source=shop/shop-pg=shop-pg-restore
+            - --source=ledger/ledger-pg=ledger-drill
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet: {path: /healthz, port: metrics}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: metrics}
+            periodSeconds: 30
+          resources:
+            limits:
+              memory: 64Mi
+            requests:
+              cpu: 5m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+
+---
+# Source: cnpg-restore-drill/templates/cronjobs.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: shop-pg-restore
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/source-namespace: shop
+    cnpg-restore-drill/source-cluster: shop-pg
+spec:
+  schedule: "36 14 17 * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  suspend: false
+  startingDeadlineSeconds: 7200
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cnpg-restore-drill
+        app.kubernetes.io/instance: cnpg-restore-drill
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: runner
+        example.com/part-of: databases
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 7200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: cnpg-restore-drill
+            app.kubernetes.io/instance: cnpg-restore-drill
+            app.kubernetes.io/component: runner
+            cnpg-restore-drill/source-namespace: shop
+            cnpg-restore-drill/source-cluster: shop-pg
+            cnpg-restore-drill/drill-name: shop-pg-restore
+            example.com/team: platform
+          annotations:
+            example.com/note: drill
+        spec:
+          serviceAccountName: shop-pg-restore-runner
+          restartPolicy: Never
+          # cnpgctl tears the drill down after a SIGTERM (teardown timeout 10m).
+          terminationGracePeriodSeconds: 660
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          imagePullSecrets:
+            - name: registry-example
+          nodeSelector:
+            example.com/pool: system
+          tolerations:
+            - effect: NoSchedule
+              key: example.com/pool
+              operator: Equal
+              value: system
+          containers:
+            - name: drill
+              image: registry.example.com/cnpgctl:9.9.9@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              imagePullPolicy: Always
+              args:
+                - drill
+                - --namespace=shop
+                - --cluster=shop-pg
+                - --drill-namespace=drills
+                - --drill-name=shop-pg-restore
+                - --timeout=90m
+                - --storage-class=example-delete
+                - --storage-size=20Gi
+                - --wal-storage-size=5Gi
+                - --cpu-request=500m
+                - --memory-request=1Gi
+                - --memory-limit=2Gi
+                - --node-selector=example.com/pool=database
+                - --toleration=example.com/pool=database:NoSchedule
+                - --toleration=example.com/arch:NoSchedule
+                - --pod-annotation=example.com/do-not-disrupt=true
+                - --sidecar-env=AWS_REGION=eu-example-1
+                - --database=shop
+                - --min-rows=shop=100
+                - --min-rows=shop/public.orders=10
+                - --count=estimate
+                - --max-recovery-point-age=48h
+                - --statement-timeout=30m
+                - --max-recovery-attempts=3
+              resources:
+                limits:
+                  memory: 128Mi
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+
+---
+# Source: cnpg-restore-drill/templates/cronjobs.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ledger-drill
+  namespace: drills
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    example.com/part-of: databases
+    cnpg-restore-drill/source-namespace: ledger
+    cnpg-restore-drill/source-cluster: ledger-pg
+spec:
+  schedule: "15 5 3 * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  suspend: true
+  startingDeadlineSeconds: 7200
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cnpg-restore-drill
+        app.kubernetes.io/instance: cnpg-restore-drill
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: runner
+        example.com/part-of: databases
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 16200
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: cnpg-restore-drill
+            app.kubernetes.io/instance: cnpg-restore-drill
+            app.kubernetes.io/component: runner
+            cnpg-restore-drill/source-namespace: ledger
+            cnpg-restore-drill/source-cluster: ledger-pg
+            cnpg-restore-drill/drill-name: ledger-drill
+            example.com/team: platform
+          annotations:
+            example.com/note: drill
+        spec:
+          serviceAccountName: ledger-drill-runner
+          restartPolicy: Never
+          # cnpgctl tears the drill down after a SIGTERM (teardown timeout 10m).
+          terminationGracePeriodSeconds: 660
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          imagePullSecrets:
+            - name: registry-example
+          nodeSelector:
+            example.com/pool: system
+          tolerations:
+            - effect: NoSchedule
+              key: example.com/pool
+              operator: Equal
+              value: system
+          containers:
+            - name: drill
+              image: registry.example.com/cnpgctl:9.9.9@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              imagePullPolicy: Always
+              args:
+                - drill
+                - --namespace=ledger
+                - --cluster=ledger-pg
+                - --drill-namespace=drills
+                - --drill-name=ledger-drill
+                - --timeout=240m
+                - --storage-class=example-delete
+                - --storage-size=100Gi
+                - --wal-storage-size=5Gi
+                - --destination-path=s3://example-backups/ledger/ledger-pg
+                - --server-name=ledger-pg-g2
+                - --endpoint-url=https://s3.eu-example-1.example.com
+                - --cpu-request=500m
+                - --memory-request=1Gi
+                - --memory-limit=2Gi
+                - --node-selector=example.com/pool=database
+                - --toleration=example.com/pool=database:NoSchedule
+                - --toleration=example.com/arch:NoSchedule
+                - --pod-annotation=example.com/do-not-disrupt=true
+                - --sidecar-env=AWS_REGION=eu-example-1
+                - --database=ledger
+                - --min-rows=ledger=1000
+                - --min-rows=shop=100
+                - --min-rows=shop/public.orders=10
+                - --count=exact
+                - --max-recovery-point-age=48h
+                - --statement-timeout=30m
+                - --max-recovery-attempts=3
+              resources:
+                limits:
+                  memory: 128Mi
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]

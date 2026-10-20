@@ -360,3 +360,64 @@ kubectl -n <namespace> get cluster.postgresql.cnpg.io <cluster> -o jsonpath='{.m
 `kubectl cnpg fencing off <cluster> <instance> -n <namespace>` (or `"*"`). A
 fenced primary means no writes, and the cluster's readiness alerts fire
 too.
+
+### CnpgRestoreDrillFailed
+
+`cnpg_restore_drill_last_result == 0`: the last monthly restore drill of the
+cluster in the alert's `namespace` and `cluster` labels failed
+([restore-drill.md](restore-drill.md)). Nothing is wrong with the running
+database because of it, but its archive is not proven restorable until a
+drill passes.
+
+**First checks.** What failed, from the result the drill recorded (in the
+drill namespace, the `cnpg-restore-drill` release namespace):
+
+```sh
+kubectl -n <drill-namespace> get configmap <cluster>-restore-result -o jsonpath='{.data.last_failure}{"\n"}'
+kubectl -n <drill-namespace> logs -l cnpg-restore-drill/source-cluster=<cluster> --tail=-1 --prefix
+```
+
+(`<cluster>-restore` is the default drill name; a drill entry's `drillName`
+replaces it everywhere here.)
+
+The step named there points at the cause:
+
+- **plan**: the source `Cluster`, its `ObjectStore` or the storage class could
+  not be read, or a value is wrong (the archive coordinates, a `Retain`
+  storage class).
+- **one drill at a time**: an object of the drill's name exists that no drill
+  created; rename one of them.
+- **recovery**: read the diagnostics in the Job's log. An access error from
+  `plugin-barman-cloud` means the restore identity: the Pod Identity
+  association must be in the drill namespace (`restore.namespace`); "no backup
+  found" means the destination path or the server name (a generation suffix);
+  a WAL that cannot be fetched means a gap in the archive, which is exactly
+  what the drill exists to find: treat it like [CNPGBackupFailed](#cnpgbackupfailed)
+  and take a fresh base backup.
+- **recovery point**: the archive is older than the maximum: WAL archiving or
+  the base backups stopped (check the source's `ContinuousArchiving`
+  condition and its last backup, `cnpgctl verify`), or the database is quiet
+  and its base backups are less frequent than the maximum allows.
+- **databases**, **database `<db>`**, **min rows**: the restore came back
+  without the expected data. Compare with the source before anything else.
+- **teardown**: the drill's objects are still there; delete them
+  (`kubectl -n <drill-namespace> delete cluster.postgresql.cnpg.io/<cluster>-restore objectstore.barmancloud.cnpg.io/<cluster>-restore-source`).
+
+**Fix and confirm.** Fix the cause, then run the drill again rather than wait
+a month: `kubectl -n <drill-namespace> create job --from=cronjob/<cluster>-restore <cluster>-restore-rerun`.
+The alert resolves when that run records a success.
+
+### CnpgRestoreDrillOverdue
+
+`time() - cnpg_restore_drill_last_success_timestamp_seconds > 35 * 86400`: no
+restore drill of the cluster has succeeded for 35 days (or none ever has: the
+success time is then `0`).
+
+**First checks.** Whether drills run at all: the CronJob
+`<cluster>-restore` in the drill namespace (suspended? `kubectl get cronjob`
+shows `SUSPEND` and `LAST SCHEDULE`), its Jobs (an image pull or scheduling
+failure leaves no result behind), and the exporter's `last_run` for the
+cluster. If drills run and fail, it is [CnpgRestoreDrillFailed](#cnpgrestoredrillfailed)
+too; start there.
+
+**Fix.** Make the CronJob run, then run a drill by hand as above.

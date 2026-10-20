@@ -56,7 +56,7 @@ func TestGuardEmptyBootstrap(t *testing.T) {
 		withSources(t, keys{"app/pg/pg-g2/wals/0001"}, &s3opt)
 
 		var out, errb bytes.Buffer
-		err := run(t.Context(), args, &out, &errb, nil)
+		err := run(t.Context(), args, &out, &errb, deps{})
 		require.ErrorIs(t, err, errFailed)
 		assert.Contains(t, out.String(), "FAIL  empty-bootstrap: REFUSED")
 		assert.Equal(t, "eu-west-1", s3opt.Region)
@@ -66,7 +66,7 @@ func TestGuardEmptyBootstrap(t *testing.T) {
 		withSources(t, keys{"app/pg/pg-g1/wals/0001"}, nil)
 
 		var out, errb bytes.Buffer
-		require.NoError(t, run(t.Context(), args, &out, &errb, nil))
+		require.NoError(t, run(t.Context(), args, &out, &errb, deps{}))
 		assert.Contains(t, out.String(), "PASS  empty-bootstrap")
 	})
 
@@ -74,7 +74,7 @@ func TestGuardEmptyBootstrap(t *testing.T) {
 		withSources(t, keys{"app/pg/pg-g2/base/x"}, nil)
 
 		var out, errb bytes.Buffer
-		require.NoError(t, run(t.Context(), append(args, "--allow-non-empty-archive", "--reason", "drill"), &out, &errb, nil))
+		require.NoError(t, run(t.Context(), append(args, "--allow-non-empty-archive", "--reason", "drill"), &out, &errb, deps{}))
 		assert.Contains(t, out.String(), "drill")
 	})
 }
@@ -91,7 +91,7 @@ func TestGuardFlagErrors(t *testing.T) {
 		{"guard", "empty-bootstrap", "--namespace", "a", "--cluster", "b", "--destination", "s3://x", "--bootstrap", "clone"},
 		{"guard", "empty-bootstrap", "--namespace", "a", "--cluster", "b", "--destination", "s3://x", "--allow-non-empty-archive"},
 	} {
-		err := run(t.Context(), args, &out, &errb, nil)
+		err := run(t.Context(), args, &out, &errb, deps{})
 		require.Error(t, err, args)
 		assert.NotErrorIs(t, err, errFailed, "a usage error is exit 2, not a refusal: %v", args)
 	}

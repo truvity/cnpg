@@ -1,0 +1,215 @@
+---
+# Source: cnpg-restore-drill/templates/serviceaccounts.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: shop-pg-restore-runner
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    cnpg-restore-drill/drill-name: shop-pg-restore
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shop-pg-restore-runner
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    cnpg-restore-drill/drill-name: shop-pg-restore
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [create]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get, delete]
+    resourceNames: [shop-pg-restore]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [create]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get, delete]
+    resourceNames: [shop-pg-restore-source]
+  # The drill's pods, events and logs, for the progress and the diagnostics;
+  # its volume claims, to wait for the teardown.
+  - apiGroups: [""]
+    resources: [pods, events, persistentvolumeclaims]
+    verbs: [list]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  # The superuser and CA Secrets the operator creates for the drill Cluster.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
+    resourceNames: [shop-pg-restore-superuser, shop-pg-restore-ca]
+  # The result ConfigMap.
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, update]
+    resourceNames: [shop-pg-restore-result]
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shop-pg-restore-runner-source
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    cnpg-restore-drill/drill-name: shop-pg-restore
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get]
+    resourceNames: [shop-pg]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [databases]
+    verbs: [list]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [list]
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shop-pg-restore-runner
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    cnpg-restore-drill/drill-name: shop-pg-restore
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: shop-pg-restore-runner
+subjects:
+  - kind: ServiceAccount
+    name: shop-pg-restore-runner
+    namespace: shop
+
+---
+# Source: cnpg-restore-drill/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: shop-pg-restore-runner-source
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    cnpg-restore-drill/drill-name: shop-pg-restore
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: shop-pg-restore-runner-source
+subjects:
+  - kind: ServiceAccount
+    name: shop-pg-restore-runner
+    namespace: shop
+
+---
+# Source: cnpg-restore-drill/templates/cronjobs.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: shop-pg-restore
+  namespace: shop
+  labels:
+    app.kubernetes.io/name: cnpg-restore-drill
+    app.kubernetes.io/instance: cnpg-restore-drill
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: runner
+    cnpg-restore-drill/source-namespace: shop
+    cnpg-restore-drill/source-cluster: shop-pg
+spec:
+  schedule: "36 14 17 * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  suspend: false
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cnpg-restore-drill
+        app.kubernetes.io/instance: cnpg-restore-drill
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: runner
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 9000
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: cnpg-restore-drill
+            app.kubernetes.io/instance: cnpg-restore-drill
+            app.kubernetes.io/component: runner
+            cnpg-restore-drill/source-namespace: shop
+            cnpg-restore-drill/source-cluster: shop-pg
+            cnpg-restore-drill/drill-name: shop-pg-restore
+        spec:
+          serviceAccountName: shop-pg-restore-runner
+          restartPolicy: Never
+          # cnpgctl tears the drill down after a SIGTERM (teardown timeout 10m).
+          terminationGracePeriodSeconds: 660
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: drill
+              image: ghcr.io/truvity/cnpg/cnpgctl:0.0.0
+              imagePullPolicy: IfNotPresent
+              args:
+                - drill
+                - --namespace=shop
+                - --cluster=shop-pg
+                - --drill-namespace=shop
+                - --drill-name=shop-pg-restore
+                - --timeout=120m
+                - --storage-class=example-delete
+                - --count=exact
+                - --max-recovery-point-age=24h
+                - --statement-timeout=15m
+                - --max-recovery-attempts=2
+              resources:
+                limits:
+                  memory: 256Mi
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]

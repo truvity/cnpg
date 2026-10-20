@@ -1,0 +1,92 @@
+# Every value set: two drills, one with explicit archive coordinates, an
+# explicit schedule and its own checks; an image pinned by digest; the
+# NetworkPolicies on.
+image:
+  repository: registry.example.com/cnpgctl
+  tag: "9.9.9"
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  pullPolicy: Always
+imagePullSecrets:
+  - name: registry-example
+defaults:
+  timeoutMinutes: 90
+  storageClass: example-delete
+  storageSize: 20Gi
+  walStorageSize: 5Gi
+  instance:
+    cpuRequest: 500m
+    memoryRequest: 1Gi
+    memoryLimit: 2Gi
+    podAnnotations:
+      example.com/do-not-disrupt: "true"
+    nodeSelector:
+      example.com/pool: database
+    tolerations:
+      - {key: example.com/pool, operator: Equal, value: database, effect: NoSchedule}
+      - {key: example.com/arch, operator: Exists, effect: NoSchedule}
+  sidecarEnv:
+    AWS_REGION: eu-example-1
+  checks:
+    databases: [shop]
+    minRows:
+      shop: 100
+      shop/public.orders: 10
+    count: estimate
+    maxRecoveryPointAgeHours: 48
+    statementTimeoutMinutes: 30
+    maxRecoveryAttempts: 3
+  suspend: false
+drills:
+  - namespace: shop
+    cluster: shop-pg
+  - namespace: ledger
+    cluster: ledger-pg
+    drillName: ledger-drill
+    schedule: "15 5 3 * *"
+    timeoutMinutes: 240
+    storageSize: 100Gi
+    archive:
+      bucket: example-backups
+      prefix: ledger/ledger-pg/
+      project: ledger
+      generation: g2
+      endpointURL: https://s3.eu-example-1.example.com
+    checks:
+      databases: [ledger]
+      minRows: {ledger: 1000}
+      count: exact
+    suspend: true
+runner:
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 128Mi}
+  nodeSelector: {example.com/pool: system}
+  tolerations:
+    - {key: example.com/pool, operator: Equal, value: system, effect: NoSchedule}
+  podLabels: {example.com/team: platform}
+  podAnnotations: {example.com/note: drill}
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 5
+  startingDeadlineSeconds: 7200
+exporter:
+  enabled: true
+  resources:
+    requests: {cpu: 5m, memory: 32Mi}
+    limits: {memory: 64Mi}
+  nodeSelector: {example.com/pool: system}
+  tolerations: []
+  podLabels: {example.com/team: platform}
+  podAnnotations: {example.com/note: exporter}
+podMonitor:
+  enabled: true
+  interval: 60s
+  labels: {example.com/scrape: "true"}
+networkPolicy:
+  enabled: true
+  operator:
+    - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: cnpg-system}}
+      podSelector: {matchLabels: {app.kubernetes.io/name: cloudnative-pg}}
+  metrics:
+    - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+commonLabels:
+  example.com/part-of: databases
