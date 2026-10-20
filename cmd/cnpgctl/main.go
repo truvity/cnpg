@@ -1,9 +1,11 @@
 // Command cnpgctl operates on CloudNativePG clusters built from these
-// charts. Today it has one command, read-only:
+// charts:
 //
-//	cnpgctl verify --namespace <ns> --cluster <name> [--context <ctx>]
+//	cnpgctl verify --namespace <ns> --cluster <name>   read-only assertions
+//	cnpgctl drill --namespace <ns> --cluster <name>    a restore drill (creates and deletes a Cluster)
+//	cnpgctl drill-metrics --namespace <ns> --source <ns>/<cluster>   exports drill results
 //
-// See docs/cnpgctl.md.
+// See docs/cnpgctl.md and docs/restore-drill.md.
 package main
 
 import (
@@ -14,8 +16,10 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/truvity/cnpg/v2/pkg/drill"
 	"github.com/truvity/cnpg/v2/pkg/verify"
 )
 
@@ -26,13 +30,17 @@ var Version = "dev"
 var errFailed = errors.New("assertions failed")
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// SIGTERM too: a drill Job that is stopped still tears its Cluster down.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	err := run(ctx, os.Args[1:], os.Stdout, os.Stderr, nil)
+	err := run(ctx, os.Args[1:], os.Stdout, os.Stderr, deps{})
 	switch {
 	case err == nil:
 	case errors.Is(err, errFailed):
 		os.Exit(1)
+	case errors.Is(err, drill.ErrInProgress):
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(3)
 	case errors.Is(err, flag.ErrHelp):
 	default:
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -43,21 +51,34 @@ func main() {
 const usage = `cnpgctl %s
 
 Usage:
-  cnpgctl verify [flags]   read-only assertions against a live cluster
+  cnpgctl verify [flags]          read-only assertions against a live cluster
+  cnpgctl drill [flags]           a restore drill: recover the archive into a
+                                  throwaway Cluster, check it, delete it (WRITES)
+  cnpgctl drill-metrics [flags]   serve the recorded drill results as metrics
   cnpgctl version
 
-Run "cnpgctl verify -h" for the flags.
+Run "cnpgctl <command> -h" for the flags.
 `
 
-// run dispatches the command. src overrides the Kubernetes client (tests).
-func run(ctx context.Context, args []string, stdout, stderr io.Writer, src verify.Source) error {
+// deps override the clients (tests); zero values mean the real ones.
+type deps struct {
+	verify verify.Source
+	drill  drill.Deps
+}
+
+// run dispatches the command.
+func run(ctx context.Context, args []string, stdout, stderr io.Writer, d deps) error {
 	if len(args) == 0 {
 		_, _ = fmt.Fprintf(stderr, usage, Version)
 		return errors.New("a command is required")
 	}
 	switch args[0] {
 	case "verify":
-		return runVerify(ctx, args[1:], stdout, stderr, src)
+		return runVerify(ctx, args[1:], stdout, stderr, d.verify)
+	case "drill":
+		return runDrill(ctx, args[1:], stdout, stderr, d.drill)
+	case "drill-metrics":
+		return runDrillMetrics(ctx, args[1:], stderr, d.drill.Kube)
 	case "version", "--version":
 		_, _ = fmt.Fprintln(stdout, Version)
 		return nil

@@ -1,0 +1,518 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "cnpg-restore-drill values",
+  "description": "An unknown key is an error, not a silent no-op. What a schema cannot express (a drill name used twice, a schedule inside the base backup window, a required storage class after merging defaults) is refused by templates/_validate.tpl; every rule has a fixture under tests/invalid/cnpg-restore-drill/.",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "k8sName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+    }
+  },
+  "properties": {
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cnpgctl": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "registry": {
+              "type": "string"
+            },
+            "repository": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^(sha256:[a-f0-9]{64})?$"
+            }
+          }
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string"
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeoutMinutes": {
+          "type": "integer",
+          "minimum": 10,
+          "description": "The drill's bound up to the end of its checks (cnpgctl --timeout). The Job's activeDeadlineSeconds is this plus 30 minutes."
+        },
+        "storageClass": {
+          "type": "string",
+          "description": "Required (defaults or entry): a StorageClass that deletes its volumes."
+        },
+        "storageSize": {
+          "type": "string",
+          "pattern": "^([0-9.]+(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?$"
+        },
+        "walStorageSize": {
+          "type": "string",
+          "pattern": "^([0-9.]+(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?$"
+        },
+        "instance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cpuRequest": {
+              "type": "string",
+              "pattern": "^([0-9.]+(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?$"
+            },
+            "memoryRequest": {
+              "type": "string",
+              "pattern": "^([0-9.]+(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?$"
+            },
+            "memoryLimit": {
+              "type": "string",
+              "pattern": "^([0-9.]+(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?$"
+            },
+            "podAnnotations": {
+              "$ref": "#/definitions/stringMap"
+            },
+            "nodeSelector": {
+              "$ref": "#/definitions/stringMap"
+            },
+            "tolerations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "effect"
+                ],
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "Equal",
+                      "Exists"
+                    ]
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "effect": {
+                    "type": "string",
+                    "enum": [
+                      "NoSchedule",
+                      "PreferNoSchedule",
+                      "NoExecute"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "sidecarEnv": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Extra environment of the barman-cloud sidecar. cnpgctl refuses static credentials."
+        },
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "databases": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "minRows": {
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^[^/=]+(/[^/=.]+\\.[^/=]+)?$"
+              },
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "description": "<db>: n over all user tables, or <db>/<schema>.<table>: n."
+            },
+            "count": {
+              "type": "string",
+              "enum": [
+                "exact",
+                "estimate"
+              ]
+            },
+            "maxRecoveryPointAgeHours": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "statementTimeoutMinutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxRecoveryAttempts": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "suspend": {
+          "type": "boolean"
+        }
+      }
+    },
+    "drills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "namespace",
+          "cluster"
+        ],
+        "properties": {
+          "timeoutMinutes": {
+            "type": "integer",
+            "minimum": 10,
+            "description": "The drill's bound up to the end of its checks (cnpgctl --timeout). The Job's activeDeadlineSeconds is this plus 30 minutes."
+          },
+          "storageClass": {
+            "type": "string",
+            "description": "Required (defaults or entry): a StorageClass that deletes its volumes."
+          },
+          "storageSize": {
+            "type": "string",
+            "pattern": "^([0-9.]+(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?$"
+          },
+          "walStorageSize": {
+            "type": "string",
+            "pattern": "^([0-9.]+(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?$"
+          },
+          "instance": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "cpuRequest": {
+                "type": "string",
+                "pattern": "^([0-9.]+(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?$"
+              },
+              "memoryRequest": {
+                "type": "string",
+                "pattern": "^([0-9.]+(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?$"
+              },
+              "memoryLimit": {
+                "type": "string",
+                "pattern": "^([0-9.]+(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?$"
+              },
+              "podAnnotations": {
+                "$ref": "#/definitions/stringMap"
+              },
+              "nodeSelector": {
+                "$ref": "#/definitions/stringMap"
+              },
+              "tolerations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "key",
+                    "effect"
+                  ],
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "operator": {
+                      "type": "string",
+                      "enum": [
+                        "Equal",
+                        "Exists"
+                      ]
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "effect": {
+                      "type": "string",
+                      "enum": [
+                        "NoSchedule",
+                        "PreferNoSchedule",
+                        "NoExecute"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "sidecarEnv": {
+            "type": "object",
+            "propertyNames": {
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+            },
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Extra environment of the barman-cloud sidecar. cnpgctl refuses static credentials."
+          },
+          "checks": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "databases": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "minRows": {
+                "type": "object",
+                "propertyNames": {
+                  "pattern": "^[^/=]+(/[^/=.]+\\.[^/=]+)?$"
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "description": "<db>: n over all user tables, or <db>/<schema>.<table>: n."
+              },
+              "count": {
+                "type": "string",
+                "enum": [
+                  "exact",
+                  "estimate"
+                ]
+              },
+              "maxRecoveryPointAgeHours": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "statementTimeoutMinutes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxRecoveryAttempts": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "suspend": {
+            "type": "boolean"
+          },
+          "namespace": {
+            "$ref": "#/definitions/k8sName"
+          },
+          "cluster": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+            "pattern": "^[a-z]([-a-z0-9]*[a-z0-9])?$"
+          },
+          "drillName": {
+            "type": "string",
+            "pattern": "^([a-z]([-a-z0-9]*[a-z0-9])?)?$",
+            "maxLength": 50,
+            "description": "Default <cluster>-restore: the restore ServiceAccount's name."
+          },
+          "schedule": {
+            "type": "string",
+            "description": "Cron, UTC. Default: monthly at a day, hour (04-23) and minute derived from namespace/cluster."
+          },
+          "archive": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "bucket": {
+                "type": "string",
+                "pattern": "^([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])?$"
+              },
+              "prefix": {
+                "type": "string"
+              },
+              "serverName": {
+                "type": "string"
+              },
+              "project": {
+                "type": "string"
+              },
+              "generation": {
+                "type": "string"
+              },
+              "endpointURL": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resources": {
+          "type": "object",
+          "description": "Kubernetes ResourceRequirements, passed through."
+        },
+        "nodeSelector": {
+          "$ref": "#/definitions/stringMap"
+        },
+        "tolerations": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "podLabels": {
+          "$ref": "#/definitions/stringMap"
+        },
+        "podAnnotations": {
+          "$ref": "#/definitions/stringMap"
+        },
+        "successfulJobsHistoryLimit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failedJobsHistoryLimit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "startingDeadlineSeconds": {
+          "type": "integer",
+          "minimum": 10
+        }
+      }
+    },
+    "exporter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resources": {
+          "type": "object",
+          "description": "Kubernetes ResourceRequirements, passed through."
+        },
+        "nodeSelector": {
+          "$ref": "#/definitions/stringMap"
+        },
+        "tolerations": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "podLabels": {
+          "$ref": "#/definitions/stringMap"
+        },
+        "podAnnotations": {
+          "$ref": "#/definitions/stringMap"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "podMonitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "interval": {
+          "type": "string"
+        },
+        "labels": {
+          "$ref": "#/definitions/stringMap"
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "operator": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "NetworkPolicyPeer entries for the CloudNativePG operator; required when enabled."
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "NetworkPolicyPeer entries for the exporter's scraper."
+        }
+      }
+    },
+    "commonLabels": {
+      "$ref": "#/definitions/stringMap"
+    }
+  }
+}

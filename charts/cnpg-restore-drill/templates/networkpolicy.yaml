@@ -1,0 +1,60 @@
+{{- /* Ingress only, and only when enabled (values.yaml says why `operator`
+is required). The drill instances are selected by name: cnpg.io/cluster is
+the drill Cluster's name, and podRole instance leaves the recovery Job out
+(it takes no connections). */}}
+{{- if and .Values.drills .Values.networkPolicy.enabled }}
+{{- $names := list }}
+{{- range include "cnpg-restore-drill.resolved" . | fromJsonArray }}
+{{- $names = append $names .drillName }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-drill-instances
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cnpg-restore-drill.labels" (dict "root" . "component" "drill") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/podRole: instance
+    matchExpressions:
+      - key: cnpg.io/cluster
+        operator: In
+        values: {{ toJson $names }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "cnpg-restore-drill.selector" (dict "root" . "component" "runner") | nindent 14 }}
+      ports:
+        - port: 5432
+          protocol: TCP
+    - from:
+        {{- toYaml .Values.networkPolicy.operator | nindent 8 }}
+      ports:
+        - port: 8000
+          protocol: TCP
+{{- if and .Values.exporter.enabled .Values.networkPolicy.metrics }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-exporter
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cnpg-restore-drill.labels" (dict "root" . "component" "exporter") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "cnpg-restore-drill.selector" (dict "root" . "component" "exporter") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- toYaml .Values.networkPolicy.metrics | nindent 8 }}
+      ports:
+        - port: 8080
+          protocol: TCP
+{{- end }}
+{{- end }}

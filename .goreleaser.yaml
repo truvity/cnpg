@@ -3,10 +3,14 @@
 # named in the caller to ghcr.io/truvity/charts at the tag's version.
 #
 # One tag stamps everything: the charts, the Go module (a module needs no
-# build step; the tag is its version) and the cnpgctl binaries built
-# here. cnpgctl is a binary, not an image: it is run by a person or a
-# pipeline step against a cluster they already have access to, and a
-# container would add a credential hand-off and nothing else.
+# build step; the tag is its version), the cnpgctl binaries built here and
+# the cnpgctl image. The archives are for a person or a pipeline step that
+# runs cnpgctl against a cluster it already has access to; the image is for
+# the cnpg-restore-drill chart, whose CronJobs run `cnpgctl drill` and whose
+# exporter runs `cnpgctl drill-metrics` inside the cluster. The release
+# packages that chart from the digest pushed here (chart-images: goreleaser
+# in .github/workflows/release.yaml), so the chart can only name an image
+# that exists.
 version: 2
 
 project_name: cnpg
@@ -27,6 +31,24 @@ archives:
     formats: [tar.gz]
     name_template: "cnpgctl_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
+# The image, built by ko without a container runtime: distroless, no shell,
+# running as a non-root user (the chart's pods run as 65532). The name is the
+# command's directory appended to KO_DOCKER_REPO, which the release workflow
+# sets to ghcr.io/truvity/cnpg (ko-docker-repo), so this publishes
+# ghcr.io/truvity/cnpg/cnpgctl; `repositories:` names the same value so that
+# `goreleaser check` validates in a checkout with no environment.
+kos:
+  - id: cnpgctl
+    build: cnpgctl
+    repositories: [ghcr.io/truvity/cnpg]
+    bare: true
+    preserve_import_paths: false
+    base_import_paths: true
+    base_image: cgr.dev/chainguard/static:latest
+    platforms: [linux/amd64, linux/arm64]
+    tags: ["{{ .Version }}"]
+    sbom: spdx
+
 checksum:
   name_template: checksums.txt
 
@@ -39,9 +61,11 @@ release:
     ## cnpg {{ .Tag }}
 
     Charts: `oci://ghcr.io/truvity/charts/cnpg-platform`, `cnpg-cluster`,
-    `cnpg-project-platform`, `cnpg-backup-access`, `cnpg-database` and `cnpg-client` at `{{ .Version }}`. `barman-cloud-crds`
+    `cnpg-project-platform`, `cnpg-backup-access`, `cnpg-projects`, `cnpg-restore-drill`,
+    `cnpg-database` and `cnpg-client` at `{{ .Version }}`. `barman-cloud-crds`
     (the barman-cloud plugin's CRDs, mirrored) is published at the upstream
     version it mirrors, once, by the `crd-charts` job.
     Go module: `go get github.com/truvity/cnpg/v2@{{ .Tag }}`.
     CLI: the `cnpgctl` archives below, or
     `go run github.com/truvity/cnpg/v2/cmd/cnpgctl@{{ .Tag }} --help`.
+    Image: `ghcr.io/truvity/cnpg/cnpgctl:{{ .Version }}` (what `cnpg-restore-drill` runs).

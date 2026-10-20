@@ -132,9 +132,55 @@ Nothing renders until `clusters` is listed.
 | `clusters[].archive.association` | bool | `true` | `false` renders the archive `Role` but no archive `PodIdentityAssociation`, for the cutover period in which the ServiceAccount is still bound to a legacy role (EKS allows one association per cluster, namespace and ServiceAccount). Set it back to `true` at the cutover. See [moving-to-a-new-backup-bucket.md](moving-to-a-new-backup-bucket.md). |
 | `clusters[].restore.enabled` | bool | `true` | Render the restore role and association. |
 | `clusters[].restore.serviceAccount` | string | `<name>-restore` | ServiceAccount bound to the restore role. |
-| `clusters[].restore.namespace` | string | cluster namespace | Namespace of the restore ServiceAccount. |
+| `clusters[].restore.namespace` | string | cluster namespace | Namespace of the restore ServiceAccount. For a restore drill, the `cnpg-restore-drill` release namespace ([restore-drill.md](restore-drill.md#identity)). |
 | `clusters[].restore.createServiceAccount` | bool | `false` | Render the restore ServiceAccount. |
 | `commonLabels`, `commonAnnotations` | map | `{}` | On every object. |
+
+## charts/cnpg-restore-drill
+
+Scheduled restore drills, in the release namespace (the drill namespace); see
+[restore-drill.md](restore-drill.md). Nothing renders until `drills` is listed.
+Every key of `defaults` can also be set on a `drills[]` entry, for that drill;
+the entry's non-empty value wins and maps merge key by key.
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `images.cnpgctl.{registry,repository,tag,digest}` | string | `""` | The release writes the digest of the image it built; a digest wins over `image`. |
+| `image.repository`, `.tag`, `.pullPolicy` | string | `ghcr.io/truvity/cnpg/cnpgctl`, appVersion, `IfNotPresent` | The cnpgctl image when no digest is pinned. |
+| `imagePullSecrets` | list | `[]` | On the runner and exporter pods. |
+| `defaults.timeoutMinutes` | int | `120` | `cnpgctl drill --timeout`; the Job's `activeDeadlineSeconds` is this plus 30 minutes. At least 10. |
+| `defaults.storageClass` | string | required | StorageClass of the drill volumes; must delete its volumes. |
+| `defaults.storageSize`, `.walStorageSize` | string | the source's | Drill volume sizes. |
+| `defaults.instance.cpuRequest`, `.memoryRequest`, `.memoryLimit` | string | `250m`, `512Mi`, `1Gi` (cnpgctl's) | The drill instance. |
+| `defaults.instance.podAnnotations` | map | `{}` | On the drill's pods and volumes. |
+| `defaults.instance.nodeSelector`, `.tolerations` | map, list | the source's | Placement of the drill's pods; either one set replaces the copy. A toleration has `key`, `effect`, and `operator` `Equal` (with `value`) or `Exists`. |
+| `defaults.sidecarEnv` | map | `{}` | Environment of the barman-cloud sidecar; static credentials are refused by cnpgctl. |
+| `defaults.checks.databases` | list | derived | Expected databases. |
+| `defaults.checks.minRows` | map | `{}` (each expected database `1`) | `<db>: n` over all user tables, `<db>/<schema>.<table>: n` for one table. |
+| `defaults.checks.count` | string | `exact` | `exact` or `estimate`. |
+| `defaults.checks.maxRecoveryPointAgeHours` | int | `24` | How old the recovered data may be. |
+| `defaults.checks.statementTimeoutMinutes` | int | `15` | Bound on each SQL statement. |
+| `defaults.checks.maxRecoveryAttempts` | int | `2` | Failed recovery pods that end a drill early. |
+| `defaults.suspend` | bool | `false` | Suspend the CronJob. |
+| `drills[].namespace`, `.cluster` | string | required | The source `Cluster`. A source appears once. |
+| `drills[].drillName` | string | `<cluster>-restore` | The drill `Cluster`'s name = the restore ServiceAccount's; at most 50 characters, unique, never a runner's or the exporter's ServiceAccount. |
+| `drills[].schedule` | string | monthly, derived | Cron in UTC; the default day (1-28), hour (04-23) and minute come from `<namespace>/<cluster>`. An hour of 1, 2 or 3 is refused. |
+| `drills[].archive.bucket` | string | the source's | With it, the destination is `s3://<bucket>/<prefix without the trailing />`. |
+| `drills[].archive.prefix` | string | `<namespace>/<cluster>/` | Needs `bucket`; ends in `/`, no leading `/`. |
+| `drills[].archive.serverName` | string | the source's | The barman server name, generation suffix included. |
+| `drills[].archive.project`, `.generation` | string | `""` | Together, instead of `serverName`: `<project>-pg-<generation>`. |
+| `drills[].archive.endpointURL` | string | the source's | S3 endpoint. |
+| `runner.resources` | object | `10m`/`64Mi`, limit `256Mi` | The CronJob pods. |
+| `runner.nodeSelector`, `.tolerations`, `.podLabels`, `.podAnnotations` | | empty | The CronJob pods. |
+| `runner.successfulJobsHistoryLimit`, `.failedJobsHistoryLimit` | int | `1`, `3` | |
+| `runner.startingDeadlineSeconds` | int | `3600` | A run missed by more than this waits for next month. |
+| `exporter.enabled` | bool | `true` | `cnpgctl drill-metrics` on port 8080. |
+| `exporter.resources`, `.nodeSelector`, `.tolerations`, `.podLabels`, `.podAnnotations` | | `5m`/`32Mi`, limit `64Mi`; empty | The exporter pod. |
+| `podMonitor.enabled`, `.interval`, `.labels` | | `true`, `""`, `{}` | A `PodMonitor` (`honorLabels: true`) when the API is served. |
+| `networkPolicy.enabled` | bool | `false` | Ingress to the drill instances (5432 from the runners, 8000 from `operator`) and to the exporter (8080 from `metrics`). |
+| `networkPolicy.operator` | list | `[]` | NetworkPolicyPeer entries for the CloudNativePG operator; required when enabled. |
+| `networkPolicy.metrics` | list | `[]` | NetworkPolicyPeer entries for the scraper; the exporter's policy renders only when set. |
+| `commonLabels` | map | `{}` | On every object. |
 
 ## charts/cnpg-cluster
 

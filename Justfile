@@ -12,7 +12,7 @@ fmt:
 # The chart render tests (chart_test.go et al. drive `helm template`; they
 # carry the golden and negative roles for cnpg-cluster and cnpg-database)
 # and the golden renders of the charts that use tests/cases: cnpg-platform and
-# cnpg-project-platform and cnpg-backup-access.
+# cnpg-project-platform, cnpg-backup-access and cnpg-restore-drill.
 test:
     hack/chart-deps.sh
     hack/golden.sh
@@ -28,8 +28,8 @@ golden:
 # and what they do together asserted (conformance/, docs/conformance.md).
 # Needs docker, kind, kubectl and helm and the network; NOT part of `check`,
 # which stays free of all of them. Set CNPG_CONFORMANCE_BACKUP=1 to add the
-# backup and point-in-time restore assertion, CNPG_CONFORMANCE_KEEP=1 to
-# keep the cluster afterwards.
+# backup, point-in-time restore and restore drill assertions,
+# CNPG_CONFORMANCE_KEEP=1 to keep the cluster afterwards.
 conformance:
     CNPG_CONFORMANCE=required go test ./conformance/ -count=1 -v -timeout 50m
 
@@ -102,6 +102,18 @@ charts:
     fi
     for values in tests/invalid/cnpg-backup-access/*.yaml; do
       if helm template invalid charts/cnpg-backup-access -f "$values" >/dev/null 2>&1; then
+        echo "RENDERED BUT SHOULD HAVE FAILED: $values" >&2
+        exit 1
+      fi
+    done
+    # cnpg-restore-drill: the same three checks.
+    helm lint charts/cnpg-restore-drill
+    if helm template x charts/cnpg-restore-drill --set bogusKey=1 >/dev/null 2>&1; then
+      echo "cnpg-restore-drill: an unknown key rendered" >&2
+      exit 1
+    fi
+    for values in tests/invalid/cnpg-restore-drill/*.yaml; do
+      if helm template invalid charts/cnpg-restore-drill -f "$values" >/dev/null 2>&1; then
         echo "RENDERED BUT SHOULD HAVE FAILED: $values" >&2
         exit 1
       fi
@@ -332,7 +344,8 @@ clean:
 check: test lint charts crd-charts-lint crds-check leak-canary rulecheck clients-ts clients-kotlin clients-python
 
 # Build a snapshot release locally (no push, no tag) — exercises
-# goreleaser's build, archive and changelog machinery (the cnpgctl archives).
+# goreleaser's build, archive and changelog machinery (the cnpgctl archives
+# and, with ko, the cnpgctl image).
 snapshot:
     goreleaser release --snapshot --clean
 
@@ -344,5 +357,6 @@ package:
     helm package charts/cnpg-platform --destination dist/
     helm package charts/cnpg-project-platform --destination dist/
     helm package charts/cnpg-backup-access --destination dist/
+    helm package charts/cnpg-restore-drill --destination dist/
     helm package charts/cnpg-client --destination dist/
     for chart in {{ crd-charts }}; do helm package "charts/$chart" --destination dist/; done

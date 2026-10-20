@@ -9,7 +9,7 @@ the per-database CA design ([decision 0004](decisions/0004-per-database-ca.md)).
 
 ```sh
 just conformance                 # one kind cluster, created and deleted by the run
-CNPG_CONFORMANCE_BACKUP=1 just conformance   # plus backup and point-in-time restore
+CNPG_CONFORMANCE_BACKUP=1 just conformance   # plus backup, point-in-time restore and a restore drill
 CNPG_CONFORMANCE_KEEP=1 just conformance     # leave the cluster for debugging
 ```
 
@@ -62,6 +62,7 @@ kept in the same scratch directory. Everything is pinned in
 | 6 | `TestReplication/6…` | After a forced renewal the new server certificate is served and no instance restarted: same pod UIDs, same restart counts, same postmaster start time. This relies on the `cnpg.io/reload` label. |
 | 7 | `TestClientAuthentication/7…` | With a password set on a certificate-only role, a password login without a client certificate is refused: there is no scram fallback. |
 | 8 | `TestBackupAndRestore` | Opt-in. A barman-cloud base backup and WAL archive to an S3 endpoint in the cluster, and a point-in-time restore of a second cluster that stops before a row written after the target. |
+| 9 | `TestBackupAndRestore` (`restoreDrill`) | Opt-in, after 8. A restore drill (`pkg/drill`, as `cnpgctl drill` runs it) of the same archive: the real operator and plugin accept the drill's `Cluster` and `ObjectStore`, the whole archive is replayed (all three rows), the checks pass through a port-forward, everything the drill created is deleted, and its result is recorded and exported. kind has no Pod Identity, so the sidecar gets the test endpoint's credentials with `--allow-static-credentials`; the identity mechanism itself is verified in [restore-drill.md](restore-drill.md#identity). |
 
 Notes on how they are made:
 

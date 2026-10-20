@@ -11,6 +11,7 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
 | `cnpg-projects` | the platform | once per Kubernetes cluster: every project's `Cluster` (cnpg-cluster per row), its backups, server TLS and archive role; optionally a per-row Pod Identity check hook |
 | `cnpg-project-platform` | the platform | once per Kubernetes cluster, for the projects whose `Cluster` another chart renders |
 | `cnpg-backup-access` | the platform | once per project bucket: the ACK IAM roles and Pod Identity associations of each cluster's archive and restore access |
+| `cnpg-restore-drill` | the platform | once per drill namespace: a monthly restore drill per source cluster (`cnpgctl drill` as a CronJob) and an exporter of the results as metrics |
 | `cnpg-database` | a product | once per product (its databases, roles, client certificates) |
 | `cnpg-client` | a product (library) | included by each application chart that connects |
 
@@ -35,6 +36,14 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
   library's. See [docs/backup-access.md](docs/backup-access.md) and, for moving a
   running cluster onto such a bucket,
   [docs/moving-to-a-new-backup-bucket.md](docs/moving-to-a-new-backup-bucket.md).
+
+- **charts/cnpg-restore-drill** — scheduled restore drills: one CronJob per
+  source cluster runs `cnpgctl drill`, which recovers the cluster's archive
+  into a throwaway `Cluster` with the read-only restore identity, checks it
+  (promoted, the expected databases and rows, the recovery point's age),
+  records the result and deletes everything it created; `cnpgctl
+  drill-metrics` serves the results as `cnpg_restore_drill_*` metrics. See
+  [docs/restore-drill.md](docs/restore-drill.md).
 
 - **charts/cnpg-cluster** — a CNPG `Cluster` with an opinionated two-posture
   profile model, plus roles, declared databases, backup `ObjectStore`s and
@@ -61,8 +70,10 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
   assertions against a live cluster: health, archiving, backups, TLS,
   reload labels and pg_hba; opt-in checks cover node placement, declared
   `Database`/`DatabaseRole` objects and the backup sidecar's Pod Identity
-  (`--check-identity`). Prebuilt for linux and darwin (amd64, arm64) on
-  each release; see [docs/cnpgctl.md](docs/cnpgctl.md).
+  (`--check-identity`). `cnpgctl drill` is the explicitly mutating restore
+  drill and `cnpgctl drill-metrics` its exporter. Prebuilt for linux and
+  darwin (amd64, arm64) on each release, and as the image
+  `ghcr.io/truvity/cnpg/cnpgctl`; see [docs/cnpgctl.md](docs/cnpgctl.md).
 - **clients/** — PostgreSQL client adapters that connect an application the
   way these charts expect: `verify-full` only, certificates re-read per
   connection, switchover-aware retry bounded by time (45 s by default, no
@@ -77,6 +88,7 @@ oci://ghcr.io/truvity/charts/cnpg-platform
 oci://ghcr.io/truvity/charts/cnpg-project-platform
 oci://ghcr.io/truvity/charts/cnpg-backup-access
 oci://ghcr.io/truvity/charts/cnpg-projects
+oci://ghcr.io/truvity/charts/cnpg-restore-drill
 oci://ghcr.io/truvity/charts/cnpg-cluster
 oci://ghcr.io/truvity/charts/cnpg-database
 oci://ghcr.io/truvity/charts/cnpg-client
@@ -211,7 +223,8 @@ package a chart's dependencies today; see
   into use, including the breaking migrations between the `scheduling`
   shape older releases assumed and the plain-input shape at HEAD.
 - [`docs/authentication.md`](docs/authentication.md) — the per-database client trust model, hba ordering and the people mapping.
-- [`docs/cnpgctl.md`](docs/cnpgctl.md) — the `cnpgctl verify` assertions and flags.
+- [`docs/cnpgctl.md`](docs/cnpgctl.md) — the `cnpgctl verify` assertions, `cnpgctl drill` and `cnpgctl drill-metrics`, and their flags.
+- [`docs/restore-drill.md`](docs/restore-drill.md) — the restore drill: identity, safety, checks, metrics and alert expressions, the chart.
 - [`docs/backupstore.md`](docs/backupstore.md) — the Pulumi backup bucket and KMS component (`pkg/aws/backupstore`).
 - [`docs/conformance.md`](docs/conformance.md) — the kind conformance suite:
   what the charts do with cert-manager, approver-policy, trust-manager and
@@ -253,7 +266,8 @@ turn every pull request red.
 ## Releasing
 
 Tag-triggered (`.github/workflows/release.yaml`): pushing `vX.Y.Z` packages
-publishes the four charts at that version and attaches the `cnpgctl` archives to the GitHub release. `.github/workflows/auto-release.yaml`
+publishes the charts at that version, pushes the `cnpgctl` image (the
+`cnpg-restore-drill` chart is packaged with its digest) and attaches the `cnpgctl` archives to the GitHub release. `.github/workflows/auto-release.yaml`
 can cut patch tags on its own — same-day for a push whose merged PR carries
 the `security` label, weekly otherwise — but only once `vars.AUTO_RELEASE` is
 set for this repository; see that workflow for today's setting. Minors and

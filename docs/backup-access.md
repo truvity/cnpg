@@ -105,7 +105,10 @@ conditioned on it), leave `retentionPolicy` unset (`backup.retentionDays: 0`;
 the role cannot delete, the bucket lifecycle expires objects), and tag
 `cnpg-backup-retention: managed` (`backup.tags`) and `keep` on the history files
 (`backup.historyTags`), per backupstore.md. A restore or drill reads the archive prefix with the
-`<cluster>-restore` ServiceAccount.
+`<cluster>-restore` ServiceAccount. For the scheduled drills of `cnpg-restore-drill`,
+set `restore.namespace` to that chart's release namespace: the drill `Cluster` is
+named `<cluster>-restore`, so CloudNativePG and the barman-cloud plugin run its
+recovery as exactly that ServiceAccount ([restore-drill.md](restore-drill.md#identity)).
 
 ## ACK mechanics
 
