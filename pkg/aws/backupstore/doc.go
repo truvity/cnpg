@@ -38,5 +38,5 @@
 // Every name, tag, boundary and description is a caller input. Nothing here
 // defaults to one estate's value.
 //
-// See docs/reference.md for the children, their names and their aliases.
+// See docs/backupstore.md for the children, their names and the aliases (none of its own; a caller passes them as resource options).
 package backupstore

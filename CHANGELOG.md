@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- Documentation only: the README describes the four client adapters, the opt-in `cnpgctl verify` checks and the published `cnpg-projects` chart as they are, and the `backupstore` package comment points at `docs/backupstore.md`. No chart, module or client changes.
+
 ## v2.33.1
 
 - Dependency updates.

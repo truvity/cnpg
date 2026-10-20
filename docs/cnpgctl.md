@@ -103,7 +103,7 @@ certificate in it, so a retired root beside the live one does not fail it.
   and, in time, as a stale `lastSuccessfulBackup`.
 - **Reading object storage.** It does not list the bucket.
 
-## TODO: restore drill
+## Not covered: a restore drill
 
 A `--restore` drill (create a rehearsal cluster from the backups, check it
 leaves recovery, delete it) is deliberately not part of `verify`, which is

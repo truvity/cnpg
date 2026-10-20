@@ -59,12 +59,15 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
 
 - **cmd/cnpgctl** — a command-line tool. `cnpgctl verify` runs read-only
   assertions against a live cluster: health, archiving, backups, TLS,
-  reload labels and pg_hba. Prebuilt for linux and darwin (amd64, arm64) on
+  reload labels and pg_hba; opt-in checks cover node placement, declared
+  `Database`/`DatabaseRole` objects and the backup sidecar's Pod Identity
+  (`--check-identity`). Prebuilt for linux and darwin (amd64, arm64) on
   each release; see [docs/cnpgctl.md](docs/cnpgctl.md).
 - **clients/** — PostgreSQL client adapters that connect an application the
   way these charts expect: `verify-full` only, certificates re-read per
-  connection, switchover-aware retry. Go (`pgx`) and TypeScript (`pg`) today,
-  Python and Kotlin to follow; one contract and one conformance suite, see
+  connection, switchover-aware retry bounded by time (45 s by default, no
+  attempt cap). Go (`pgx`), TypeScript (`pg`), Python (`psycopg`) and Kotlin
+  (`pgjdbc`); one contract and one conformance suite, see
   [clients/README.md](clients/README.md).
 
 Published as OCI charts:
@@ -73,6 +76,7 @@ Published as OCI charts:
 oci://ghcr.io/truvity/charts/cnpg-platform
 oci://ghcr.io/truvity/charts/cnpg-project-platform
 oci://ghcr.io/truvity/charts/cnpg-backup-access
+oci://ghcr.io/truvity/charts/cnpg-projects
 oci://ghcr.io/truvity/charts/cnpg-cluster
 oci://ghcr.io/truvity/charts/cnpg-database
 oci://ghcr.io/truvity/charts/cnpg-client
@@ -187,8 +191,9 @@ package a chart's dependencies today; see
 
 | repo | consumers (surface) |
 |---|---|
-| cnpg-cluster | truvity/gitops (chart `cnpg-cluster`; `cnpgctl` as a verification step) |
-| cnpg-platform | not yet adopted |
+| cnpg-projects, cnpg-backup-access, cnpg-platform, cnpg-database | truvity/gitops (the per-project Clusters, their backup access and the platform objects), with `cnpgctl verify` as a verification step |
+| cnpg-cluster | the chart `cnpg-projects` carries per row; installable on its own |
+| clients/ | the Go, TypeScript, Python and Kotlin adapters, used by the applications that connect |
 
 ## Neighbours
 
