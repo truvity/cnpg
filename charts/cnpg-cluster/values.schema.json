@@ -179,7 +179,7 @@
             "reason": { "type": "string", "description": "Why allowNonEmptyArchive is set." },
             "serviceAccount": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$", "maxLength": 253, "description": "ServiceAccount the Job runs as. Empty = {clusterName}-restore." },
             "namespace": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$", "maxLength": 63, "description": "Namespace of the Job and its ServiceAccount. Empty = the cluster's." },
-            "region": { "type": "string", "description": "The bucket's region. Empty = backup.bucket.region, else the pod's AWS_REGION, else us-east-1." },
+            "region": { "type": "string", "description": "The bucket's region. Empty = backup.bucket.region, else the pod's AWS_REGION; with neither the Job fails." },
             "image": {
               "type": "object",
               "additionalProperties": false,

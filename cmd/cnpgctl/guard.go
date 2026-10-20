@@ -13,18 +13,13 @@ import (
 
 // guardSources builds the readers `guard empty-bootstrap` uses; tests
 // replace it with fakes.
-var guardSources = func(ctx context.Context, kubeconfig, kubeContext string, s3opt guard.S3Options) (guard.ClusterSource, guard.ArchiveLister, error) {
+var guardSources = func(_ context.Context, kubeconfig, kubeContext string, s3opt guard.S3Options) (guard.ClusterSource, guard.ArchiveLister, error) {
 	ks, err := verify.NewKubeSource(kubeconfig, kubeContext)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	s3l, err := guard.NewS3Lister(ctx, s3opt)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return ks, s3l, nil
+	return ks, guard.NewS3Lister(s3opt), nil
 }
 
 const guardUsage = `Usage:
@@ -54,7 +49,7 @@ func runGuard(ctx context.Context, args []string, stdout, stderr io.Writer) erro
 		bootstrap   = fs.String("bootstrap", guard.BootstrapInitdb, "the Cluster's bootstrap: initdb or recovery")
 		destination = fs.String("destination", "", "the ObjectStore's destinationPath, s3://<bucket>[/<path>] (required)")
 		serverName  = fs.String("server-name", "", "the barman server directory under the destination (default: the cluster name)")
-		region      = fs.String("region", "", "the bucket's region (default: the SDK's, then us-east-1)")
+		region      = fs.String("region", "", "the bucket's region (default: the SDK's, AWS_REGION; required if neither is set)")
 		endpoint    = fs.String("endpoint", "", "an S3-compatible endpoint URL (default: AWS)")
 		allow       = fs.Bool("allow-non-empty-archive", false, "pass whatever the archive holds (needs --reason)")
 		reason      = fs.String("reason", "", "why --allow-non-empty-archive is set")
