@@ -1,0 +1,5 @@
+defaults:
+  storageClass: example-delete
+  checks: {minRows: {"shop/orders": 1}}
+drills:
+  - {namespace: shop, cluster: shop-pg}

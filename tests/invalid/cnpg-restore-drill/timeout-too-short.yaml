@@ -1,0 +1,5 @@
+defaults:
+  storageClass: example-delete
+  timeoutMinutes: 5
+drills:
+  - {namespace: shop, cluster: shop-pg}

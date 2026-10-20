@@ -1,0 +1,69 @@
+{{- /* cnpgctl drill-metrics: serves the result ConfigMaps of every drill as
+cnpg_restore_drill_* metrics (docs/restore-drill.md). It reads them by name at
+each scrape and holds no state of its own. */}}
+{{- if and .Values.drills .Values.exporter.enabled }}
+{{- $name := include "cnpg-restore-drill.exporterName" . }}
+{{- $args := list "drill-metrics" (printf "--namespace=%s" .Release.Namespace) "--listen=:8080" }}
+{{- range include "cnpg-restore-drill.resolved" . | fromJsonArray }}
+{{- $args = append $args (printf "--source=%s/%s=%s" .namespace .cluster .drillName) }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cnpg-restore-drill.labels" (dict "root" . "component" "exporter") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "cnpg-restore-drill.selector" (dict "root" . "component" "exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cnpg-restore-drill.selector" (dict "root" . "component" "exporter") | nindent 8 }}
+        {{- with .Values.exporter.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.exporter.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ $name }}
+      securityContext:
+        {{- include "cnpg-restore-drill.podSecurity" . | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.exporter.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.exporter.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: exporter
+          image: {{ include "cnpg-restore-drill.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- toYaml $args | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet: {path: /healthz, port: metrics}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: metrics}
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.exporter.resources | nindent 12 }}
+          securityContext:
+            {{- include "cnpg-restore-drill.containerSecurity" . | nindent 12 }}
+{{- end }}

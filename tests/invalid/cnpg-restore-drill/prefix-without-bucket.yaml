@@ -1,0 +1,4 @@
+defaults:
+  storageClass: example-delete
+drills:
+  - {namespace: shop, cluster: shop-pg, archive: {prefix: shop/shop-pg/}}

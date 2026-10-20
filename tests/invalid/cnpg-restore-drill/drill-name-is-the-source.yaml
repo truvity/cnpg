@@ -1,0 +1,4 @@
+defaults:
+  storageClass: example-delete
+drills:
+  - {namespace: default, cluster: shop-pg, drillName: shop-pg}

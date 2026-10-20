@@ -31,9 +31,10 @@ const (
 	// keepVariable leaves the kind cluster (and its kubeconfig) in place
 	// after the run, for debugging.
 	keepVariable = "CNPG_CONFORMANCE_KEEP"
-	// backupVariable opts into the barman-cloud backup and point-in-time
-	// restore assertion (MinIO in the cluster). It pulls two more images and
-	// starts a second database, so it is off by default.
+	// backupVariable opts into the barman-cloud backup, point-in-time
+	// restore and restore drill assertions (an S3 endpoint in the cluster).
+	// It pulls more images and starts three more databases, so it is off by
+	// default.
 	backupVariable = "CNPG_CONFORMANCE_BACKUP"
 
 	clusterName = "cnpg-conformance"

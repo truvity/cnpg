@@ -1,0 +1,146 @@
+{{- /* Namespace-scoped, one set per drill, narrowed by name wherever the API
+allows it. In the release (drill) namespace a drill's runner may create
+Clusters, ObjectStores and ConfigMaps (create cannot be narrowed by name) but
+read, delete or update only its own drill's names, so it can never delete a
+Cluster that is not its drill, even where the source lives in this namespace.
+In the source namespace it may only read: its source Cluster (by name), the
+ObjectStores, the Database objects and the volume claims. */}}
+{{- $results := list }}
+{{- range $e := include "cnpg-restore-drill.resolved" . | fromJsonArray }}
+{{- $results = append $results (printf "%s-result" $e.drillName) }}
+{{- $runner := include "cnpg-restore-drill.runnerName" $e.drillName }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $runner }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "cnpg-restore-drill.labels" (dict "root" $ "component" "runner") | nindent 4 }}
+    cnpg-restore-drill/drill-name: {{ $e.drillName }}
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [create]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get, delete]
+    resourceNames: [{{ $e.drillName }}]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [create]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get, delete]
+    resourceNames: [{{ $e.drillName }}-source]
+  # The drill's pods, events and logs, for the progress and the diagnostics;
+  # its volume claims, to wait for the teardown.
+  - apiGroups: [""]
+    resources: [pods, events, persistentvolumeclaims]
+    verbs: [list]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  # The superuser and CA Secrets the operator creates for the drill Cluster.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
+    resourceNames: [{{ $e.drillName }}-superuser, {{ $e.drillName }}-ca]
+  # The result ConfigMap.
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, update]
+    resourceNames: [{{ $e.drillName }}-result]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $runner }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "cnpg-restore-drill.labels" (dict "root" $ "component" "runner") | nindent 4 }}
+    cnpg-restore-drill/drill-name: {{ $e.drillName }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $runner }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $runner }}
+    namespace: {{ $.Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $runner }}-source
+  namespace: {{ $e.namespace }}
+  labels:
+    {{- include "cnpg-restore-drill.labels" (dict "root" $ "component" "runner") | nindent 4 }}
+    cnpg-restore-drill/drill-name: {{ $e.drillName }}
+rules:
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    verbs: [get]
+    resourceNames: [{{ $e.cluster }}]
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [databases]
+    verbs: [list]
+  - apiGroups: [barmancloud.cnpg.io]
+    resources: [objectstores]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $runner }}-source
+  namespace: {{ $e.namespace }}
+  labels:
+    {{- include "cnpg-restore-drill.labels" (dict "root" $ "component" "runner") | nindent 4 }}
+    cnpg-restore-drill/drill-name: {{ $e.drillName }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $runner }}-source
+subjects:
+  - kind: ServiceAccount
+    name: {{ $runner }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- if and .Values.drills .Values.exporter.enabled }}
+{{- $exporter := include "cnpg-restore-drill.exporterName" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $exporter }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cnpg-restore-drill.labels" (dict "root" . "component" "exporter") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get]
+    resourceNames: {{ toJson $results }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $exporter }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cnpg-restore-drill.labels" (dict "root" . "component" "exporter") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $exporter }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $exporter }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

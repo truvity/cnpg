@@ -1,0 +1,105 @@
+{{- include "cnpg-restore-drill.validate" . }}
+{{- /* One CronJob per source cluster, named like its drill Cluster. A drill
+is never retried by the Job (backoffLimit 0) and never overlaps itself
+(concurrencyPolicy Forbid; cnpgctl also refuses while a drill Cluster of the
+same name is younger than its timeout). activeDeadlineSeconds is the drill's
+timeout plus 30 minutes; the grace period lets cnpgctl tear the drill down
+after a SIGTERM. */}}
+{{- $image := include "cnpg-restore-drill.image" . }}
+{{- range $e := include "cnpg-restore-drill.resolved" . | fromJsonArray }}
+{{- $c := $e.checks | default dict }}
+{{- $i := $e.instance | default dict }}
+{{- $args := list "drill"
+    (printf "--namespace=%s" $e.namespace)
+    (printf "--cluster=%s" $e.cluster)
+    (printf "--drill-namespace=%s" $.Release.Namespace)
+    (printf "--drill-name=%s" $e.drillName)
+    (printf "--timeout=%dm" (int $e.timeoutMinutes))
+    (printf "--storage-class=%s" $e.storageClass) }}
+{{- with $e.storageSize }}{{ $args = append $args (printf "--storage-size=%s" .) }}{{ end }}
+{{- with $e.walStorageSize }}{{ $args = append $args (printf "--wal-storage-size=%s" .) }}{{ end }}
+{{- with $e.destinationPath }}{{ $args = append $args (printf "--destination-path=%s" .) }}{{ end }}
+{{- with $e.serverName }}{{ $args = append $args (printf "--server-name=%s" .) }}{{ end }}
+{{- with ($e.archive | default dict).endpointURL }}{{ $args = append $args (printf "--endpoint-url=%s" .) }}{{ end }}
+{{- with $i.cpuRequest }}{{ $args = append $args (printf "--cpu-request=%s" .) }}{{ end }}
+{{- with $i.memoryRequest }}{{ $args = append $args (printf "--memory-request=%s" .) }}{{ end }}
+{{- with $i.memoryLimit }}{{ $args = append $args (printf "--memory-limit=%s" .) }}{{ end }}
+{{- range $k := keys ($i.nodeSelector | default dict) | sortAlpha }}{{ $args = append $args (printf "--node-selector=%s=%s" $k (get $i.nodeSelector $k)) }}{{ end }}
+{{- range $i.tolerations }}{{ $args = append $args (printf "--toleration=%s" (include "cnpg-restore-drill.toleration" .)) }}{{ end }}
+{{- range $k := keys ($i.podAnnotations | default dict) | sortAlpha }}{{ $args = append $args (printf "--pod-annotation=%s=%s" $k (get $i.podAnnotations $k)) }}{{ end }}
+{{- range $k := keys ($e.sidecarEnv | default dict) | sortAlpha }}{{ $args = append $args (printf "--sidecar-env=%s=%s" $k (get $e.sidecarEnv $k)) }}{{ end }}
+{{- range $c.databases }}{{ $args = append $args (printf "--database=%s" .) }}{{ end }}
+{{- range $k := keys ($c.minRows | default dict) | sortAlpha }}{{ $args = append $args (printf "--min-rows=%s=%d" $k (int (get $c.minRows $k))) }}{{ end }}
+{{- $args = append $args (printf "--count=%s" ($c.count | default "exact")) }}
+{{- $args = append $args (printf "--max-recovery-point-age=%dh" (int ($c.maxRecoveryPointAgeHours | default 24))) }}
+{{- $args = append $args (printf "--statement-timeout=%dm" (int ($c.statementTimeoutMinutes | default 15))) }}
+{{- $args = append $args (printf "--max-recovery-attempts=%d" (int ($c.maxRecoveryAttempts | default 2))) }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $e.drillName }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "cnpg-restore-drill.labels" (dict "root" $ "component" "runner") | nindent 4 }}
+    cnpg-restore-drill/source-namespace: {{ $e.namespace }}
+    cnpg-restore-drill/source-cluster: {{ $e.cluster }}
+spec:
+  schedule: {{ $e.schedule | quote }}
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  suspend: {{ $e.suspend | default false }}
+  startingDeadlineSeconds: {{ $.Values.runner.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ $.Values.runner.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ $.Values.runner.failedJobsHistoryLimit }}
+  jobTemplate:
+    metadata:
+      labels:
+        {{- include "cnpg-restore-drill.labels" (dict "root" $ "component" "runner") | nindent 8 }}
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ mul (add (int $e.timeoutMinutes) 30) 60 }}
+      template:
+        metadata:
+          labels:
+            {{- include "cnpg-restore-drill.selector" (dict "root" $ "component" "runner") | nindent 12 }}
+            cnpg-restore-drill/source-namespace: {{ $e.namespace }}
+            cnpg-restore-drill/source-cluster: {{ $e.cluster }}
+            cnpg-restore-drill/drill-name: {{ $e.drillName }}
+            {{- with $.Values.runner.podLabels }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with $.Values.runner.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        spec:
+          serviceAccountName: {{ include "cnpg-restore-drill.runnerName" $e.drillName }}
+          restartPolicy: Never
+          # cnpgctl tears the drill down after a SIGTERM (teardown timeout 10m).
+          terminationGracePeriodSeconds: 660
+          securityContext:
+            {{- include "cnpg-restore-drill.podSecurity" $ | nindent 12 }}
+          {{- with $.Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $.Values.runner.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $.Values.runner.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: drill
+              image: {{ $image }}
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              args:
+                {{- toYaml $args | nindent 16 }}
+              resources:
+                {{- toYaml $.Values.runner.resources | nindent 16 }}
+              securityContext:
+                {{- include "cnpg-restore-drill.containerSecurity" $ | nindent 16 }}
+{{- end }}

@@ -1,0 +1,29 @@
+{{- /* Rendered only when the cluster serves monitoring.coreos.com/v1
+PodMonitor (prometheus-operator, or the VictoriaMetrics operator's
+converter); `helm template` needs --api-versions
+monitoring.coreos.com/v1/PodMonitor to show it. honorLabels: the metrics carry
+the SOURCE cluster's namespace in `namespace`, which must win over the
+exporter pod's. */}}
+{{- if and .Values.drills .Values.exporter.enabled .Values.podMonitor.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PodMonitor") }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "cnpg-restore-drill.exporterName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cnpg-restore-drill.labels" (dict "root" . "component" "exporter") | nindent 4 }}
+    {{- with .Values.podMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "cnpg-restore-drill.selector" (dict "root" . "component" "exporter") | nindent 6 }}
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      honorLabels: true
+      {{- with .Values.podMonitor.interval }}
+      interval: {{ . | quote }}
+      {{- end }}
+{{- end }}

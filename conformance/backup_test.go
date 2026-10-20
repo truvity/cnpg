@@ -20,10 +20,10 @@ const (
 	bucket   = "conformance-backups"
 )
 
-// TestBackupAndRestore is assertion 8: a barman-cloud base backup and WAL
-// archive to an S3 endpoint inside the cluster, and a point-in-time restore
-// of a second cluster from them, stopping before a row written after the
-// target. Opt-in (CNPG_CONFORMANCE_BACKUP): it pulls a further image and runs
+// TestBackupAndRestore is assertions 8 and 9: a barman-cloud base backup and
+// WAL archive to an S3 endpoint inside the cluster, a point-in-time restore of
+// a second cluster from them, stopping before a row written after the target,
+// and then a cnpgctl restore drill of the same archive. Opt-in (CNPG_CONFORMANCE_BACKUP): it pulls a further image and runs
 // two more databases.
 func TestBackupAndRestore(t *testing.T) {
 	s := gate(t)
@@ -155,4 +155,7 @@ bootstrap:
 
 	rows := sql("pgr", "select string_agg(n::text, ',' order by n) from points")
 	assert.Equal(t, "1,2", rows, "the restore stops at %s: row 2 is in, row 3 is not", target)
+
+	// Assertion 9: a restore drill of the same archive (drill_test.go).
+	s.restoreDrill(t)
 }
