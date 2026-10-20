@@ -1,0 +1,26 @@
+# The empty-bootstrap guard turned on explicitly for a cluster that does not
+# use the per-project preset: an S3-compatible endpoint, a restore
+# ServiceAccount in a namespace of its own and an image pinned by digest.
+# Renders the hook Role, RoleBinding and Job; the Job's destination and
+# server name are the ObjectStore's and the plugin's.
+clusterName: pg
+namespace: app
+profile: prod
+bootstrap:
+  initdb: {database: app, owner: app-owner}
+backup:
+  enabled: true
+  bucketName: example-backups
+  serverName: pg-g3
+  endpoint: https://objects.example.com
+  encryption: ""
+guards:
+  emptyBootstrap:
+    enabled: true
+    serviceAccount: pg-reader
+    namespace: app-restore
+    region: auto
+    image:
+      tag: "2.34.0"
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    activeDeadlineSeconds: 120

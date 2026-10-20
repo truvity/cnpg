@@ -114,6 +114,23 @@
             "for": { "$ref": "#/definitions/duration" }
           }
         },
+        "manualSwitchover": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "for": { "$ref": "#/definitions/duration" }
+          }
+        },
+        "fenced": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "for": { "$ref": "#/definitions/duration" }
+          }
+        },
+        "runbookUrl": { "type": "string" },
         "backupNotConfigured": {
           "type": "object",
           "additionalProperties": false,

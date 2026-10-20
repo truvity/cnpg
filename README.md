@@ -61,8 +61,11 @@ redirects the old name, and the Go module is `github.com/truvity/cnpg/v2`.)
   assertions against a live cluster: health, archiving, backups, TLS,
   reload labels and pg_hba; opt-in checks cover node placement, declared
   `Database`/`DatabaseRole` objects and the backup sidecar's Pod Identity
-  (`--check-identity`). Prebuilt for linux and darwin (amd64, arm64) on
-  each release; see [docs/cnpgctl.md](docs/cnpgctl.md).
+  (`--check-identity`). `cnpgctl guard empty-bootstrap` refuses an `initdb`
+  bootstrap onto a non-empty backup archive; `cnpg-cluster` runs it as a
+  pre-sync hook (`guards.emptyBootstrap`). Prebuilt for linux and darwin
+  (amd64, arm64) and as the image `ghcr.io/truvity/cnpg/cnpgctl` on each
+  release; see [docs/cnpgctl.md](docs/cnpgctl.md).
 - **clients/** — PostgreSQL client adapters that connect an application the
   way these charts expect: `verify-full` only, certificates re-read per
   connection, switchover-aware retry bounded by time (45 s by default, no
@@ -211,7 +214,8 @@ package a chart's dependencies today; see
   into use, including the breaking migrations between the `scheduling`
   shape older releases assumed and the plain-input shape at HEAD.
 - [`docs/authentication.md`](docs/authentication.md) — the per-database client trust model, hba ordering and the people mapping.
-- [`docs/cnpgctl.md`](docs/cnpgctl.md) — the `cnpgctl verify` assertions and flags.
+- [`docs/cnpgctl.md`](docs/cnpgctl.md) — the `cnpgctl verify` assertions and flags, and the `guard empty-bootstrap` check.
+- [`docs/runbooks.md`](docs/runbooks.md) — recovering a lost cluster, point-in-time recovery after bad data, a phase stuck after a primary change, and one section per alert.
 - [`docs/backupstore.md`](docs/backupstore.md) — the Pulumi backup bucket and KMS component (`pkg/aws/backupstore`).
 - [`docs/conformance.md`](docs/conformance.md) — the kind conformance suite:
   what the charts do with cert-manager, approver-policy, trust-manager and

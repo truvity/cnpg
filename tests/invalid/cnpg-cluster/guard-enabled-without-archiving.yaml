@@ -1,0 +1,6 @@
+# guards.emptyBootstrap.enabled true with archiving off: nothing to guard.
+clusterName: pg
+namespace: app
+profile: devel
+guards:
+  emptyBootstrap: {enabled: true}

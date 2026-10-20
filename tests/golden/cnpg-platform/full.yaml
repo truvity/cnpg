@@ -194,6 +194,26 @@ spec:
           annotations:
             summary: "No backup is configured for {{ $labels.pod }}"
             description: "The instance exports no barman-cloud backup metric, so CnpgBackupTooOld cannot see it: backups are not configured. Configure them, or, if this cluster is deliberately not backed up, opt out in the cnpg-cluster chart with backup.expected=false and a backup.notExpectedReason."
+        - alert: CnpgManualSwitchoverRequired
+          expr: "cnpg_collector_manual_switchover_required{namespace=~\"pg-.*\"} > 0"
+          for: 10m
+          labels:
+            severity: page-later
+            team: data
+          annotations:
+            summary: "{{ $labels.pod }} waits for a manual switchover"
+            description: "The cluster's primary needs a restart (an update, a changed parameter) and primaryUpdateStrategy is supervised: the operator waits for a person to switch over before it restarts the primary, and the rolling update stays half done until then."
+            runbook_url: "https://github.com/truvity/cnpg/blob/master/docs/runbooks.md#cnpgmanualswitchoverrequired"
+        - alert: CnpgInstanceFenced
+          expr: "cnpg_collector_fencing_on{namespace=~\"pg-.*\"} > 0"
+          for: 15m
+          labels:
+            severity: page-later
+            team: data
+          annotations:
+            summary: "{{ $labels.pod }} is fenced"
+            description: "The instance is fenced (the Cluster's cnpg.io/fencedInstances annotation names it, or \"*\"): PostgreSQL is stopped on it and it serves nothing. A fence is a deliberate, temporary step; lift it once the investigation that needed it is done."
+            runbook_url: "https://github.com/truvity/cnpg/blob/master/docs/runbooks.md#cnpginstancefenced"
 
 ---
 # Source: cnpg-platform/templates/database-role-guard.yaml

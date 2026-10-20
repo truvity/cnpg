@@ -1,0 +1,21 @@
+# The escape hatch: a per-project-bucket cluster (the guard is on by default)
+# whose initdb onto a non-empty archive dir is intended. No hook is rendered;
+# the Cluster carries the reason.
+clusterName: pg
+namespace: app
+profile: devel
+bootstrap:
+  initdb: {database: app, owner: app-owner}
+backup:
+  enabled: true
+  mode: perProjectBucket
+  bucket:
+    prefix: example-pg
+    project: app
+    env: staging
+    region: eu-west-1
+  generation: g2
+guards:
+  emptyBootstrap:
+    allowNonEmptyArchive: true
+    reason: "rehearsal: the archive dir is a copy restored by hand and is discarded after the test"

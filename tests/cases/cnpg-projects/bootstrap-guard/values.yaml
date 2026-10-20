@@ -1,0 +1,27 @@
+# The empty-bootstrap guard carried into cnpg-projects: alpha is a
+# per-project-bucket cluster (the guard is on by default), beta turns it off.
+clusters:
+  - values:
+      clusterName: alpha-pg
+      namespace: alpha
+      profile: prod
+      bootstrap:
+        initdb: {database: alpha, owner: alpha_owner}
+      backup:
+        enabled: true
+        mode: perProjectBucket
+        bucket: {prefix: example-pg, project: alpha, env: staging, region: eu-west-1}
+        generation: g4
+  - values:
+      clusterName: beta-pg
+      namespace: beta
+      profile: prod
+      bootstrap:
+        initdb: {database: beta, owner: beta_owner}
+      backup:
+        enabled: true
+        mode: perProjectBucket
+        bucket: {prefix: example-pg, project: beta, env: staging, region: eu-west-1}
+        generation: g4
+      guards:
+        emptyBootstrap: {enabled: false}

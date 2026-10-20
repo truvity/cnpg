@@ -267,3 +267,44 @@ backup.bucket, backup.generation and backup.mode set, the result is
 {{- end -}}
 {{- toJson $b -}}
 {{- end -}}
+
+{{/*
+The empty-bootstrap guard (values guards.emptyBootstrap), resolved, as JSON:
+  on        the guard applies (explicitly, or by default under
+            backup.mode perProjectBucket with archiving on and neither
+            backup.existingSecret nor backup.endpointCA)
+  job       the hook Job is rendered: on, bootstrap.mode initdb and no
+            override
+  override  the reason of allowNonEmptyArchive (on only), else ""
+Fails the render on a contradiction: enabled true without archiving, or
+with static credentials or a private CA (the Job uses the restore
+ServiceAccount's ambient identity and the system roots only), or the
+override without a reason.
+*/}}
+{{- define "cnpg-cluster.emptyBootstrapGuard" -}}
+{{- $g := ((.Values.guards | default dict).emptyBootstrap | default dict) -}}
+{{- $b := include "cnpg-cluster.backup" . | fromJson -}}
+{{- $archiving := not (not (and $b.enabled $b.bucketName)) -}}
+{{- $static := not (not (or $b.existingSecret $b.endpointCA)) -}}
+{{- $on := false -}}
+{{- if kindIs "invalid" $g.enabled -}}
+{{- $on = and $archiving (eq ($b.mode | default "") "perProjectBucket") (not $static) -}}
+{{- else if $g.enabled -}}
+{{- if not $archiving -}}
+{{- fail "guards.emptyBootstrap.enabled is true but archiving is off (backup.enabled and a bucket): there is no archive to guard" -}}
+{{- end -}}
+{{- if $static -}}
+{{- fail "guards.emptyBootstrap supports the ambient identity of its ServiceAccount and the system roots only: it cannot be enabled with backup.existingSecret or backup.endpointCA (set guards.emptyBootstrap.enabled false)" -}}
+{{- end -}}
+{{- $on = true -}}
+{{- end -}}
+{{- $override := "" -}}
+{{- if $g.allowNonEmptyArchive -}}
+{{- $override = trim ($g.reason | default "") -}}
+{{- if not $override -}}
+{{- fail "guards.emptyBootstrap.allowNonEmptyArchive needs guards.emptyBootstrap.reason: say why an initdb onto a non-empty archive is intended" -}}
+{{- end -}}
+{{- end -}}
+{{- $job := and $on (eq .Values.bootstrap.mode "initdb") (not $g.allowNonEmptyArchive) -}}
+{{- dict "on" $on "job" $job "override" (ternary $override "" $on) | toJson -}}
+{{- end -}}

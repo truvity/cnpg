@@ -1,0 +1,7 @@
+# The image digest must be sha256:<64 hex>.
+clusterName: pg
+namespace: app
+profile: devel
+guards:
+  emptyBootstrap:
+    image: {digest: "latest"}

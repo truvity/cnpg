@@ -155,3 +155,119 @@ spec:
     name: barman-cloud.cloudnative-pg.io
     parameters:
       barmanObjectName: pg-objectstore
+---
+# Source: cnpg-cluster/templates/bootstrap-guard.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pg-bootstrap-guard
+  namespace: app
+  labels:
+    app.kubernetes.io/component: bootstrap-guard
+    app.kubernetes.io/instance: pg
+    app.kubernetes.io/name: cnpg-cluster-bootstrap-guard
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "-11"
+rules:
+  # Whether this one Cluster exists: nothing else.
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    resourceNames: [pg]
+    verbs: [get]
+
+---
+# Source: cnpg-cluster/templates/bootstrap-guard.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pg-bootstrap-guard
+  namespace: app
+  labels:
+    app.kubernetes.io/component: bootstrap-guard
+    app.kubernetes.io/instance: pg
+    app.kubernetes.io/name: cnpg-cluster-bootstrap-guard
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "-11"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pg-bootstrap-guard
+subjects:
+  - kind: ServiceAccount
+    name: pg-restore
+    namespace: app
+
+---
+# Source: cnpg-cluster/templates/bootstrap-guard.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pg-bootstrap-guard
+  namespace: app
+  labels:
+    app.kubernetes.io/component: bootstrap-guard
+    app.kubernetes.io/instance: pg
+    app.kubernetes.io/name: cnpg-cluster-bootstrap-guard
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "-10"
+spec:
+  # A refusal (exit 1) fails the Job at once; an error (exit 2: the API or
+  # the store did not answer) is retried twice, within the deadline.
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  podFailurePolicy:
+    rules:
+      - action: FailJob
+        onExitCodes:
+          containerName: guard
+          operator: In
+          values: [1]
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: bootstrap-guard
+        app.kubernetes.io/instance: pg
+        app.kubernetes.io/name: cnpg-cluster-bootstrap-guard
+    spec:
+      serviceAccountName: pg-restore
+      automountServiceAccountToken: true
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: guard
+          image: ghcr.io/truvity/cnpg/cnpgctl:0.0.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - guard
+            - empty-bootstrap
+            - --namespace=app
+            - --cluster=pg
+            - --bootstrap=initdb
+            - --destination=s3://example-pg-app-staging-eu-west-1/app/pg
+            - --server-name=app-pg-g2
+            - --region=eu-west-1
+          # The verdict is the last log line; a failed pod shows it as its
+          # termination message.
+          terminationMessagePolicy: FallbackToLogsOnError
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            limits:
+              memory: 64Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi

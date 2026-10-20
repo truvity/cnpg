@@ -1,11 +1,13 @@
 # cnpgctl
 
 `cnpgctl` operates on CloudNativePG clusters built from these charts. It has
-one command, `verify`, and it never writes: every call it makes to the
-Kubernetes API is a GET.
+two commands, `verify` and `guard empty-bootstrap`, and neither writes: every
+call they make to the Kubernetes API is a GET, and the guard's only call to
+the object store is a list.
 
 Install: the `cnpgctl_<version>_<os>_<arch>.tar.gz` archive of a release
-(linux and darwin, amd64 and arm64; `checksums.txt` alongside), or
+(linux and darwin, amd64 and arm64; `checksums.txt` alongside), the image
+`ghcr.io/truvity/cnpg/cnpgctl:<version>` (linux, amd64 and arm64), or
 
 ```sh
 go run github.com/truvity/cnpg/v2/cmd/cnpgctl@<tag> verify --help
@@ -102,6 +104,48 @@ certificate in it, so a retired root beside the live one does not fail it.
   pods. A stalled archive therefore shows as the condition turning `False`
   and, in time, as a stale `lastSuccessfulBackup`.
 - **Reading object storage.** It does not list the bucket.
+
+## guard empty-bootstrap
+
+```sh
+cnpgctl guard empty-bootstrap --namespace app --cluster pg \
+  --destination s3://<bucket>/app/pg --server-name pg-g2 [--region <region>] \
+  [--bootstrap initdb|recovery] [--endpoint <url>] \
+  [--allow-non-empty-archive --reason "<why>"]
+```
+
+The check behind the `cnpg-cluster` chart's `guards.emptyBootstrap` hook
+([reference.md](reference.md#guards-pre-sync-checks)). If a production
+`Cluster` object is deleted and GitOps re-creates it with an `initdb`
+bootstrap, it comes up as an EMPTY database while its archive still holds the
+data; barman's own `check-wal-archive` notices only later, once the empty
+database is already serving. The guard answers before anything is applied:
+
+| state | verdict |
+|---|---|
+| `--bootstrap recovery` | PASS: a recovery continues an archive (nothing is read) |
+| `--allow-non-empty-archive` with a `--reason` | PASS, the reason printed (nothing is read) |
+| the `Cluster` exists and is not being deleted | PASS: an upgrade, nothing is bootstrapped (the archive is not read) |
+| the `Cluster` does not exist (or is being deleted), and neither `<path>/<server-name>/base/` nor `<path>/<server-name>/wals/` holds an object | PASS: a new cluster, or a re-create under a new generation |
+| the `Cluster` does not exist (or is being deleted), and either holds an object | FAIL (exit 1), naming the dir and what to do |
+| the API or the store cannot be read, a flag is wrong | error (exit 2): it never passes when it cannot look |
+
+`--destination` is the `ObjectStore`'s `destinationPath` and `--server-name`
+the `Cluster` plugin's `serverName` (default: the cluster name), joined as
+barman-cloud joins them. The Kubernetes client is the kubeconfig's, else the
+in-cluster configuration; it reads the one `Cluster` (a `get`). The object
+store is read with the AWS SDK's default credential chain (environment, EKS
+Pod Identity, web identity, instance profile) with one `ListObjectsV2` of at
+most one key per sub-directory, so `s3:ListBucket` on the bucket is all it
+needs. `--region` defaults to the SDK's own (`AWS_REGION`), then `us-east-1`;
+`--endpoint` addresses an S3-compatible store path-style.
+
+The chart runs it as a hook `Job` under the cluster's read-only restore
+ServiceAccount (`<cluster>-restore`, [backup-access.md](backup-access.md)).
+What to do when it refuses: [runbooks.md](runbooks.md#the-empty-bootstrap-guard-refused-a-sync).
+
+In Go: `guard.EmptyBootstrap` with a `guard.ClusterSource` (`verify.KubeSource`
+implements it) and a `guard.ArchiveLister` (`guard.S3Lister`).
 
 ## Not covered: a restore drill
 

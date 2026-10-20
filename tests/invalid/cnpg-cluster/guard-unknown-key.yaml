@@ -1,0 +1,6 @@
+# A misspelled key under guards.emptyBootstrap is refused by the schema.
+clusterName: pg
+namespace: app
+profile: devel
+guards:
+  emptyBootstrap: {enable: false}

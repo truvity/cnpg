@@ -101,10 +101,12 @@ backup:
   # serverName is the barman server directory under the prefix; defaults
   # to clusterName. A RECREATED (fresh initdb) cluster must NOT reuse
   # its predecessor's archive dir — barman's check-wal-archive refuses a
-  # non-empty archive for a new timeline history. Bump a generation
+  # non-empty archive for a new timeline history, and
+  # guards.emptyBootstrap refuses the sync before that. Bump a generation
   # suffix on recreate ({clusterName}-g2, -g3, …); the old dir stays
   # readable for recovery until the S3 lifecycle expires it. A
-  # recovery-bootstrapped cluster CONTINUES the old dir instead.
+  # recovery-bootstrapped cluster reads the old dir (bootstrap.recovery)
+  # and archives into a NEW one: never two writers on one dir.
   # After bumping it on a running cluster, take an on-demand Backup at
   # once (see `immediate`): until then the new dir has no base backup.
   serverName: ""
@@ -217,6 +219,63 @@ bootstrap:
     target:
       targetTime: ""
       exclusive: false
+
+# ── Guards ───────────────────────────────────────────────────────────
+# Checks that run BEFORE the sync, as Helm pre-install/pre-upgrade hooks
+# (Argo CD runs them as PreSync hooks on every sync).
+guards:
+  # The empty-bootstrap guard. If the Cluster object is deleted (a prune, a
+  # bad deploy) and re-created with an initdb bootstrap, it comes up as an
+  # EMPTY database while its archive still holds the data. This hook Job
+  # (`cnpgctl guard empty-bootstrap`, docs/cnpgctl.md) fails the sync when
+  #   the Cluster does not exist (or is being deleted), AND
+  #   bootstrap.mode is initdb, AND
+  #   s3://<bucket>/<s3Prefix>/<serverName>/ already holds base/ or wals/.
+  # It passes when the Cluster exists (every ordinary upgrade) or the
+  # archive dir is empty (a new cluster, or a deliberate re-create under a
+  # bumped serverName generation, see backup.serverName). With
+  # bootstrap.mode recovery nothing is rendered: a recovery continues an
+  # archive. docs/runbooks.md says what to do when it refuses.
+  emptyBootstrap:
+    # null (default) = ON when backup.mode is perProjectBucket and archiving
+    # is on (backup.enabled and a bucket), without backup.existingSecret or
+    # backup.endpointCA; off otherwise. true forces it on (archiving must
+    # be on); false turns it off.
+    enabled: null
+    # The escape hatch for the rare intended initdb onto a non-empty
+    # archive dir: no Job is rendered, and the Cluster carries the reason as
+    # the annotation cnpg-cluster/empty-bootstrap-override. REQUIRES
+    # reason. Remove both once the cluster exists.
+    allowNonEmptyArchive: false
+    reason: ""
+    # The identity the Job runs as: it reads the Cluster (get, through a
+    # Role and RoleBinding the chart renders as hooks too) and lists the
+    # archive dir (s3:ListBucket). Default {clusterName}-restore, the
+    # read-only restore ServiceAccount cnpg-backup-access binds
+    # (restore.createServiceAccount renders it; docs/backup-access.md).
+    # The ServiceAccount must exist before the sync: without it the Job
+    # cannot start and fails at activeDeadlineSeconds.
+    serviceAccount: ""
+    # Where the Job and that ServiceAccount live. Default: the cluster's
+    # namespace. Set it to cnpg-backup-access' restore.namespace when that
+    # differs (the RoleBinding is still in the cluster's namespace).
+    namespace: ""
+    # The bucket's region. Default backup.bucket.region, else the pod's
+    # AWS_REGION (EKS injects it), else us-east-1.
+    region: ""
+    # The cnpgctl image (truvity/cnpg's release, ko-built). The tag defaults
+    # to the chart's appVersion, which the release stamps with its own
+    # version; a digest, when set, is appended.
+    image:
+      repository: ghcr.io/truvity/cnpg/cnpgctl
+      tag: ""
+      digest: ""
+      pullPolicy: IfNotPresent
+    # Seconds before a Job that has not finished (no pod could start, the
+    # API or the store does not answer) is failed, and the sync with it.
+    activeDeadlineSeconds: 300
+    # Empty = 10m/32Mi requested, 64Mi limit.
+    resources: {}
 
 # Additional databases in this cluster (absorbs the retired
 # cnpg-database chart): name/owner/schemas/ensure.

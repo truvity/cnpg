@@ -3,10 +3,12 @@
 # named in the caller to ghcr.io/truvity/charts at the tag's version.
 #
 # One tag stamps everything: the charts, the Go module (a module needs no
-# build step; the tag is its version) and the cnpgctl binaries built
-# here. cnpgctl is a binary, not an image: it is run by a person or a
-# pipeline step against a cluster they already have access to, and a
-# container would add a credential hand-off and nothing else.
+# build step; the tag is its version), the cnpgctl binaries built here and
+# the cnpgctl image. A person or a pipeline step runs the binary against a
+# cluster they already have access to; the image exists for the one place
+# cnpgctl runs inside the cluster, the cnpg-cluster chart's empty-bootstrap
+# guard (a hook Job, guards.emptyBootstrap), whose tag defaults to the
+# chart's appVersion, i.e. this same release.
 version: 2
 
 project_name: cnpg
@@ -20,6 +22,29 @@ builds:
     goarch: [amd64, arm64]
     ldflags:
       - -s -w -X main.Version={{.Version}}
+
+# ghcr.io/truvity/cnpg/cnpgctl:<version> (bare: the image is that repository
+# itself). release.yaml passes the same repository as ko-docker-repo, because
+# the shared workflow's KO_DOCKER_REPO overrides `repositories` (its default,
+# ghcr.io/truvity, would publish elsewhere). The base is pinned by digest;
+# renovate moves it.
+kos:
+  - id: cnpgctl
+    build: cnpgctl
+    repositories:
+      - ghcr.io/truvity/cnpg/cnpgctl
+    tags:
+      - "{{ .Version }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    bare: true
+    base_image: cgr.dev/chainguard/static:latest@sha256:41e17ed83c594a64a9396b6ab96dd26d5ddc290dacf4c177464712ff21ad534f
+    sbom: none
+    labels:
+      org.opencontainers.image.title: cnpgctl
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.source: https://github.com/truvity/cnpg
 
 archives:
   - id: cnpgctl
@@ -45,3 +70,4 @@ release:
     Go module: `go get github.com/truvity/cnpg/v2@{{ .Tag }}`.
     CLI: the `cnpgctl` archives below, or
     `go run github.com/truvity/cnpg/v2/cmd/cnpgctl@{{ .Tag }} --help`.
+    Image: `ghcr.io/truvity/cnpg/cnpgctl:{{ .Version }}`.
