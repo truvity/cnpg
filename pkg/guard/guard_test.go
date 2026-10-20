@@ -195,3 +195,17 @@ func TestParseDestination(t *testing.T) {
 		assert.Error(t, err, bad)
 	}
 }
+
+// TestS3Lister_NoRegion: without a region the first listing fails (an error,
+// never a pass), and building the lister needs none.
+func TestS3Lister_NoRegion(t *testing.T) {
+	t.Setenv("AWS_REGION", "")
+	t.Setenv("AWS_DEFAULT_REGION", "")
+	t.Setenv("AWS_CONFIG_FILE", t.TempDir()+"/none")
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", t.TempDir()+"/none")
+	t.Setenv("AWS_PROFILE", "")
+
+	l := NewS3Lister(S3Options{})
+	_, err := l.HasObjects(t.Context(), "b", "p/")
+	require.ErrorContains(t, err, "no region")
+}

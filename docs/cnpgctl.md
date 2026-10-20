@@ -137,7 +137,7 @@ in-cluster configuration; it reads the one `Cluster` (a `get`). The object
 store is read with the AWS SDK's default credential chain (environment, EKS
 Pod Identity, web identity, instance profile) with one `ListObjectsV2` of at
 most one key per sub-directory, so `s3:ListBucket` on the bucket is all it
-needs. `--region` defaults to the SDK's own (`AWS_REGION`), then `us-east-1`;
+needs. `--region` defaults to the SDK's own (`AWS_REGION`) and is required when there is none;
 `--endpoint` addresses an S3-compatible store path-style.
 
 The chart runs it as a hook `Job` under the cluster's read-only restore

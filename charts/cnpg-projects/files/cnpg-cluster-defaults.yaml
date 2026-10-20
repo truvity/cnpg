@@ -261,7 +261,8 @@ guards:
     # differs (the RoleBinding is still in the cluster's namespace).
     namespace: ""
     # The bucket's region. Default backup.bucket.region, else the pod's
-    # AWS_REGION (EKS injects it), else us-east-1.
+    # AWS_REGION; with neither the Job fails (exit 2). An S3-compatible
+    # store that ignores regions takes any name (e.g. auto).
     region: ""
     # The cnpgctl image (truvity/cnpg's release, ko-built). The tag defaults
     # to the chart's appVersion, which the release stamps with its own
