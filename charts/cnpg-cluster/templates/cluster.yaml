@@ -12,18 +12,24 @@ project overrides knobs, never the posture. */}}
 {{- fail (printf "prod posture requires instances >= 3 (got %d) — failoverQuorum is meaningless below 3 and a 2-instance prod is forbidden" (int $instances)) }}
 {{- end }}
 {{- $storageClass := .Values.storage.storageClass | default ($prod | ternary "cnpg-gp3" "cnpg-gp3-delete") }}
+{{- $guard := include "cnpg-cluster.emptyBootstrapGuard" . | fromJson }}
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   name: {{ .Values.clusterName }}
   namespace: {{ .Values.namespace }}
-  {{- if or $prod .Values.annotations }}
+  {{- if or $prod .Values.annotations $guard.override }}
   annotations:
     {{- if $prod }}
     # Quorum-based failover protection is 1.30 ALPHA — enabled via
     # annotation, not spec (pkg/utils FailoverQuorumAnnotationName;
     # there is no spec.failoverQuorum field in the CRD).
     alpha.cnpg.io/failoverQuorum: "true"
+    {{- end }}
+    {{- with $guard.override }}
+    # guards.emptyBootstrap.allowNonEmptyArchive: the empty-bootstrap guard
+    # is overridden, for this reason.
+    cnpg-cluster/empty-bootstrap-override: {{ . | quote }}
     {{- end }}
     {{- with .Values.annotations }}
     {{- toYaml . | nindent 4 }}

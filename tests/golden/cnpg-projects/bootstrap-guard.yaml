@@ -1,0 +1,453 @@
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: alpha-pg-g4
+  namespace: alpha
+  annotations:
+    # An old id's Backup is a record of a base backup, not the backup: Argo CD
+    # must not prune it when the id changes (docs/moving-to-a-new-backup-bucket.md).
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  cluster:
+    name: alpha-pg
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: alpha-pg-objectstore
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Backup
+metadata:
+  name: beta-pg-g4
+  namespace: beta
+  annotations:
+    # An old id's Backup is a record of a base backup, not the backup: Argo CD
+    # must not prune it when the id changes (docs/moving-to-a-new-backup-bucket.md).
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  cluster:
+    name: beta-pg
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: beta-pg-objectstore
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: alpha-pg
+  namespace: alpha
+  annotations:
+    # Quorum-based failover protection is 1.30 ALPHA — enabled via
+    # annotation, not spec (pkg/utils FailoverQuorumAnnotationName;
+    # there is no spec.failoverQuorum field in the CRD).
+    alpha.cnpg.io/failoverQuorum: "true"
+spec:
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  # Explicit on both postures: CNPG defaults enablePDB to true, so a
+  # devel single-instance cluster would otherwise get a primary PDB
+  # with 0 allowed disruptions and block node drains until the node
+  # pool's force-drain deadline (devel = no PDB).
+  enablePDB: true
+  inheritedMetadata:
+    annotations:
+      # Instance pods must never be consolidation victims — Karpenter
+      # moves stateless workloads around them instead.
+      karpenter.sh/do-not-disrupt: "true"
+  postgresql:
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+    parameters:
+      max_slot_wal_keep_size: "2GB"
+    pg_hba:
+      - hostssl all alpha_owner all scram-sha-256
+      - hostssl all all all cert
+
+  storage:
+    size: 10Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  walStorage:
+    size: 5Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  resources:
+    limits:
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  affinity:
+    podAntiAffinityType: required
+  probes:
+    liveness:
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6 # ~60s — the 30s default self-fences on AWS blips
+      isolationCheck:
+        enabled: true
+        # Integers per CRD schema (strings fail structured-merge diff).
+        requestTimeout: 2000
+        connectionTimeout: 2000
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: alpha-pg
+  bootstrap:
+    initdb:
+      database: alpha
+      owner: alpha_owner
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      enabled: true
+      # v2: TRUE — continuous WAL archiving is the point; false only ever
+      # made sense while nothing consumed the archive.
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: alpha-pg-objectstore
+        serverName: alpha-pg-g4
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: beta-pg
+  namespace: beta
+  annotations:
+    # Quorum-based failover protection is 1.30 ALPHA — enabled via
+    # annotation, not spec (pkg/utils FailoverQuorumAnnotationName;
+    # there is no spec.failoverQuorum field in the CRD).
+    alpha.cnpg.io/failoverQuorum: "true"
+spec:
+  instances: 3
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  enableSuperuserAccess: false
+  # Explicit on both postures: CNPG defaults enablePDB to true, so a
+  # devel single-instance cluster would otherwise get a primary PDB
+  # with 0 allowed disruptions and block node drains until the node
+  # pool's force-drain deadline (devel = no PDB).
+  enablePDB: true
+  inheritedMetadata:
+    annotations:
+      # Instance pods must never be consolidation victims — Karpenter
+      # moves stateless workloads around them instead.
+      karpenter.sh/do-not-disrupt: "true"
+  postgresql:
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+    parameters:
+      max_slot_wal_keep_size: "2GB"
+    pg_hba:
+      - hostssl all beta_owner all scram-sha-256
+      - hostssl all all all cert
+
+  storage:
+    size: 10Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  walStorage:
+    size: 5Gi
+    storageClass: cnpg-gp3
+    resizeInUseVolumes: true
+  resources:
+    limits:
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  affinity:
+    podAntiAffinityType: required
+  probes:
+    liveness:
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6 # ~60s — the 30s default self-fences on AWS blips
+      isolationCheck:
+        enabled: true
+        # Integers per CRD schema (strings fail structured-merge diff).
+        requestTimeout: 2000
+        connectionTimeout: 2000
+
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          cnpg.io/cluster: beta-pg
+  bootstrap:
+    initdb:
+      database: beta
+      owner: beta_owner
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      enabled: true
+      # v2: TRUE — continuous WAL archiving is the point; false only ever
+      # made sense while nothing consumed the archive.
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: beta-pg-objectstore
+        serverName: beta-pg-g4
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: alpha-pg-alpha
+  namespace: alpha
+spec:
+  name: alpha
+  owner: alpha_owner
+  ensure: present
+  cluster:
+    name: alpha-pg
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: beta-pg-beta
+  namespace: beta
+spec:
+  name: beta
+  owner: beta_owner
+  ensure: present
+  cluster:
+    name: beta-pg
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: alpha-pg-objectstore
+  namespace: alpha
+spec:
+  configuration:
+    destinationPath: s3://example-pg-alpha-staging-eu-west-1/alpha/alpha-pg
+    # Object tags on every base backup and WAL upload (barman --tags); the
+    # bucket lifecycle selects on them (docs/backupstore.md).
+    tags:
+      cnpg-backup-retention: managed
+    # Object tags on the timeline history files only (barman --history-tags).
+    historyTags:
+      cnpg-backup-retention: keep
+    s3Credentials:
+      inheritFromIAMRole: true # the pod's ambient identity, bound by the platform
+    data:
+      # Base backups: the CRD enum here is narrower than WAL's (no
+      # zstd/xz — found by a server-side dry-run against the plugin).
+      compression: snappy
+      encryption: AES256
+      jobs: 2
+    wal:
+      compression: zstd
+      encryption: AES256
+      maxParallel: 4
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: beta-pg-objectstore
+  namespace: beta
+spec:
+  configuration:
+    destinationPath: s3://example-pg-beta-staging-eu-west-1/beta/beta-pg
+    # Object tags on every base backup and WAL upload (barman --tags); the
+    # bucket lifecycle selects on them (docs/backupstore.md).
+    tags:
+      cnpg-backup-retention: managed
+    # Object tags on the timeline history files only (barman --history-tags).
+    historyTags:
+      cnpg-backup-retention: keep
+    s3Credentials:
+      inheritFromIAMRole: true # the pod's ambient identity, bound by the platform
+    data:
+      # Base backups: the CRD enum here is narrower than WAL's (no
+      # zstd/xz — found by a server-side dry-run against the plugin).
+      compression: snappy
+      encryption: AES256
+      jobs: 2
+    wal:
+      compression: zstd
+      encryption: AES256
+      maxParallel: 4
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: alpha-pg-scheduled-backup
+  namespace: alpha
+spec:
+  schedule: "0 0 2 * * *"
+  immediate: true
+  backupOwnerReference: self
+  cluster:
+    name: alpha-pg
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: alpha-pg-objectstore
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: beta-pg-scheduled-backup
+  namespace: beta
+spec:
+  schedule: "0 0 2 * * *"
+  immediate: true
+  backupOwnerReference: self
+  cluster:
+    name: beta-pg
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+    parameters:
+      barmanObjectName: beta-pg-objectstore
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: alpha-pg-bootstrap-guard
+  namespace: alpha
+  labels:
+    app.kubernetes.io/component: bootstrap-guard
+    app.kubernetes.io/instance: alpha-pg
+    app.kubernetes.io/name: cnpg-cluster-bootstrap-guard
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "-11"
+rules:
+  # Whether this one Cluster exists: nothing else.
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    resourceNames: [alpha-pg]
+    verbs: [get]
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: alpha-pg-bootstrap-guard
+  namespace: alpha
+  labels:
+    app.kubernetes.io/component: bootstrap-guard
+    app.kubernetes.io/instance: alpha-pg
+    app.kubernetes.io/name: cnpg-cluster-bootstrap-guard
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "-11"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: alpha-pg-bootstrap-guard
+subjects:
+  - kind: ServiceAccount
+    name: alpha-pg-restore
+    namespace: alpha
+
+---
+# Source: cnpg-projects/templates/clusters.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: alpha-pg-bootstrap-guard
+  namespace: alpha
+  labels:
+    app.kubernetes.io/component: bootstrap-guard
+    app.kubernetes.io/instance: alpha-pg
+    app.kubernetes.io/name: cnpg-cluster-bootstrap-guard
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "-10"
+spec:
+  # A refusal (exit 1) fails the Job at once; an error (exit 2: the API or
+  # the store did not answer) is retried twice, within the deadline.
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  podFailurePolicy:
+    rules:
+      - action: FailJob
+        onExitCodes:
+          containerName: guard
+          operator: In
+          values: [1]
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: bootstrap-guard
+        app.kubernetes.io/instance: alpha-pg
+        app.kubernetes.io/name: cnpg-cluster-bootstrap-guard
+    spec:
+      serviceAccountName: alpha-pg-restore
+      automountServiceAccountToken: true
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: guard
+          image: ghcr.io/truvity/cnpg/cnpgctl:0.0.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - guard
+            - empty-bootstrap
+            - --namespace=alpha
+            - --cluster=alpha-pg
+            - --bootstrap=initdb
+            - --destination=s3://example-pg-alpha-staging-eu-west-1/alpha/alpha-pg
+            - --server-name=alpha-pg-g4
+            - --region=eu-west-1
+          # The verdict is the last log line; a failed pod shows it as its
+          # termination message.
+          terminationMessagePolicy: FallbackToLogsOnError
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            limits:
+              memory: 64Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi

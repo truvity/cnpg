@@ -164,6 +164,39 @@
         }
       }
     },
+    "guards": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Checks run before the sync as pre-install/pre-upgrade hooks (Argo CD PreSync).",
+      "properties": {
+        "emptyBootstrap": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Refuse the sync when the Cluster does not exist, bootstrap.mode is initdb and the archive dir already holds base backups or WAL (cnpgctl guard empty-bootstrap).",
+          "properties": {
+            "enabled": { "type": ["boolean", "null"], "description": "null = on with backup.mode perProjectBucket and archiving on (no existingSecret, no endpointCA); true forces it on; false turns it off." },
+            "allowNonEmptyArchive": { "type": "boolean", "description": "Escape hatch: render no Job and annotate the Cluster with the reason. Requires reason." },
+            "reason": { "type": "string", "description": "Why allowNonEmptyArchive is set." },
+            "serviceAccount": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$", "maxLength": 253, "description": "ServiceAccount the Job runs as. Empty = {clusterName}-restore." },
+            "namespace": { "type": "string", "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$", "maxLength": 63, "description": "Namespace of the Job and its ServiceAccount. Empty = the cluster's." },
+            "region": { "type": "string", "description": "The bucket's region. Empty = backup.bucket.region, else the pod's AWS_REGION, else us-east-1." },
+            "image": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "The cnpgctl image.",
+              "properties": {
+                "repository": { "type": "string", "minLength": 1 },
+                "tag": { "type": "string", "description": "Empty = the chart's appVersion." },
+                "digest": { "type": "string", "pattern": "^(sha256:[a-f0-9]{64})?$" },
+                "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+              }
+            },
+            "activeDeadlineSeconds": { "type": "integer", "minimum": 30, "description": "Seconds before an unfinished Job (and the sync) fails." },
+            "resources": { "type": "object", "description": "Container resources. Empty = 10m/32Mi requested, 64Mi limit." }
+          }
+        }
+      }
+    },
     "databases": {
       "type": "array",
       "description": "Additional databases in this cluster (absorbs the retired cnpg-database chart).",

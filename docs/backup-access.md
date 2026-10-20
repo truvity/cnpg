@@ -107,6 +107,17 @@ the role cannot delete, the bucket lifecycle expires objects), and tag
 (`backup.historyTags`), per backupstore.md. A restore or drill reads the archive prefix with the
 `<cluster>-restore` ServiceAccount.
 
+`cnpg-cluster`'s empty-bootstrap guard (`guards.emptyBootstrap`, on by default
+with `backup.mode: perProjectBucket`) runs its pre-sync hook `Job` as that
+same ServiceAccount: the restore role's `s3:ListBucket` is all it needs from
+the bucket, and the chart's hook `Role` adds a `get` on the one `Cluster`. So
+render the ServiceAccount (`restore.createServiceAccount: true`) in the
+cluster's namespace, which is the default `restore.namespace`. With a restore
+namespace of its own, set `guards.emptyBootstrap.namespace` to it (the `Job`
+runs there); with restore off, set `guards.emptyBootstrap.serviceAccount` to
+another identity that may list the prefix, or turn the guard off. A missing
+ServiceAccount fails the sync at the `Job`'s deadline (five minutes by default).
+
 ## ACK mechanics
 
 - The Roles carry `services.k8s.aws/adoption-policy: adopt-or-create` (the

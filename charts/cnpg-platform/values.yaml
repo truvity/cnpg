@@ -142,6 +142,22 @@ alerts:
     # RE2 over the scrape job; a PodMonitor's job is <namespace>/<name>.
     jobRegex: ".+/.+"
     for: 10m
+  # States a person must end. Both read gauges the instance exporter serves.
+  manualSwitchover:
+    enabled: true
+    # cnpg_collector_manual_switchover_required > 0: the primary needs a
+    # restart and primaryUpdateStrategy is supervised, so the operator waits
+    # for a person to switch over.
+    for: 10m
+  fenced:
+    enabled: true
+    # cnpg_collector_fencing_on > 0: the instance is fenced (the Cluster's
+    # cnpg.io/fencedInstances annotation), PostgreSQL stopped on it.
+    for: 15m
+  # The runbook_url of the rules that have a section in this repository's
+  # docs/runbooks.md (the two above): this URL plus #<alert, lower-case>.
+  # Empty renders no link.
+  runbookUrl: https://github.com/truvity/cnpg/blob/master/docs/runbooks.md
   backupNotConfigured:
     enabled: true
     # An instance that exports cnpg_collector_up but no barman-cloud backup

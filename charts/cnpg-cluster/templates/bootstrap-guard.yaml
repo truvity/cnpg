@@ -1,0 +1,131 @@
+{{- $_ := include "cnpg-cluster.posture" . -}}
+{{- /* The empty-bootstrap guard (values guards.emptyBootstrap): a
+pre-install,pre-upgrade hook Job that refuses the sync when the Cluster does
+not exist, its bootstrap is initdb and its archive dir already holds base
+backups or WAL (`cnpgctl guard empty-bootstrap`, docs/cnpgctl.md). Argo CD
+runs Helm hooks as PreSync hooks, on every sync, by hook-weight; a failed
+hook fails the sync before any other object of the release is applied.
+
+The Role and RoleBinding are hooks too, one weight earlier: on a first
+install nothing of the release exists yet when PreSync runs. All three are
+before-hook-creation: the previous run's objects stay until the next sync
+replaces them, so a refusal can be read from the Job. The Job runs as the
+cluster's read-only restore ServiceAccount (cnpg-backup-access), whose
+identity may list the archive and nothing else. */}}
+{{- $g := include "cnpg-cluster.emptyBootstrapGuard" . | fromJson }}
+{{- if $g.job }}
+{{- $v := .Values.guards.emptyBootstrap }}
+{{- $b := include "cnpg-cluster.backup" . | fromJson }}
+{{- $name := printf "%s-bootstrap-guard" .Values.clusterName | trunc 63 | trimSuffix "-" }}
+{{- $sa := $v.serviceAccount | default (printf "%s-restore" .Values.clusterName) }}
+{{- $jobNs := $v.namespace | default .Values.namespace }}
+{{- $region := $v.region | default (($b.bucket | default dict).region | default "") }}
+{{- $img := $v.image | default dict }}
+{{- $ref := printf "%s:%s" ($img.repository | default "ghcr.io/truvity/cnpg/cnpgctl") ($img.tag | default .Chart.AppVersion) }}
+{{- with $img.digest }}{{ $ref = printf "%s@%s" $ref . }}{{ end }}
+{{- $labels := dict "app.kubernetes.io/name" "cnpg-cluster-bootstrap-guard" "app.kubernetes.io/instance" .Values.clusterName "app.kubernetes.io/component" "bootstrap-guard" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "-11"
+rules:
+  # Whether this one Cluster exists: nothing else.
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters]
+    resourceNames: [{{ .Values.clusterName }}]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "-11"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ $jobNs }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  namespace: {{ $jobNs }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "-10"
+spec:
+  # A refusal (exit 1) fails the Job at once; an error (exit 2: the API or
+  # the store did not answer) is retried twice, within the deadline.
+  backoffLimit: 2
+  activeDeadlineSeconds: {{ $v.activeDeadlineSeconds | default 300 | int }}
+  podFailurePolicy:
+    rules:
+      - action: FailJob
+        onExitCodes:
+          containerName: guard
+          operator: In
+          values: [1]
+  template:
+    metadata:
+      labels:
+        {{- toYaml $labels | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $sa }}
+      automountServiceAccountToken: true
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: guard
+          image: {{ $ref }}
+          imagePullPolicy: {{ $img.pullPolicy | default "IfNotPresent" }}
+          args:
+            - guard
+            - empty-bootstrap
+            - --namespace={{ .Values.namespace }}
+            - --cluster={{ .Values.clusterName }}
+            - --bootstrap={{ .Values.bootstrap.mode }}
+            - --destination=s3://{{ $b.bucketName }}/{{ include "cnpg-cluster.s3Prefix" . }}
+            - --server-name={{ $b.serverName | default .Values.clusterName }}
+            {{- with $region }}
+            - --region={{ . }}
+            {{- end }}
+            {{- with $b.endpoint }}
+            - --endpoint={{ . }}
+            {{- end }}
+          # The verdict is the last log line; a failed pod shows it as its
+          # termination message.
+          terminationMessagePolicy: FallbackToLogsOnError
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            {{- $v.resources | default (dict "requests" (dict "cpu" "10m" "memory" "32Mi") "limits" (dict "memory" "64Mi")) | toYaml | nindent 12 }}
+{{- end }}

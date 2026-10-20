@@ -1,0 +1,11 @@
+# The escape hatch needs a reason.
+clusterName: pg
+namespace: app
+profile: devel
+backup:
+  enabled: true
+  mode: perProjectBucket
+  bucket: {prefix: example-pg, project: app, env: staging, region: eu-west-1}
+  generation: g2
+guards:
+  emptyBootstrap: {allowNonEmptyArchive: true, reason: "  "}

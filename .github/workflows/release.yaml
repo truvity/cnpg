@@ -36,10 +36,13 @@ jobs:
       packages: write
     uses: truvity/ci-workflows/.github/workflows/release-public.yaml@d4350d573f67de8f7a145a4de94c392c6b43fd8c # v5.0.0
     with:
-      # One job: goreleaser builds and archives cnpgctl and cuts the
-      # GitHub release + changelog, then the charts (five) are pushed as
+      # One job: goreleaser builds and archives cnpgctl, pushes its image
+      # and cuts the GitHub release + changelog, then the charts are pushed as
       # oci://ghcr.io/truvity/charts/<name> at the same tag.
       charts: '["cnpg-cluster","cnpg-database","cnpg-platform","cnpg-project-platform","cnpg-backup-access","cnpg-projects","cnpg-client"]'
+      # The cnpgctl image (.goreleaser.yaml kos, bare): the cnpg-cluster
+      # chart's empty-bootstrap guard Job runs it at the chart's version.
+      ko-docker-repo: ghcr.io/truvity/cnpg/cnpgctl
 
   # The CRD mirror charts (barman-cloud-crds) are NOT in the `charts` list above: the
   # shared workflow stamps the tag onto every chart it is given, and these

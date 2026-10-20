@@ -11,7 +11,7 @@ values are laid over that chart's defaults. */ -}}
 {{- end }}
 {{- $_ := set $seen $key true }}
 {{- $ctx := dict "Values" $values "Capabilities" $.Capabilities "Release" $.Release "Chart" $.Chart }}
-{{- range $f := list "cluster" "databases" "metrics-networkpolicy" "objectstore-source" "objectstore" "on-demand-backup" "podmonitor" "roles" "scheduled-backup" "server-tls" "trust" }}
+{{- range $f := list "bootstrap-guard" "cluster" "databases" "metrics-networkpolicy" "objectstore-source" "objectstore" "on-demand-backup" "podmonitor" "roles" "scheduled-backup" "server-tls" "trust" }}
 ---
 {{ include (printf "cnpg-projects.cluster.%s" $f) $ctx }}
 {{- end }}

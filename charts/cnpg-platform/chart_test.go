@@ -60,6 +60,8 @@ func TestAlertRulesNameTheirMetricAndThreshold(t *testing.T) {
 		"CnpgInstanceExporterDown":      "cnpg_collector_up",
 		"CnpgInstanceScrapeDown":        "up{",
 		"CnpgBackupNotConfigured":       "unless on (namespace, pod) barman_cloud_cloudnative_pg_io_last_available_backup_timestamp",
+		"CnpgManualSwitchoverRequired":  "cnpg_collector_manual_switchover_required{} > 0",
+		"CnpgInstanceFenced":            "cnpg_collector_fencing_on{} > 0",
 	}
 
 	got := map[string]bool{}
@@ -262,4 +264,42 @@ func TestMetricsPolicyNamespaceMetadata(t *testing.T) {
 	assert.Equal(t, "primary", special["labels"].(map[string]any)["tier"])
 	assert.Equal(t, "yes", special["labels"].(map[string]any)["shared"])
 	assert.Equal(t, map[string]any{"shared": "overridden"}, special["annotations"])
+}
+
+// TestStatesAPersonMustEnd: the manual-switchover and fencing rules follow
+// the selector and their switches, and link to their runbook sections; the
+// other rules carry no runbook link.
+func TestStatesAPersonMustEnd(t *testing.T) {
+	rulesOf := func(sets ...string) map[string]map[string]any {
+		docs := render(t, append([]string{"alerts.enabled=true"}, sets...)...)
+		out := map[string]map[string]any{}
+
+		for _, r := range docs[0]["spec"].(map[string]any)["groups"].([]any)[0].(map[string]any)["rules"].([]any) {
+			rule := r.(map[string]any)
+			out[rule["alert"].(string)] = rule
+		}
+
+		return out
+	}
+
+	got := rulesOf("alerts.selector=namespace=~\"pg-.*\"")
+	assert.Equal(t, `cnpg_collector_manual_switchover_required{namespace=~"pg-.*"} > 0`, got["CnpgManualSwitchoverRequired"]["expr"])
+	assert.Equal(t, "10m", got["CnpgManualSwitchoverRequired"]["for"])
+	assert.Equal(t, `cnpg_collector_fencing_on{namespace=~"pg-.*"} > 0`, got["CnpgInstanceFenced"]["expr"])
+	assert.Equal(t, "15m", got["CnpgInstanceFenced"]["for"])
+
+	for name, anchor := range map[string]string{"CnpgManualSwitchoverRequired": "cnpgmanualswitchoverrequired", "CnpgInstanceFenced": "cnpginstancefenced"} {
+		ann := got[name]["annotations"].(map[string]any)
+		assert.Equal(t, "https://github.com/truvity/cnpg/blob/master/docs/runbooks.md#"+anchor, ann["runbook_url"], name)
+		assert.Equal(t, "warning", got[name]["labels"].(map[string]any)["severity"], name)
+	}
+
+	assert.NotContains(t, got["CnpgWalArchivingFailing"]["annotations"], "runbook_url")
+
+	got = rulesOf("alerts.manualSwitchover.enabled=false", "alerts.fenced.enabled=false")
+	assert.NotContains(t, got, "CnpgManualSwitchoverRequired")
+	assert.NotContains(t, got, "CnpgInstanceFenced")
+
+	got = rulesOf("alerts.runbookUrl=")
+	assert.NotContains(t, got["CnpgInstanceFenced"]["annotations"], "runbook_url")
 }

@@ -1,7 +1,8 @@
 // Command cnpgctl operates on CloudNativePG clusters built from these
-// charts. Today it has one command, read-only:
+// charts. Its commands are read-only:
 //
 //	cnpgctl verify --namespace <ns> --cluster <name> [--context <ctx>]
+//	cnpgctl guard empty-bootstrap --namespace <ns> --cluster <name> --destination s3://<bucket>/<path> [--server-name <dir>]
 //
 // See docs/cnpgctl.md.
 package main
@@ -44,9 +45,11 @@ const usage = `cnpgctl %s
 
 Usage:
   cnpgctl verify [flags]   read-only assertions against a live cluster
+  cnpgctl guard empty-bootstrap [flags]
+                           refuse an initdb bootstrap onto a non-empty archive
   cnpgctl version
 
-Run "cnpgctl verify -h" for the flags.
+Run "cnpgctl verify -h" or "cnpgctl guard empty-bootstrap -h" for the flags.
 `
 
 // run dispatches the command. src overrides the Kubernetes client (tests).
@@ -58,6 +61,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, src verif
 	switch args[0] {
 	case "verify":
 		return runVerify(ctx, args[1:], stdout, stderr, src)
+	case "guard":
+		return runGuard(ctx, args[1:], stdout, stderr)
 	case "version", "--version":
 		_, _ = fmt.Fprintln(stdout, Version)
 		return nil

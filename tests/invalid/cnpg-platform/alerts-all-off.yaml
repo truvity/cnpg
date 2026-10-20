@@ -7,3 +7,5 @@ alerts:
   exporterDown: {enabled: false}
   scrapeDown: {enabled: false}
   backupNotConfigured: {enabled: false}
+  manualSwitchover: {enabled: false}
+  fenced: {enabled: false}

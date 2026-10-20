@@ -14,6 +14,14 @@ them.
 | The archive role exists before the ServiceAccount is rebound | `cnpg-backup-access`: `clusters[].archive.association: false` |
 | An association is adopted instead of created (rarely wanted) | `cnpg-backup-access`: `global.adoptAssociations: true` (default `false`) |
 
+The preset `backup.mode: perProjectBucket` also turns on `cnpg-cluster`'s
+empty-bootstrap guard, a pre-sync hook `Job` that runs as `<cluster>-restore`
+([backup-access.md](backup-access.md#with-cnpg-clusters-objectstore)). For a
+running cluster it passes at once (the `Cluster` exists), but the
+ServiceAccount must exist before the sync that sets the mode: render it with
+`cnpg-backup-access` `restore.createServiceAccount: true` in the prepare step,
+or set `guards.emptyBootstrap.enabled: false` until it does.
+
 `cnpg-cluster` and `cnpg-projects` render the same `ObjectStore` and `Backup`
 for the same inputs: `cnpg-projects` carries the `cnpg-cluster` templates
 (`hack/sync-cnpg-projects.sh`), and its test renders every
