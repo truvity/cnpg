@@ -1,0 +1,144 @@
+# Restore drills, one CronJob per source cluster, in the release namespace (the
+# DRILL namespace): the drill Clusters, their ObjectStores, the result
+# ConfigMaps, the runner and the exporter all live here. The source clusters
+# are only read. See docs/restore-drill.md.
+#
+# Nothing here names an estate: with no drills the chart renders nothing, and
+# a storage class is required as soon as one drill is listed.
+
+# The cnpgctl image (truvity/cnpg's release, ko-built), the same image the
+# cnpg-cluster chart's empty-bootstrap guard runs. The tag defaults to the
+# chart's appVersion, which the release stamps with its own version; a
+# digest, when set, is appended.
+image:
+  repository: ghcr.io/truvity/cnpg/cnpgctl
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Applied under every drills[] entry; a non-empty value of the entry wins
+# (maps merge key by key).
+defaults:
+  # The drill's bound from start to the end of its checks (cnpgctl --timeout).
+  # The Job's activeDeadlineSeconds is this plus 30 minutes, for the teardown.
+  timeoutMinutes: 120
+  # REQUIRED (here or per drill): the StorageClass of the drill volumes. It
+  # must DELETE its volumes: a class that retains them leaves a volume behind
+  # every month (cnpgctl refuses a Retain class it can read).
+  storageClass: ""
+  # Volume sizes. Empty: the source's (the larger of its spec and its volume
+  # claims' capacity). walStorageSize applies when the source has a WAL volume.
+  storageSize: ""
+  walStorageSize: ""
+  # The drill instance (one). Empty: cnpgctl's defaults (250m / 512Mi, limit 1Gi).
+  instance:
+    cpuRequest: ""
+    memoryRequest: ""
+    memoryLimit: ""
+    # On the drill's pods and volumes (the Cluster's inheritedMetadata), e.g. a
+    # node autoscaler's do-not-disrupt annotation, so a consolidation does not
+    # end a drill.
+    podAnnotations: {}
+    # Both empty: the source's nodeSelector and tolerations are copied (the
+    # drill runs where the source's instances can run). Either set: used as
+    # given. A toleration needs key and effect; operator Exists or Equal.
+    nodeSelector: {}
+    tolerations: []
+  # Extra environment of the barman-cloud sidecar that reads the archive
+  # (NAME: value), e.g. AWS_REGION. Static credentials are refused by cnpgctl:
+  # the archive is read with the restore identity only.
+  sidecarEnv: {}
+  checks:
+    # Databases expected in the restore. Empty: the source's Database objects
+    # and bootstrap database; if none, every database but postgres.
+    databases: []
+    # Minimum rows: "<db>": n over all user tables of a database (default 1
+    # for each expected one), "<db>/<schema>.<table>": n for one table.
+    minRows: {}
+    # exact: count(*) of every user table (reads all the data, so every page
+    # is proven readable); estimate: the planner's reltuples.
+    count: exact
+    # How old the recovered data may be: now minus the later of the last
+    # replayed transaction and the base backup's start. A quiet database's
+    # last commit can be old; see docs/restore-drill.md.
+    maxRecoveryPointAgeHours: 24
+    statementTimeoutMinutes: 15
+    # Failed recovery Job pods that end the drill before the timeout.
+    maxRecoveryAttempts: 2
+  # Suspend the CronJob (true wins only when set here or on the entry).
+  suspend: false
+
+# One entry per source cluster.
+#
+#  - namespace: shop            # REQUIRED: the source Cluster's namespace
+#    cluster: shop-pg           # REQUIRED: the source Cluster's name
+#    drillName: ""              # default <cluster>-restore: the restore
+#                               # ServiceAccount of cnpg-backup-access, whose
+#                               # restore.namespace must be this release's
+#    schedule: ""               # default: monthly, a day (1-28), hour (04-23
+#                               # UTC) and minute derived from namespace/cluster
+#    archive:                   # all empty: taken from the source's plugin
+#      bucket: ""               # entry and ObjectStore at drill time
+#      prefix: ""               # default <namespace>/<cluster>/ (with bucket)
+#      serverName: ""           # or project + generation: <project>-pg-<generation>
+#      project: ""
+#      generation: ""
+#      endpointURL: ""
+#    # ...and any key of `defaults` above, for this drill only.
+drills: []
+
+# The runners: the CronJobs' pods, which run `cnpgctl drill`. Each drill has
+# its own runner ServiceAccount, <drillName>-runner, allowed to touch only that
+# drill's objects and read only its source; none is a restore ServiceAccount.
+runner:
+  resources:
+    requests: {cpu: 10m, memory: 64Mi}
+    limits: {memory: 256Mi}
+  nodeSelector: {}
+  tolerations: []
+  podLabels: {}
+  podAnnotations: {}
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  # A run the controller missed by more than this is skipped until next month.
+  startingDeadlineSeconds: 3600
+
+# The exporter: `cnpgctl drill-metrics`, serving the result ConfigMaps as
+# cnpg_restore_drill_* metrics on port 8080 (/metrics). A monthly Job cannot be
+# scraped; the ConfigMaps are the durable state, this makes them metrics.
+exporter:
+  enabled: true
+  resources:
+    requests: {cpu: 5m, memory: 32Mi}
+    limits: {memory: 64Mi}
+  nodeSelector: {}
+  tolerations: []
+  podLabels: {}
+  podAnnotations: {}
+
+# A monitoring.coreos.com/v1 PodMonitor for the exporter, rendered only when
+# the cluster serves that API (helm template: --api-versions
+# monitoring.coreos.com/v1/PodMonitor). honorLabels keeps the metrics' own
+# `namespace` (the SOURCE namespace) instead of the exporter pod's.
+podMonitor:
+  enabled: true
+  interval: ""
+  labels: {}
+
+# NetworkPolicies for a namespace that denies ingress by default. Off unless
+# enabled. When on: the drill instances accept 5432 from the runner only and
+# 8000 (the instance manager's status port) from `operator`, which is required
+# because selecting the instances for ingress closes every other port; the
+# exporter accepts 8080 from `metrics` (rendered only when it is non-empty).
+# Egress is not rendered: docs/restore-drill.md lists what must be allowed.
+networkPolicy:
+  enabled: false
+  # NetworkPolicyPeer entries for the CloudNativePG operator, e.g.
+  #  - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: cnpg-system}}
+  #    podSelector: {matchLabels: {app.kubernetes.io/name: cloudnative-pg}}
+  operator: []
+  # NetworkPolicyPeer entries for the scraper of the exporter.
+  metrics: []
+
+commonLabels: {}

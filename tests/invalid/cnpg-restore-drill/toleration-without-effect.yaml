@@ -1,0 +1,6 @@
+defaults:
+  storageClass: example-delete
+  instance:
+    tolerations: [{key: pool, operator: Exists}]
+drills:
+  - {namespace: shop, cluster: shop-pg}

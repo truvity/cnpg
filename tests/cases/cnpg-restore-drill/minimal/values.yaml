@@ -1,0 +1,7 @@
+# One drill, only the required keys: everything else is derived from the
+# source at drill time.
+defaults:
+  storageClass: example-delete
+drills:
+  - namespace: shop
+    cluster: shop-pg

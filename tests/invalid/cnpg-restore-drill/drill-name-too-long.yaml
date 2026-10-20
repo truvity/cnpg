@@ -1,0 +1,4 @@
+defaults:
+  storageClass: example-delete
+drills:
+  - {namespace: shop, cluster: a-cluster-name-that-is-exactly-43-character}

@@ -5,10 +5,11 @@
 # One tag stamps everything: the charts, the Go module (a module needs no
 # build step; the tag is its version), the cnpgctl binaries built here and
 # the cnpgctl image. A person or a pipeline step runs the binary against a
-# cluster they already have access to; the image exists for the one place
-# cnpgctl runs inside the cluster, the cnpg-cluster chart's empty-bootstrap
-# guard (a hook Job, guards.emptyBootstrap), whose tag defaults to the
-# chart's appVersion, i.e. this same release.
+# cluster they already have access to; the image exists for the places
+# cnpgctl runs inside the cluster: the cnpg-cluster chart's empty-bootstrap
+# guard (a hook Job, guards.emptyBootstrap) and the cnpg-restore-drill
+# chart's CronJobs (`cnpgctl drill`) and exporter (`cnpgctl drill-metrics`).
+# Both charts default the tag to their appVersion, i.e. this same release.
 version: 2
 
 project_name: cnpg
@@ -64,7 +65,8 @@ release:
     ## cnpg {{ .Tag }}
 
     Charts: `oci://ghcr.io/truvity/charts/cnpg-platform`, `cnpg-cluster`,
-    `cnpg-project-platform`, `cnpg-backup-access`, `cnpg-database` and `cnpg-client` at `{{ .Version }}`. `barman-cloud-crds`
+    `cnpg-project-platform`, `cnpg-backup-access`, `cnpg-projects`, `cnpg-restore-drill`,
+    `cnpg-database` and `cnpg-client` at `{{ .Version }}`. `barman-cloud-crds`
     (the barman-cloud plugin's CRDs, mirrored) is published at the upstream
     version it mirrors, once, by the `crd-charts` job.
     Go module: `go get github.com/truvity/cnpg/v2@{{ .Tag }}`.

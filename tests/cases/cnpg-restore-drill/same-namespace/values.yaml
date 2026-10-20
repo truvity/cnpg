@@ -1,0 +1,10 @@
+# The drill in the source's own namespace (the release namespace is the
+# source's), with the exporter off. The runner can still delete only the
+# drill's names, never the source Cluster.
+defaults:
+  storageClass: example-delete
+drills:
+  - namespace: shop
+    cluster: shop-pg
+exporter:
+  enabled: false
