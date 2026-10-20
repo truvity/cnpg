@@ -6,7 +6,7 @@ upgrade is expected to clear.
 
 ## Unreleased
 
-- Documentation only: the README describes the four client adapters, the opt-in `cnpgctl verify` checks and the published `cnpg-projects` chart as they are, and the `backupstore` package comment points at `docs/backupstore.md`. No chart, module or client changes.
+- Documentation only: the README describes the four client adapters, the opt-in `cnpgctl verify` checks and the published `cnpg-projects` chart as they are, and the `backupstore` package comment points at `docs/backupstore.md`; the README install examples use the current release (2.33.1). No chart, module or client changes.
 
 ## v2.33.1
 

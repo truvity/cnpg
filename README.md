@@ -113,7 +113,7 @@ inside a cluster it does not own.
 ## Install and a worked example
 
 ```sh
-helm install pg oci://ghcr.io/truvity/charts/cnpg-cluster --version 2.0.0 -f values.yaml
+helm install pg oci://ghcr.io/truvity/charts/cnpg-cluster --version 2.33.1 -f values.yaml
 ```
 
 A minimal `values.yaml` that renders as written:
@@ -176,7 +176,7 @@ updates, inherited labels and annotations, staggered rollouts) and a chart,
 `cnpg-platform`, for the objects around it:
 
 ```sh
-helm install cnpg-platform oci://ghcr.io/truvity/charts/cnpg-platform --version 2.2.0 -f values.yaml
+helm install cnpg-platform oci://ghcr.io/truvity/charts/cnpg-platform --version 2.33.1 -f values.yaml
 ```
 
 Everything in `cnpg-platform` is off until asked for, and nothing in it is
