@@ -4,6 +4,15 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+### Changed
+
+- **Feature (charts `cnpg-cluster`, `cnpg-projects`): `karpenter.doNotDisrupt`** (bool, schema-validated) decides whether the instance pods carry `karpenter.sh/do-not-disrupt: "true"` (`spec.inheritedMetadata.annotations`). `true` renders it on either profile, for a cluster on a node pool that consolidates under-utilised nodes.
+  - **Behaviour change (default): off.** Until now every `prod` cluster carried the annotation unconditionally. On a database pool with `consolidationPolicy: WhenEmpty` consolidation never touches a node that runs a pod, so the annotation only blocked planned drift and expiry drains: Karpenter waited for the node pool's `terminationGracePeriod` and then force-deleted the pods, the primary included. Without it the drain is native: Karpenter taints the node `karpenter.sh/disrupted` and evicts through the Eviction API, the operator (which treats that taint as a drain) switches the primary over to a replica on another node, and its PodDisruptionBudgets let the replicas go one at a time. Goldens that change: the `prod` cases of `cnpg-cluster` (`annotations`, `empty-bootstrap-guard`, `full-prod`, `platform-posture`, `platform-posture-explicit`) and `cnpg-projects` (`bootstrap-guard`, `full`, `identity-check`, `posture`) lose the annotation and nothing else; new case `cnpg-cluster/karpenter-do-not-disrupt`. To keep the old render, set `karpenter.doNotDisrupt: true`.
+  - **After upgrading, remove the annotation from the running pods by hand.** CloudNativePG patches added or changed inherited annotations onto running pods in place but never removes one, so the pods keep it until they are recreated: `kubectl annotate pod -n <namespace> -l cnpg.io/cluster=<clusterName> karpenter.sh/do-not-disrupt-` (metadata only, no restart). Changing `inheritedMetadata` never restarts an instance: the operator's rollout check compares the pod spec, not its metadata.
+- **Documentation:** `docs/reference.md` gains the `karpenter` section (how a Karpenter drain goes without the annotation); `docs/runbooks.md`, `CNPGInstanceOnDisruptedNode`, describes the native drain and when the alert still fires (a cluster short of a ready replica, a left-over or opted-in annotation, a single instance with a PodDisruptionBudget).
+
 ## v2.35.0
 
 ### Added

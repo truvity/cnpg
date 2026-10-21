@@ -407,6 +407,17 @@
           "items": { "type": "object" }
         }
       }
+    },
+    "karpenter": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Karpenter. Off by default: nothing Karpenter-specific is rendered.",
+      "properties": {
+        "doNotDisrupt": {
+          "type": "boolean",
+          "description": "true = karpenter.sh/do-not-disrupt: \"true\" on every instance pod (spec.inheritedMetadata.annotations), both profiles: Karpenter never evicts an instance, and a drift or expiry drain waits for the node pool's terminationGracePeriod and force-deletes it. Default false: on a WhenEmpty pool the operator's switchover and PodDisruptionBudgets make the drain safe. Turn on for a pool that consolidates under-utilised nodes. Turning it off does not remove it from running pods (the operator never propagates removals)."
+        }
+      }
     }
   }
 }

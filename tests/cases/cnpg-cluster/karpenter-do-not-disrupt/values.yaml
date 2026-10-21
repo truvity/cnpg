@@ -1,0 +1,13 @@
+# karpenter.doNotDisrupt: true (opt-in; default false) puts
+# karpenter.sh/do-not-disrupt: "true" on the instance pods through
+# spec.inheritedMetadata.annotations, for a cluster on a node pool that
+# consolidates under-utilised nodes.
+clusterName: pg
+namespace: app
+profile: prod
+scheduling:
+  databasePool: general
+karpenter:
+  doNotDisrupt: true
+bootstrap:
+  initdb: {database: app, owner: app-owner}

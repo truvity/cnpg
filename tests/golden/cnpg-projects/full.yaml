@@ -82,11 +82,6 @@ spec:
   # with 0 allowed disruptions and block node drains until the node
   # pool's force-drain deadline (devel = no PDB).
   enablePDB: true
-  inheritedMetadata:
-    annotations:
-      # Instance pods must never be consolidation victims — Karpenter
-      # moves stateless workloads around them instead.
-      karpenter.sh/do-not-disrupt: "true"
   postgresql:
     synchronous:
       method: any

@@ -24,8 +24,11 @@ type (
 	cluster struct {
 		Kind string `json:"kind"`
 		Spec struct {
-			Instances int   `json:"instances"`
-			EnablePDB *bool `json:"enablePDB"`
+			Instances         int   `json:"instances"`
+			EnablePDB         *bool `json:"enablePDB"`
+			InheritedMetadata *struct {
+				Annotations map[string]string `json:"annotations"`
+			} `json:"inheritedMetadata"`
 			Affinity  struct {
 				NodeSelector        map[string]string        `json:"nodeSelector"`
 				PodAntiAffinityType string                   `json:"podAntiAffinityType"`
@@ -76,6 +79,37 @@ func TestProfilePDB_ExplicitOnBothPostures(t *testing.T) {
 	require.NotNil(t, prod.Spec.EnablePDB, "prod must emit enablePDB explicitly")
 	assert.True(t, *prod.Spec.EnablePDB, "prod posture keeps the PDB: 3 instances make eviction survivable via switchover")
 	assert.Equal(t, 3, prod.Spec.Instances)
+}
+
+// TestKarpenterDoNotDisrupt_DefaultOff: karpenter.doNotDisrupt is off by
+// default on BOTH profiles (a prod cluster used to carry the annotation
+// unconditionally), so a Karpenter drift or expiry drain evicts the
+// instances through the operator's PodDisruptionBudgets after its
+// switchover; true puts the annotation back on either profile, and the
+// schema refuses anything but a boolean.
+func TestKarpenterDoNotDisrupt_DefaultOff(t *testing.T) {
+	const key = "karpenter.sh/do-not-disrupt"
+
+	for _, profile := range []string{"devel", "prod"} {
+		def := renderCluster(t, "profile="+profile)
+		if def.Spec.InheritedMetadata != nil {
+			assert.NotContains(t, def.Spec.InheritedMetadata.Annotations, key, "%s: no do-not-disrupt by default", profile)
+		}
+
+		on := renderCluster(t, "profile="+profile, "karpenter.doNotDisrupt=true")
+		require.NotNil(t, on.Spec.InheritedMetadata, "%s: doNotDisrupt=true renders inheritedMetadata", profile)
+		assert.Equal(t, "true", on.Spec.InheritedMetadata.Annotations[key], "%s: doNotDisrupt=true puts the annotation on the instance pods", profile)
+	}
+
+	out, err := exec.CommandContext(t.Context(), "helm", "template", "pg", ".", "-n", "test",
+		"--set", "clusterName=test-pg", "--set", "namespace=test", "--set", "profile=prod",
+		"--set-string", "karpenter.doNotDisrupt=yes").CombinedOutput()
+	require.Errorf(t, err, "a non-boolean doNotDisrupt must be refused by the schema:\n%s", out)
+
+	out, err = exec.CommandContext(t.Context(), "helm", "template", "pg", ".", "-n", "test",
+		"--set", "clusterName=test-pg", "--set", "namespace=test", "--set", "profile=prod",
+		"--set", "karpenter.bogus=true").CombinedOutput()
+	require.Errorf(t, err, "an unknown karpenter key must be refused by the schema:\n%s", out)
 }
 
 // TestPoolSelector_PlainInput: scheduling.databasePool is a plain input
