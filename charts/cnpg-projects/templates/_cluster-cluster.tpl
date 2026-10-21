@@ -78,12 +78,15 @@ spec:
   {{- if and $backupOff (not .Values.backup.notExpectedReason) }}
   {{- fail "backup.expected is false but backup.notExpectedReason is empty: say why this cluster is deliberately not backed up" }}
   {{- end }}
-  {{- if or $prod .Values.labels $backupOff }}
+  {{- $doNotDisrupt := .Values.karpenter.doNotDisrupt }}
+  {{- if or $doNotDisrupt .Values.labels $backupOff }}
   inheritedMetadata:
-    {{- if $prod }}
+    {{- if $doNotDisrupt }}
     annotations:
-      # Instance pods must never be consolidation victims — Karpenter
-      # moves stateless workloads around them instead.
+      # karpenter.doNotDisrupt: Karpenter never evicts an instance pod. Off
+      # by default: on a WhenEmpty pool the operator's switchover (it
+      # watches karpenter.sh/disrupted) and its PodDisruptionBudgets drain
+      # the instances safely; on for a pool that consolidates busy nodes.
       karpenter.sh/do-not-disrupt: "true"
     {{- end }}
     {{- if or .Values.labels $backupOff }}

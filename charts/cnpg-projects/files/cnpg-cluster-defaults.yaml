@@ -411,6 +411,35 @@ scheduling:
   #  - key: arch
   #    operator: Exists
 
+# Karpenter. OFF by default: nothing Karpenter-specific is rendered.
+karpenter:
+  # true puts `karpenter.sh/do-not-disrupt: "true"` on every instance pod
+  # (spec.inheritedMetadata.annotations), on both profiles. Karpenter then
+  # never evicts an instance: a drift or expiry drain of its node waits for
+  # the node pool's terminationGracePeriod and force-deletes the pod, the
+  # primary included.
+  #
+  # Why off: on a node pool with `consolidationPolicy: WhenEmpty` (a
+  # dedicated database pool) consolidation never picks a node that still
+  # runs a pod, so the annotation only blocks the planned drains. Without
+  # it, Karpenter taints the node `karpenter.sh/disrupted:NoSchedule` and
+  # evicts through the Eviction API: the operator sees the taint (one of
+  # its DRAIN_TAINTS) and switches the primary over to a replica on another
+  # node, and the operator's own PodDisruptionBudgets (prod: `<cluster>`
+  # for the replicas, one at a time; `<cluster>-primary`, none) let the
+  # replicas go one by one, each back and ready before the next.
+  #
+  # Turn it on for a cluster whose pool consolidates under-utilised nodes
+  # (`WhenEmptyOrUnderutilized`, `Balanced`), where moving databases to save
+  # cost is not worth a switchover.
+  #
+  # Turning it OFF on a running cluster does not take it off the running
+  # pods: CloudNativePG propagates added and changed inherited annotations
+  # in place but never removals. Remove it by hand (metadata only, no
+  # restart): kubectl annotate pod -n <ns> -l cnpg.io/cluster=<cluster>
+  # karpenter.sh/do-not-disrupt-
+  doNotDisrupt: false
+
 # ── Monitoring ───────────────────────────────────────────────────────
 # Every instance pod serves the PostgreSQL exporter on port 9187 (port
 # name `metrics`, path /metrics). Nothing scrapes it unless a scraper is

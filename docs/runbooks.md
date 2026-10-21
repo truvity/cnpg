@@ -308,26 +308,55 @@ kubectl -n <namespace> logs <instance-pod> -c plugin-barman-cloud --since=3h
 ### CNPGInstanceOnDisruptedNode
 
 **Meaning.** A database instance pod runs on a node Karpenter is draining (the
-node carries the `karpenter.sh/disrupted` taint). The instance's
-PodDisruptionBudget (and, on a prod cluster, `karpenter.sh/do-not-disrupt`)
-holds the drain, so the node sits half-drained until the node pool's
-termination grace period evicts the pod by force, a primary included.
+node carries the `karpenter.sh/disrupted` taint) and has not left. A normal
+drain moves instances on its own: the operator treats that taint as a drain
+and switches the primary over to a replica on another node, and Karpenter
+evicts the replicas through the Eviction API, one at a time as the
+operator's PodDisruptionBudgets allow (`<cluster>`: one replica of a
+three-instance cluster; `<cluster>-primary`: none), each recreated elsewhere
+and ready before the next. Instances still there after the alert's hold mean
+the drain is stuck, until the node pool's termination grace period
+force-deletes the pod, a primary included. The usual causes:
 
-**First checks.** Which instance it is and what it is:
+- **The cluster is short of a ready replica.** A replica is down, still
+  catching up or pending on another node (a volume whose zone has no
+  schedulable node), so the replica budget allows no eviction, and with no
+  ready replica on another node the operator cannot switch over.
+- **The pod carries `karpenter.sh/do-not-disrupt: "true"`.** Either the
+  cluster sets `karpenter.doNotDisrupt: true` (then this is expected: the
+  instance waits for the termination grace period unless moved by hand), or
+  the annotation is left over from a release that set it on every `prod`
+  cluster: the operator never removes an inherited annotation from running
+  pods.
+- **A single-instance cluster with `enablePDB: true`** (the chart renders
+  `false` on `devel`): its primary budget allows no eviction and there is no
+  replica to switch over to.
+
+**First checks.** What the instance is, what holds it, and whether the cluster
+is healthy:
 
 ```sh
 kubectl -n <namespace> get pods -l cnpg.io/cluster=<cluster> -L cnpg.io/instanceRole -o wide
+kubectl -n <namespace> get pod <instance-pod> -o jsonpath='{.metadata.annotations.karpenter\.sh/do-not-disrupt}{"\n"}'
+kubectl -n <namespace> get pdb -l cnpg.io/cluster=<cluster>
+kubectl -n <namespace> get cluster.postgresql.cnpg.io <cluster>
 kubectl get node <node> -o jsonpath='{.spec.taints}{"\n"}'
-kubectl get nodeclaims -o wide | grep <node>
+kubectl get events -A --field-selector involvedObject.name=<node> | grep -i -e evict -e drain
 ```
 
-**Fix.** Move it on your terms:
+**Fix.**
 
-- A replica: delete its pod. The operator recreates it on another node of the
-  same zone (its volume is zonal), and the drain goes on.
-- The primary: switch over to a ready replica first,
-  `kubectl cnpg promote <cluster> <replica-instance> -n <namespace>`, then the
-  old primary is a replica: delete its pod as above.
+- A left-over annotation: take it off (metadata only, no restart) and the
+  drain goes on by itself:
+  `kubectl -n <namespace> annotate pod -l cnpg.io/cluster=<cluster> karpenter.sh/do-not-disrupt-`.
+- An unhealthy cluster: bring the missing replica back first (see why it is
+  not ready or not scheduled); once it is ready the budget allows the next
+  eviction.
+- To move an instance on your terms before the grace period: a replica,
+  delete its pod (the operator recreates it on another node of the same zone);
+  the primary, switch over to a ready replica first,
+  `kubectl cnpg promote <cluster> <replica-instance> -n <namespace>`, then
+  delete the former primary's pod as a replica.
 
 ### CnpgManualSwitchoverRequired
 

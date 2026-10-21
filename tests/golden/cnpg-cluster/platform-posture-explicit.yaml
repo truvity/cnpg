@@ -185,10 +185,6 @@ spec:
     clientCASecret: shop-pg-client-ca
     replicationTLSSecret: shop-pg-replication-tls
   inheritedMetadata:
-    annotations:
-      # Instance pods must never be consolidation victims — Karpenter
-      # moves stateless workloads around them instead.
-      karpenter.sh/do-not-disrupt: "true"
     labels:
       example.com/project: shop
   postgresql:

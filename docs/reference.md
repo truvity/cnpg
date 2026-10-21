@@ -403,6 +403,32 @@ port 9187 on the instance pods: set `monitoring.networkPolicy.from`.
 | `scheduling.databasePool` | string | `""` | Node pool name. Selects `nodeSelector: {karpenter.sh/nodepool: <value>}` and adds a matching `Equal`/`NoSchedule` toleration for it automatically. Pins both profiles equally — there is no profile-aware default (unlike releases before the current one; see `docs/adoption.md`). |
 | `scheduling.tolerations` | []object | `[]` | Extra raw Kubernetes tolerations (passthrough), appended after the pool's own (if `databasePool` is set). |
 
+### `karpenter` (off by default)
+
+| Key | Type | Default | What it does |
+|---|---|---|---|
+| `karpenter.doNotDisrupt` | bool | `false` | `true` puts `karpenter.sh/do-not-disrupt: "true"` on every instance pod (`spec.inheritedMetadata.annotations`), on both profiles: Karpenter never evicts an instance, so a drift or expiry drain of its node waits for the node pool's `terminationGracePeriod` and then force-deletes the pod, the primary included. Leave it off on a node pool with `consolidationPolicy: WhenEmpty`: consolidation never picks a node that runs a pod, and a planned drain is safe without it (below). Turn it on for a cluster on a pool that consolidates under-utilised nodes (`WhenEmptyOrUnderutilized`, `Balanced`). Releases before this key rendered the annotation on every `prod` cluster. |
+
+How a Karpenter drain goes without the annotation: Karpenter taints the node
+`karpenter.sh/disrupted:NoSchedule` (it does not cordon) and evicts its pods
+through the Eviction API, which honours PodDisruptionBudgets. The operator
+treats that taint as a drain (`karpenter.sh/disrupted` is in its default
+`DRAIN_TAINTS`, next to `node.kubernetes.io/unschedulable`) and switches the
+primary over to a ready replica on another node; the former primary is then a
+replica. On `prod` (`enablePDB: true`, three instances) the operator's
+`<clusterName>` budget lets one replica go at a time and `<clusterName>-primary`
+none, so replicas leave one by one, each recreated on another node (same
+zone, its volume is zonal) and ready before the next. A drain stays blocked
+only while the cluster is short of a ready replica; then Karpenter keeps
+retrying until the node pool's `terminationGracePeriod`, and the platform's
+`CNPGInstanceOnDisruptedNode` alert fires (`docs/runbooks.md`).
+
+Switching the key off on a running cluster leaves the annotation on the
+running pods: CloudNativePG patches added or changed inherited annotations
+onto pods in place (no restart) but never removes one. Take it off by hand
+(metadata only, no restart):
+`kubectl annotate pod -n <namespace> -l cnpg.io/cluster=<clusterName> karpenter.sh/do-not-disrupt-`.
+
 ## charts/cnpg-database
 
 The chart a product installs (typically as a dependency of its own `-infra`
