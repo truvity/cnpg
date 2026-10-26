@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## v2.36.2
+
+- Dependency updates.
+
 ## v2.36.1
 
 - Dependency updates.
