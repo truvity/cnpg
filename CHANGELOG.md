@@ -6,6 +6,8 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+## v2.37.0
+
 ### Changed
 
 - **Feature (charts `cnpg-cluster`, `cnpg-projects`): `scheduling.hardSpread`** (bool or null, schema-validated) decides the instance placement independently of the profile. `true` renders `affinity.podAntiAffinityType: required` and the zone `topologySpreadConstraint` with `whenUnsatisfiable: DoNotSchedule`; `false` renders no anti-affinity and `ScheduleAnyway`. Unset (the default) follows the profile exactly as before, so no existing render changes. Use `true` on a `devel` cluster of three instances that runs on reclaimable nodes, so one reclaim cannot take the primary and a standby together.
