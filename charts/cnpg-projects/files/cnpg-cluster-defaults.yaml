@@ -410,6 +410,13 @@ scheduling:
   tolerations: []
   #  - key: arch
   #    operator: Exists
+  # Hard placement: true renders `affinity.podAntiAffinityType: required`
+  # (one instance per node) and a zone topologySpreadConstraint with
+  # `whenUnsatisfiable: DoNotSchedule`; false renders no anti-affinity and
+  # `ScheduleAnyway`. Unset (null) follows the profile: hard on prod, soft
+  # on devel. Set true on a devel cluster that runs three instances on
+  # reclaimable nodes, so one reclaim cannot take a primary and a standby.
+  hardSpread: null
 
 # Karpenter. OFF by default: nothing Karpenter-specific is rendered.
 karpenter:

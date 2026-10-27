@@ -402,6 +402,7 @@ port 9187 on the instance pods: set `monitoring.networkPolicy.from`.
 |---|---|---|---|
 | `scheduling.databasePool` | string | `""` | Node pool name. Selects `nodeSelector: {karpenter.sh/nodepool: <value>}` and adds a matching `Equal`/`NoSchedule` toleration for it automatically. Pins both profiles equally — there is no profile-aware default (unlike releases before the current one; see `docs/adoption.md`). |
 | `scheduling.tolerations` | []object | `[]` | Extra raw Kubernetes tolerations (passthrough), appended after the pool's own (if `databasePool` is set). |
+| `scheduling.hardSpread` | bool or null | `null` | `true` renders `affinity.podAntiAffinityType: required` and a zone spread with `whenUnsatisfiable: DoNotSchedule`; `false` renders no anti-affinity and `ScheduleAnyway`. `null` follows the profile (hard on `prod`, soft on `devel`). |
 
 ### `karpenter` (off by default)
 
