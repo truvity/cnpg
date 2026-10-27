@@ -13,11 +13,6 @@
   "automergeType": "pr",
   "automergeStrategy": "rebase",
   "platformAutomerge": true,
-  "lockFileMaintenance": {
-    "description": "The preset does not run lockfile maintenance; go.sum needs it kept current independently of any dependency bump.",
-    "enabled": true,
-    "schedule": ["before 6am"]
-  },
   "customManagers": [
     {
       "customType": "regex",
