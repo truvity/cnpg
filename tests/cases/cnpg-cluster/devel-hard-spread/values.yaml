@@ -1,0 +1,11 @@
+# scheduling.hardSpread: true on the devel profile renders the prod
+# placement (required anti-affinity, DoNotSchedule zone spread) for a
+# three-instance cluster on reclaimable nodes.
+clusterName: pg
+namespace: app
+profile: devel
+instances: 3
+scheduling:
+  hardSpread: true
+bootstrap:
+  initdb: {database: app, owner: app-owner}

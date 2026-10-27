@@ -7,6 +7,9 @@ project overrides knobs, never the posture. */}}
 {{- end }}
 {{- $backup := include "cnpg-cluster.backup" . | fromJson }}
 {{- $prod := eq .Values.profile "prod" }}
+{{- /* scheduling.hardSpread: unset follows the profile; true/false forces the hard (required anti-affinity + DoNotSchedule zone spread) or soft placement on either profile. */}}
+{{- $hard := $prod }}
+{{- if not (kindIs "invalid" .Values.scheduling.hardSpread) }}{{- $hard = .Values.scheduling.hardSpread }}{{- end }}
 {{- $instances := .Values.instances | default ($prod | ternary 3 1) }}
 {{- if and $prod (lt (int $instances) 3) }}
 {{- fail (printf "prod posture requires instances >= 3 (got %d) — failoverQuorum is meaningless below 3 and a 2-instance prod is forbidden" (int $instances)) }}
@@ -177,7 +180,7 @@ spec:
   {{- $tolerations = append $tolerations (dict "key" $pool "operator" "Equal" "value" "true" "effect" "NoSchedule") }}
   {{- end }}
   affinity:
-    {{- if $prod }}
+    {{- if $hard }}
     podAntiAffinityType: required
     {{- end }}
     {{- if $pool }}
@@ -204,7 +207,7 @@ spec:
   topologySpreadConstraints:
     - maxSkew: 1
       topologyKey: topology.kubernetes.io/zone
-      whenUnsatisfiable: {{ $prod | ternary "DoNotSchedule" "ScheduleAnyway" }}
+      whenUnsatisfiable: {{ $hard | ternary "DoNotSchedule" "ScheduleAnyway" }}
       labelSelector:
         matchLabels:
           cnpg.io/cluster: {{ .Values.clusterName }}

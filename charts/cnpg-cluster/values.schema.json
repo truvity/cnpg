@@ -395,11 +395,15 @@
     "scheduling": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Node placement. Both keys are estate facts (a pool name, a taint) and have no default — set them to reproduce a specific platform's shape.",
+      "description": "Node placement. databasePool and tolerations are estate facts (a pool name, a taint) and have no default — set them to reproduce a specific platform's shape.",
       "properties": {
         "databasePool": {
           "type": "string",
           "description": "Karpenter (or any) node pool name. Selects nodeSelector 'karpenter.sh/nodepool' and adds a matching Equal/NoSchedule toleration automatically. Empty/absent = no pool, no nodeSelector, no pool toleration."
+        },
+        "hardSpread": {
+          "type": ["boolean", "null"],
+          "description": "true renders podAntiAffinityType required and a zone topologySpreadConstraint with whenUnsatisfiable DoNotSchedule; false renders no anti-affinity and ScheduleAnyway. Unset (null) follows the profile: hard on prod, soft on devel."
         },
         "tolerations": {
           "type": "array",

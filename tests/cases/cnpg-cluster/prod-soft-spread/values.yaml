@@ -1,0 +1,9 @@
+# scheduling.hardSpread: false on the prod profile renders the soft
+# placement (no anti-affinity, ScheduleAnyway zone spread).
+clusterName: pg
+namespace: app
+profile: prod
+scheduling:
+  hardSpread: false
+bootstrap:
+  initdb: {database: app, owner: app-owner}

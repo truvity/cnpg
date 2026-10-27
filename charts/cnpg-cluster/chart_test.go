@@ -134,6 +134,15 @@ func TestPoolSelector_PlainInput(t *testing.T) {
 	assert.Empty(t, develPinned.Spec.Affinity.PodAntiAffinityType, "pinning a pool must not smuggle in the prod anti-affinity")
 }
 
+// TestHardSpread_OverridesProfile: scheduling.hardSpread forces the hard
+// placement on devel and the soft one on prod; unset follows the profile.
+func TestHardSpread_OverridesProfile(t *testing.T) {
+	assert.Equal(t, "required", renderCluster(t, "profile=devel", "instances=3", "scheduling.hardSpread=true").Spec.Affinity.PodAntiAffinityType)
+	assert.Empty(t, renderCluster(t, "profile=prod", "scheduling.hardSpread=false").Spec.Affinity.PodAntiAffinityType)
+	assert.Equal(t, "required", renderCluster(t, "profile=prod").Spec.Affinity.PodAntiAffinityType)
+	assert.Empty(t, renderCluster(t, "profile=devel").Spec.Affinity.PodAntiAffinityType)
+}
+
 // TestTolerations_PlainInput: no toleration is hard-coded (C13) — the
 // arch taint a previous version always emitted is now something an
 // estate opts into via scheduling.tolerations. Setting
