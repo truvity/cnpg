@@ -346,6 +346,24 @@ postgresql:
 
 enableSuperuserAccess: false
 
+# ── Primary lease ────────────────────────────────────────────────────
+# Timings of the Kubernetes Lease the primary instance holds (spec.primaryLease,
+# CloudNativePG 1.30 or later). The holder renews every retryPeriodSeconds, so
+# the default of 15 cuts the lease writes to the API server (and its audit log)
+# from one per 2 s per database to one per 15 s. The price is failover time: a
+# standby promotes only after the lease has gone unrenewed for
+# leaseDurationSeconds, so an unplanned primary loss takes up to about a minute
+# to recover, against about 15 s with CloudNativePG's own defaults (15/10/2). A
+# planned switchover releases the lease and is not slowed down by the duration,
+# only by up to one retry period.
+# Constraint: retryPeriodSeconds < renewDeadlineSeconds < leaseDurationSeconds.
+# null renders no primaryLease: the operator's defaults (15/10/2) apply, and the
+# chart also works on an operator older than 1.30.
+primaryLease:
+  leaseDurationSeconds: 60
+  renewDeadlineSeconds: 40
+  retryPeriodSeconds: 15
+
 # ── Server certificate (optional) ────────────────────────────────────
 # By default the operator mints a self-signed CA per cluster and signs
 # the server certificate from it. Setting serverTLS.issuerRef.name makes

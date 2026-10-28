@@ -53,6 +53,17 @@ spec:
   # pool's force-drain deadline (devel = no PDB).
   enablePDB: {{ $prod }}
 
+  {{- with .Values.primaryLease }}
+  # The Kubernetes Lease the primary holds and renews (CloudNativePG 1.30+).
+  # The holder writes it every retryPeriodSeconds, so the audit log of a
+  # cluster grows by one entry per renewal per database. A replica promotes
+  # only after the lease has gone unrenewed for leaseDurationSeconds.
+  primaryLease:
+    leaseDurationSeconds: {{ .leaseDurationSeconds }}
+    renewDeadlineSeconds: {{ .renewDeadlineSeconds }}
+    retryPeriodSeconds: {{ .retryPeriodSeconds }}
+  {{- end }}
+
   {{- $existing := include "cnpg-cluster.serverTLSExisting" . }}
   {{- if or (include "cnpg-cluster.serverTLSEnabled" .) $existing (include "cnpg-cluster.replicationEnabled" .) }}
   certificates:

@@ -24,12 +24,13 @@ type (
 	cluster struct {
 		Kind string `json:"kind"`
 		Spec struct {
-			Instances         int   `json:"instances"`
-			EnablePDB         *bool `json:"enablePDB"`
+			Instances         int            `json:"instances"`
+			EnablePDB         *bool          `json:"enablePDB"`
+			PrimaryLease      map[string]int `json:"primaryLease"`
 			InheritedMetadata *struct {
 				Annotations map[string]string `json:"annotations"`
 			} `json:"inheritedMetadata"`
-			Affinity  struct {
+			Affinity struct {
 				NodeSelector        map[string]string        `json:"nodeSelector"`
 				PodAntiAffinityType string                   `json:"podAntiAffinityType"`
 				Tolerations         []map[string]interface{} `json:"tolerations"`
@@ -132,6 +133,19 @@ func TestPoolSelector_PlainInput(t *testing.T) {
 	develPinned := renderCluster(t, "profile=devel", "scheduling.databasePool=durable")
 	assert.Equal(t, "durable", develPinned.Spec.Affinity.NodeSelector["karpenter.sh/nodepool"], "an explicit pool pins the devel profile too")
 	assert.Empty(t, develPinned.Spec.Affinity.PodAntiAffinityType, "pinning a pool must not smuggle in the prod anti-affinity")
+}
+
+// TestPrimaryLease_SlowByDefault: the primary lease renews every 15 s, not
+// every 2 s, to keep the API server's audit log small; null leaves the
+// operator's own defaults, and the timings can be set per cluster.
+func TestPrimaryLease_SlowByDefault(t *testing.T) {
+	want := map[string]int{"leaseDurationSeconds": 60, "renewDeadlineSeconds": 40, "retryPeriodSeconds": 15}
+	assert.Equal(t, want, renderCluster(t, "profile=devel").Spec.PrimaryLease)
+	assert.Equal(t, want, renderCluster(t, "profile=prod").Spec.PrimaryLease)
+	assert.Empty(t, renderCluster(t, "profile=devel", "primaryLease=null").Spec.PrimaryLease, "null renders no primaryLease")
+
+	custom := renderCluster(t, "profile=prod", "primaryLease.leaseDurationSeconds=30", "primaryLease.renewDeadlineSeconds=20", "primaryLease.retryPeriodSeconds=5")
+	assert.Equal(t, map[string]int{"leaseDurationSeconds": 30, "renewDeadlineSeconds": 20, "retryPeriodSeconds": 5}, custom.Spec.PrimaryLease)
 }
 
 // TestHardSpread_OverridesProfile: scheduling.hardSpread forces the hard

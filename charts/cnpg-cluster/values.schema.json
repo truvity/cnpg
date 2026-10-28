@@ -282,6 +282,17 @@
       }
     },
     "enableSuperuserAccess": { "type": "boolean" },
+    "primaryLease": {
+      "type": ["object", "null"],
+      "description": "Timings of the Kubernetes Lease the primary holds (spec.primaryLease, CloudNativePG 1.30+). null renders none and the operator's defaults (15/10/2) apply.",
+      "additionalProperties": false,
+      "required": ["leaseDurationSeconds", "renewDeadlineSeconds", "retryPeriodSeconds"],
+      "properties": {
+        "leaseDurationSeconds": { "type": "integer", "minimum": 1, "description": "How long the lease is valid before a standby may take it. Greater than renewDeadlineSeconds." },
+        "renewDeadlineSeconds": { "type": "integer", "minimum": 1, "description": "How long the primary retries a renewal before it gives up and stops. Less than leaseDurationSeconds." },
+        "retryPeriodSeconds": { "type": "integer", "minimum": 1, "description": "Seconds between renewal attempts by the holder. Less than renewDeadlineSeconds." }
+      }
+    },
     "serverTLS": {
       "type": "object",
       "additionalProperties": false,

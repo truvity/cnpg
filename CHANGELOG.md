@@ -6,6 +6,10 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+### Changed
+
+- **Behaviour (charts `cnpg-cluster`, `cnpg-projects`): the primary lease renews every 15 s, not every 2 s.** The chart now renders `spec.primaryLease` with `leaseDurationSeconds: 60`, `renewDeadlineSeconds: 40` and `retryPeriodSeconds: 15` (CloudNativePG's own defaults are 15, 10 and 2). The primary writes that Kubernetes Lease once per retry period, so every database cost the API server's audit log about 1,800 entries an hour; it now costs about 240. The price is failover time: a standby promotes only after the lease has gone unrenewed for `leaseDurationSeconds`, so an unplanned loss of the primary takes up to about a minute to recover (about 15 s before). A planned switchover releases the lease and waits at most one retry period. Needs CloudNativePG 1.30 or later (the CRD has no `primaryLease` before). Set `primaryLease: null` to render none and keep the operator's defaults, or set the three values per cluster; they must satisfy `retryPeriodSeconds < renewDeadlineSeconds < leaseDurationSeconds`. A consumer that renders these charts therefore sees a diff on every Cluster.
+
 ## v2.37.0
 
 ### Changed
