@@ -15,6 +15,14 @@ spec:
   # with 0 allowed disruptions and block node drains until the node
   # pool's force-drain deadline (devel = no PDB).
   enablePDB: false
+  # The Kubernetes Lease the primary holds and renews (CloudNativePG 1.30+).
+  # The holder writes it every retryPeriodSeconds, so the audit log of a
+  # cluster grows by one entry per renewal per database. A replica promotes
+  # only after the lease has gone unrenewed for leaseDurationSeconds.
+  primaryLease:
+    leaseDurationSeconds: 60
+    renewDeadlineSeconds: 40
+    retryPeriodSeconds: 15
   postgresql:
     parameters:
       synchronous_commit: "off" # devel: fsync stays ON; test suites fly
