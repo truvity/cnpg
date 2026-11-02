@@ -1,0 +1,20 @@
+# The opt-in stuck-reload guard (cloudnative-pg#11627): a CronJob with its
+# own ServiceAccount, Role and RoleBinding, with a non-default schedule,
+# window, phase list and an image pinned by digest.
+clusterName: pg
+namespace: app
+profile: prod
+bootstrap:
+  initdb: {database: app, owner: app-owner}
+guards:
+  stuckReload:
+    enabled: true
+    schedule: "*/5 * * * *"
+    stuckFor: 10m
+    phases:
+      - Waiting for the instances to become active
+      - Switchover in progress
+    image:
+      tag: "2.39.0"
+      digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    activeDeadlineSeconds: 90

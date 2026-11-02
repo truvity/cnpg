@@ -236,8 +236,8 @@ and hand in here.
 
 ### `guards` (pre-sync checks)
 
-Helm `pre-install,pre-upgrade` hooks, which Argo CD runs as `PreSync` hooks on
-every sync. See [cnpgctl.md](cnpgctl.md#guard-empty-bootstrap) for the check
+`emptyBootstrap` is a Helm `pre-install,pre-upgrade` hook, which Argo CD runs as a `PreSync` hook on
+every sync; `stuckReload` is an ordinary CronJob. See [cnpgctl.md](cnpgctl.md#guard-empty-bootstrap) for the check
 and [runbooks.md](runbooks.md#the-empty-bootstrap-guard-refused-a-sync) for a refusal.
 
 | Key | Type | Default | What it does |
@@ -250,6 +250,13 @@ and [runbooks.md](runbooks.md#the-empty-bootstrap-guard-refused-a-sync) for a re
 | `guards.emptyBootstrap.image.*` | — | `ghcr.io/truvity/cnpg/cnpgctl`, tag = the chart's `appVersion`, no digest, `IfNotPresent` | The `cnpgctl` image this repository's release publishes at its own version. |
 | `guards.emptyBootstrap.activeDeadlineSeconds` | int | `300` | A `Job` not finished by then fails, and the sync with it. A refusal (exit 1) fails it at once (`podFailurePolicy`); an error (exit 2) is retried twice. |
 | `guards.emptyBootstrap.resources` | object | `{}` | Empty = `10m`/`32Mi` requested, `64Mi` limit. |
+| `guards.stuckReload.enabled` | bool | `false` | **Opt-in** workaround for [cloudnative-pg#11627](https://github.com/cloudnative-pg/cloudnative-pg/issues/11627): a plain `CronJob` (not a hook) running `cnpgctl guard stuck-reload`, which runs `SELECT pg_reload_conf()` on every ready instance when the `Cluster` has shown `Ready=False` for `stuckFor` at one of `phases` with every instance ready ([cnpgctl.md](cnpgctl.md#guard-stuck-reload)). Renders the `CronJob`, its own ServiceAccount `{clusterName}-stuck-reload`, a `Role` (`get` this `Cluster`; `list` pods; `create` `pods/exec` and `events`) and a `RoleBinding`, in the cluster's namespace; no NetworkPolicy (the exec goes through the API server). Nothing changes while it is off. |
+| `guards.stuckReload.schedule` | string | `*/3 * * * *` | Cron schedule; a run that does not finish is not overlapped (`Forbid`). |
+| `guards.stuckReload.stuckFor` | duration | `5m` | How long `Ready` must have been not-`True`. |
+| `guards.stuckReload.phases` | []string | the three phases of the bug | `status.phase` values that count as stuck (no commas). |
+| `guards.stuckReload.image.*` | — | as `guards.emptyBootstrap.image.*` | The `cnpgctl` image; the tag defaults to the chart's `appVersion`, so chart and image release together. |
+| `guards.stuckReload.activeDeadlineSeconds` | int | `120` | A run not finished by then fails; the next schedule tick retries. |
+| `guards.stuckReload.resources` | object | `{}` | Empty = `10m`/`32Mi` requested, `64Mi` limit. |
 
 ### `databases`, `customers`, `roles` (project-declared)
 

@@ -1,12 +1,13 @@
 # cnpgctl
 
 `cnpgctl` operates on CloudNativePG clusters built from these charts. It has
-four commands:
+five commands:
 
 | command | writes? | what |
 |---|---|---|
 | `verify` | never: every call it makes to the Kubernetes API is a GET | read-only assertions against a live cluster |
 | `guard empty-bootstrap` | never: a GET of one `Cluster` and one list of the object store | refuses an `initdb` bootstrap onto a non-empty archive |
+| `guard stuck-reload` | **yes**, but only `SELECT pg_reload_conf()` in the instance pods of one `Cluster` (an `exec`) and one `Event` | reloads the configuration of every instance of a `Cluster` stuck by cloudnative-pg#11627 |
 | `drill` | **yes**: it creates and deletes one `Cluster` and one `ObjectStore`, and writes one `ConfigMap`, in the drill namespace | a restore drill of a cluster's archive |
 | `drill-metrics` | never | serves the recorded drill results as metrics |
 
@@ -154,6 +155,63 @@ What to do when it refuses: [runbooks.md](runbooks.md#the-empty-bootstrap-guard-
 
 In Go: `guard.EmptyBootstrap` with a `guard.ClusterSource` (`verify.KubeSource`
 implements it) and a `guard.ArchiveLister` (`guard.S3Lister`).
+
+## guard stuck-reload
+
+```sh
+cnpgctl guard stuck-reload --namespace app --cluster pg \
+  [--stuck-for 5m] [--phases "<phase>"]... [--dry-run]
+```
+
+A workaround for [cloudnative-pg#11627](https://github.com/cloudnative-pg/cloudnative-pg/issues/11627),
+behind the `cnpg-cluster` chart's opt-in `guards.stuckReload`
+([reference.md](reference.md#guards-pre-sync-checks)). After a primary change
+(a node rotation, say) the instance manager rewrites `custom.conf` while
+postgres is not yet accepting connections; the reload it decided on is dropped
+and never retried. The `Cluster` then sits at a transient `status.phase` with
+`Ready=False` although every instance is ready, and restarting the operator or
+the pods does not help. `SELECT pg_reload_conf()` on every instance does, within
+seconds; it changes no data and is idempotent.
+
+It acts only when ALL of these hold; otherwise it logs why and exits 0:
+
+1. `status.phase` is one of `--phases` (default: `Waiting for the instances to
+   become active`, `Switchover in progress`, `Cluster cannot proceed to
+   reconciliation due to an error while interacting with plugins`). The flag
+   repeats or takes a comma list, so a phase name cannot contain a comma.
+2. `spec.instances` is above 0 and `status.readyInstances` equals it.
+3. The `Ready` condition exists, its status is not `True`, and its
+   `lastTransitionTime` is older than `--stuck-for` (default `5m`). A missing
+   or unparsable time means do nothing.
+4. The `Cluster` is not hibernated (`cnpg.io/hibernation: "on"`) and has no
+   fenced instances (`cnpg.io/fencedInstances` set to anything but `""` or
+   `[]`).
+
+Then, in every pod with the labels `cnpg.io/cluster=<cluster>` and
+`cnpg.io/podRole=instance` that is `Running`, not terminating, and whose
+`postgres` container is ready (replicas and the primary alike), it execs
+`psql -U postgres -XAtqc "SELECT pg_reload_conf()"` in the `postgres`
+container, over the exec subresource (a websocket stream, falling back to SPDY),
+and checks that the output is `t`. Every pod is tried even if one fails. Each
+decision is one structured log line (cluster, phase, action, pods); after a
+reload it creates a `Normal` `Event` with reason `StuckReload` on the `Cluster`
+naming the pods (a failure to create it is logged, not fatal). `--dry-run`
+decides and logs and runs nothing.
+
+| outcome | exit |
+|---|---|
+| nothing to do, or the reload is done | 0 |
+| the API did not answer, an exec failed or did not print `t`, a flag is wrong | 2 (the CronJob's next run retries) |
+
+RBAC, all in the `Cluster`'s namespace: `get` on the one `Cluster`, `list` on
+pods, `create` on `pods/exec` and on `events`. RBAC cannot narrow `pods/exec` by
+label, so the Role covers every pod of the namespace; the binary only ever
+execs the fixed statement into this `Cluster`'s instance pods. The chart renders
+the Role, its own ServiceAccount `<cluster>-stuck-reload` and the CronJob.
+
+In Go: `stuckreload.Decide` (pure) and `stuckreload.Run` with a
+`stuckreload.Source` and a `stuckreload.Executor` (`stuckreload.Kube`
+implements both).
 
 ## drill
 

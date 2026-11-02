@@ -96,3 +96,13 @@ func TestGuardFlagErrors(t *testing.T) {
 		assert.NotErrorIs(t, err, errFailed, "a usage error is exit 2, not a refusal: %v", args)
 	}
 }
+
+func TestGuardStuckReload_Flags(t *testing.T) {
+	var out, errb bytes.Buffer
+
+	err := runGuard(t.Context(), []string{"stuck-reload", "--namespace", "app"}, &out, &errb)
+	require.ErrorContains(t, err, "--namespace and --cluster are required")
+
+	err = runGuard(t.Context(), []string{"stuck-reload", "--bogus"}, &out, &errb)
+	require.Error(t, err)
+}

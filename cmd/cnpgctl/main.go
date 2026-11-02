@@ -3,6 +3,7 @@
 //
 //	cnpgctl verify --namespace <ns> --cluster <name>   read-only assertions
 //	cnpgctl guard empty-bootstrap --namespace <ns> --cluster <name> --destination s3://<bucket>/<path> [--server-name <dir>]
+//	cnpgctl guard stuck-reload --namespace <ns> --cluster <name> [--stuck-for 5m] [--dry-run]
 //	cnpgctl drill --namespace <ns> --cluster <name>    a restore drill (creates and deletes a Cluster)
 //	cnpgctl drill-metrics --namespace <ns> --source <ns>/<cluster>   exports drill results
 //
@@ -55,12 +56,14 @@ Usage:
   cnpgctl verify [flags]          read-only assertions against a live cluster
   cnpgctl guard empty-bootstrap [flags]
                                   refuse an initdb bootstrap onto a non-empty archive
+  cnpgctl guard stuck-reload [flags]
+                                  reload every instance of a Cluster stuck by cloudnative-pg#11627
   cnpgctl drill [flags]           a restore drill: recover the archive into a
                                   throwaway Cluster, check it, delete it (WRITES)
   cnpgctl drill-metrics [flags]   serve the recorded drill results as metrics
   cnpgctl version
 
-Run "cnpgctl <command> -h" (or "cnpgctl guard empty-bootstrap -h") for the flags.
+Run "cnpgctl <command> -h" (or "cnpgctl guard stuck-reload -h") for the flags.
 `
 
 // deps override the clients (tests); zero values mean the real ones.
