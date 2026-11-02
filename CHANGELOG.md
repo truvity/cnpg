@@ -6,6 +6,10 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+## v2.38.1
+
+- Dependency updates.
+
 ## v2.38.0
 
 ### Changed
