@@ -160,7 +160,7 @@ charts:
 # upstream version (the chart's version IS the upstream version; the release
 # publishes it at that version, once, via hack/release-crd-charts.sh).
 # Review the diff before committing.
-crdctl := "github.com/truvity/ocictl/cmd/crdctl@v0.7.1"
+crdctl := "github.com/truvity/ocictl/cmd/crdctl@v0.12.0"
 
 crds:
     #!/usr/bin/env bash
