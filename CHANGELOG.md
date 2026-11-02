@@ -6,6 +6,10 @@ upgrade is expected to clear.
 
 ## Unreleased
 
+### Added
+
+- **Feature (chart `cnpg-cluster`, `cnpgctl`): opt-in stuck-reload guard, `guards.stuckReload`, and `cnpgctl guard stuck-reload`.** Works around [cloudnative-pg#11627](https://github.com/cloudnative-pg/cloudnative-pg/issues/11627): after a primary change (a node rotation, say) a dropped configuration reload leaves the `Cluster` at `status.phase` "Waiting for the instances to become active" (or "Switchover in progress", or the plugin-error phase) with `Ready=False` for good, although every instance is ready. When the `Cluster` shows that signature for longer than `stuckFor` (default `5m`), is not hibernated and has no fenced instances, the command runs `SELECT pg_reload_conf()` (idempotent, no data change) in every ready instance pod and records a `StuckReload` Event on the `Cluster`. The chart renders a CronJob (every 3 minutes by default) with its own ServiceAccount `<cluster>-stuck-reload` and a namespace-scoped Role (`get` this `Cluster`, `list` pods, `create` `pods/exec` and `events`); `pods/exec` cannot be narrowed by label in RBAC, so the binary only ever runs the fixed statement in this `Cluster`'s instance pods. **No default change:** `guards.stuckReload.enabled` is `false`, so no existing render changes. The image tag defaults to the chart's `appVersion`, so chart and image release together. The Go module gains `gorilla/websocket`, `moby/spdystream` and `k8s.io/streaming` as indirect dependencies of client-go's exec.
+
 ## v2.38.0
 
 ### Changed

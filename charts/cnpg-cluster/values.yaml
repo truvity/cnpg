@@ -278,6 +278,43 @@ guards:
     # Empty = 10m/32Mi requested, 64Mi limit.
     resources: {}
 
+  # The stuck-reload guard (OPT-IN, off by default: nothing is rendered
+  # unless enabled). Works around cloudnative-pg/cloudnative-pg#11627: after
+  # a primary change (a node rotation, say) the instance manager rewrites
+  # custom.conf while postgres is not yet accepting connections, and the
+  # reload it decided on is dropped and never retried. The Cluster then sits
+  # at status.phase "Waiting for the instances to become active" (or
+  # "Switchover in progress", or the plugin-error phase) with Ready=False
+  # although every instance is ready; restarting the operator or the pods
+  # does not help. This is a plain CronJob (NOT a hook) that runs
+  # `cnpgctl guard stuck-reload` (docs/cnpgctl.md): when the Cluster shows
+  # that signature for longer than stuckFor it runs `SELECT pg_reload_conf()`
+  # on every ready instance, which is idempotent and changes no data. It
+  # renders its own ServiceAccount {clusterName}-stuck-reload, a Role
+  # (get this Cluster; list pods; create pods/exec and events) and a
+  # RoleBinding, in the cluster's namespace.
+  stuckReload:
+    enabled: false
+    schedule: "*/3 * * * *"
+    # Ready must have been not-True for at least this long (a Go duration).
+    stuckFor: 5m
+    # status.phase values that count as stuck.
+    phases:
+      - Waiting for the instances to become active
+      - Switchover in progress
+      - Cluster cannot proceed to reconciliation due to an error while interacting with plugins
+    # The cnpgctl image, same shape as guards.emptyBootstrap.image; the tag
+    # defaults to the chart's appVersion, so chart and image release together.
+    image:
+      repository: ghcr.io/truvity/cnpg/cnpgctl
+      tag: ""
+      digest: ""
+      pullPolicy: IfNotPresent
+    # Seconds before a run that has not finished is failed.
+    activeDeadlineSeconds: 120
+    # Empty = 10m/32Mi requested, 64Mi limit.
+    resources: {}
+
 # Additional databases in this cluster (absorbs the retired
 # cnpg-database chart): name/owner/schemas/ensure.
 databases: []
