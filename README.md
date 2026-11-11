@@ -202,11 +202,27 @@ placeholder. It ships no subcharts, because the release workflow cannot
 package a chart's dependencies today; see
 [`docs/decisions/0002-operator-chart.md`](docs/decisions/0002-operator-chart.md).
 
+## Platform part and company part
+
+**Platform part.** The platform admin applies `cnpg-platform` once per
+Kubernetes cluster, with the operator and barman-cloud plugin presets from
+[`examples/operator/`](examples/operator/). The admin also applies
+`cnpg-projects` (or `cnpg-cluster` per cluster, with `cnpg-project-platform`),
+`cnpg-backup-access` and `cnpg-restore-drill`. The platform sets `profile` and
+the `backup` coordinates of each cluster. See
+[docs/adoption.md](docs/adoption.md).
+
+**Company part.** A company's SRE installs `cnpg-database` in the company's own
+namespace for its databases, roles and client certificates, and includes
+`cnpg-client` in each application chart that connects. The company can run
+`cnpgctl verify` against its cluster. See [docs/connecting.md](docs/connecting.md)
+and [docs/cnpgctl.md](docs/cnpgctl.md).
+
 ## Consumers
 
 | repo | consumers (surface) |
 |---|---|
-| cnpg-projects, cnpg-backup-access, cnpg-platform, cnpg-database | truvity/gitops (the per-project Clusters, their backup access and the platform objects), with `cnpgctl verify` as a verification step |
+| cnpg-projects, cnpg-backup-access, cnpg-platform, cnpg-database | the maintainers' platform repository (the per-project Clusters, their backup access and the platform objects), with `cnpgctl verify` as a verification step |
 | cnpg-cluster | the chart `cnpg-projects` carries per row; installable on its own |
 | clients/ | the Go, TypeScript, Python and Kotlin adapters, used by the applications that connect |
 
