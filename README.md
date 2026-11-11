@@ -207,17 +207,20 @@ package a chart's dependencies today; see
 **Platform part.** The platform admin applies `cnpg-platform` once per
 Kubernetes cluster, with the operator and barman-cloud plugin presets from
 [`examples/operator/`](examples/operator/). The admin also applies
-`cnpg-projects` for every project's `Cluster` (or `cnpg-cluster` for a single
-cluster), `cnpg-project-platform` where a project's own chart renders its
-`Cluster`, `cnpg-backup-access` and `cnpg-restore-drill`, and checks a cluster
-with `cnpgctl verify`. The platform sets `profile` and the `backup` coordinates
-of each cluster. See [docs/adoption.md](docs/adoption.md) and
-[docs/cnpgctl.md](docs/cnpgctl.md).
+`cnpg-projects` (or `cnpg-cluster` for a single cluster) to give each project
+its `Cluster`, `cnpg-project-platform` for the `ObjectStore`, `ScheduledBackup`
+and server certificate beside a `Cluster` that another chart renders,
+`cnpg-backup-access` and `cnpg-restore-drill`. The platform sets `profile` and
+the `backup` coordinates of each cluster and checks it with `cnpgctl verify`.
+See [docs/adoption.md](docs/adoption.md) and [docs/cnpgctl.md](docs/cnpgctl.md).
 
-**Company part.** A company's SRE installs `cnpg-database` in the company's own
-namespace, against the cluster the platform gave it, for its databases, roles
-and client certificates, and includes `cnpg-client` in each application chart
-that connects. See [docs/connecting.md](docs/connecting.md).
+**Company part.** A company's SRE declares `cnpg-database` for its databases,
+roles and client certificates, usually as a dependency of its application
+chart, which Argo CD applies from the company's gitops repository in the
+company's own namespace, against the `Cluster` the platform gave it. Each
+application chart that connects includes `cnpg-client`. The company does not
+render or change that `Cluster`, its backups or its restore drill. See
+[docs/connecting.md](docs/connecting.md) and [docs/adoption.md](docs/adoption.md).
 
 ## Consumers
 
