@@ -202,11 +202,31 @@ placeholder. It ships no subcharts, because the release workflow cannot
 package a chart's dependencies today; see
 [`docs/decisions/0002-operator-chart.md`](docs/decisions/0002-operator-chart.md).
 
+## Platform part and company part
+
+**Platform part.** The platform admin applies `cnpg-platform` once per
+Kubernetes cluster, with the operator and barman-cloud plugin presets from
+[`examples/operator/`](examples/operator/). The admin also applies
+`cnpg-projects` (or `cnpg-cluster` for a single cluster) to give each project
+its `Cluster`, `cnpg-project-platform` for the `ObjectStore`, `ScheduledBackup`
+and server certificate beside a `Cluster` that another chart renders,
+`cnpg-backup-access` and `cnpg-restore-drill`. The platform sets `profile` and
+the `backup` coordinates of each cluster and checks it with `cnpgctl verify`.
+See [docs/adoption.md](docs/adoption.md) and [docs/cnpgctl.md](docs/cnpgctl.md).
+
+**Company part.** A company's SRE declares `cnpg-database` for its databases,
+roles and client certificates, usually as a dependency of its application
+chart, which Argo CD applies from the company's gitops repository in the
+company's own namespace, against the `Cluster` the platform gave it. Each
+application chart that connects includes `cnpg-client`. The company does not
+render or change that `Cluster`, its backups or its restore drill. See
+[docs/connecting.md](docs/connecting.md) and [docs/adoption.md](docs/adoption.md).
+
 ## Consumers
 
 | repo | consumers (surface) |
 |---|---|
-| cnpg-projects, cnpg-backup-access, cnpg-platform, cnpg-database | truvity/gitops (the per-project Clusters, their backup access and the platform objects), with `cnpgctl verify` as a verification step |
+| cnpg-projects, cnpg-backup-access, cnpg-platform, cnpg-database | the maintainers' platform repository (the per-project Clusters, their backup access and the platform objects), with `cnpgctl verify` as a verification step |
 | cnpg-cluster | the chart `cnpg-projects` carries per row; installable on its own |
 | clients/ | the Go, TypeScript, Python and Kotlin adapters, used by the applications that connect |
 
