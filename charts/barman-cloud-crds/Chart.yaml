@@ -9,10 +9,10 @@ type: application
 # the annotation, version and appVersion equal to crdctl.yaml's repo and
 # pinned_version (checked by crd-charts-lint), and the release publishes the
 # chart at that version only if it is not already in the registry.
-version: 0.13.0
-appVersion: "0.13.0"
+version: 0.16.0
+appVersion: "0.16.0"
 annotations:
-  truvity.io/mirror: "cloudnative-pg/plugin-barman-cloud@0.13.0"
+  truvity.io/mirror: "cloudnative-pg/plugin-barman-cloud@0.16.0"
 home: https://github.com/truvity/cnpg
 sources:
   - https://github.com/truvity/cnpg

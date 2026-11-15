@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Feature (chart `barman-cloud-crds`): the CustomResourceDefinitions of the barman-cloud plugin move to upstream v0.16.0 (chart version 0.16.0, from 0.13.0).** The new fields are additive: `spec.s3AddressingStyle` on an `ObjectStore` (`auto`, `virtual` or `path`; needs `s3Credentials` and Barman 3.18 or later), `spec.s3Credentials.sseCustomerKey` (a Secret reference to a base64 256-bit key for SSE-C; it cannot be combined with `encryption` on `data` or `wal`), and `zstd` in the base backup compression enum. Existing objects validate as before. Upstream v0.16.0 needs CloudNativePG 1.30 or later. Install these CRDs before, or with, the plugin that serves them.
+
 ## v2.39.2
 
 - Dependency updates.
