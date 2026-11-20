@@ -376,3 +376,167 @@ func TestProjectBucketsReplicaMapping(t *testing.T) {
 
 	checkGolden(t, "projects/urns-replica.json", dumpURNs(t, regs))
 }
+
+// extraRoleArgs gives the first cluster the dotted names beside its defaults.
+func extraRoleArgs() *backupstore.ProjectBucketsArgs {
+	a := bucketSetArgs()
+	a.Projects[0].Clusters[0].ExtraArchiveRoleNames = []string{"staging-acme-billing-eu.pg-archive"}
+	a.Projects[0].Clusters[0].ExtraRestoreRoleNames = []string{"staging-acme-billing-eu.pg-restore"}
+
+	return a
+}
+
+// TestExtraRoleNamesAreAdmittedBesideTheDefaults: the extra names become
+// tenants of the same prefix, after both defaults of the cluster; the archive
+// one carries the same session tags as the default; nothing else moves.
+func TestExtraRoleNamesAreAdmittedBesideTheDefaults(t *testing.T) {
+	plain, err := backupstore.BuildProjectBuckets(bucketSetArgs())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	built, err := backupstore.BuildProjectBuckets(extraRoleArgs())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tn := built[0].Args.Tenants
+	if len(tn) != 4 {
+		t.Fatalf("tenants: %+v", tn)
+	}
+
+	// The first two are the defaults, as before.
+	if tn[0] != plain[0].Args.Tenants[0] && *tn[0].SessionTags != *plain[0].Args.Tenants[0].SessionTags {
+		t.Errorf("default archive tenant moved: %+v", tn[0])
+	}
+
+	if tn[1] != plain[0].Args.Tenants[1] {
+		t.Errorf("default restore tenant moved: %+v", tn[1])
+	}
+
+	arch, rest := tn[2], tn[3]
+	pre := "arn:" + partition + ":iam::" + src + ":role/"
+
+	if arch.RoleARN != pre+"staging-acme-billing-eu.pg-archive" || arch.Prefix != "billing/billing-infra-pg/" ||
+		arch.Purpose != backupstore.PurposeArchive || arch.SessionTags == nil || *arch.SessionTags != *tn[0].SessionTags {
+		t.Errorf("extra archive tenant: %+v", arch)
+	}
+
+	if rest.RoleARN != pre+"staging-acme-billing-eu.pg-restore" || rest.Prefix != "billing/billing-infra-pg/" ||
+		rest.Purpose != backupstore.PurposeRestore || rest.SessionTags != nil {
+		t.Errorf("extra restore tenant: %+v", rest)
+	}
+
+	// The other project is untouched.
+	if len(built[1].Args.Tenants) != len(plain[1].Args.Tenants) {
+		t.Errorf("another project changed: %+v", built[1].Args.Tenants)
+	}
+}
+
+// TestUnsetExtraRoleNamesChangeNothing: nil and empty lists build exactly the
+// tenants of a caller that never had the fields.
+func TestUnsetExtraRoleNamesChangeNothing(t *testing.T) {
+	a := bucketSetArgs()
+	a.Projects[0].Clusters[0].ExtraArchiveRoleNames = []string{}
+	a.Projects[0].Clusters[0].ExtraRestoreRoleNames = nil
+
+	got, err := backupstore.BuildProjectBuckets(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want, err := backupstore.BuildProjectBuckets(bucketSetArgs())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := range want {
+		g, w := dumpTenants(got[i].Args.Tenants), dumpTenants(want[i].Args.Tenants)
+		if g != w {
+			t.Errorf("project %d tenants differ:\n%s\nwant\n%s", i, g, w)
+		}
+	}
+}
+
+func dumpTenants(tn []backupstore.Tenant) string {
+	raw, _ := json.Marshal(tn)
+
+	return string(raw)
+}
+
+// TestExtraRoleNamesReachBucketAndKeyPolicy: both the default and the extra
+// ARNs are principals of the allows and keep their own deny outside the
+// prefix, and in KMS mode both reach the key policy.
+func TestExtraRoleNamesReachBucketAndKeyPolicy(t *testing.T) {
+	a := extraRoleArgs()
+	a.Encryption = backupstore.EncryptionKMS
+	a.KeyDescription = func(project, bucket string) string { return "backups of " + project }
+
+	regs := runProjects(t, a)
+	bucketName := "acme-pg-billing-staging-eu-west-1"
+
+	raw, _ := policyOf(t, regs, bucketPolicyType, bucketName+"-policy")
+	key := find(t, regs, "aws:kms/key:Key", bucketName+"-kms").inputs["policy"].StringValue()
+	pre := "arn:" + partition + ":iam::" + src + ":role/"
+
+	for _, n := range []string{
+		"staging-pg-billing-infra-pg-archive", "staging-pg-billing-infra-pg-restore",
+		"staging-acme-billing-eu.pg-archive", "staging-acme-billing-eu.pg-restore",
+	} {
+		if !strings.Contains(raw, pre+n) {
+			t.Errorf("bucket policy lacks %s", n)
+		}
+
+		if !strings.Contains(key, pre+n) {
+			t.Errorf("key policy lacks %s", n)
+		}
+	}
+
+	byID := map[string]statement{}
+	for _, s := range statementsOf(t, raw) {
+		byID[s.Sid] = s
+	}
+
+	for _, sid := range []string{
+		"AllowTenant3ArchiveObjects", "AllowTenant4RestoreObjects",
+		"DenyTenantRole3OutsideItsPrefix", "DenyTenantRole4OutsideItsPrefix",
+	} {
+		if _, ok := byID[sid]; !ok {
+			t.Errorf("statement %s missing", sid)
+		}
+	}
+
+	tags := byID["AllowTenant3ArchiveObjects"].Condition["StringEquals"]
+	if tags["aws:PrincipalTag/kubernetes-service-account"] != "billing-infra-pg" || tags["aws:PrincipalArn"] != pre+"staging-acme-billing-eu.pg-archive" {
+		t.Errorf("extra archive allow condition: %v", tags)
+	}
+}
+
+func TestExtraRoleNamesRefusals(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mutate func(*backupstore.ProjectCluster)
+		want   string
+	}{
+		"empty":    {func(c *backupstore.ProjectCluster) { c.ExtraArchiveRoleNames = []string{""} }, "empty name"},
+		"glob":     {func(c *backupstore.ProjectCluster) { c.ExtraRestoreRoleNames = []string{"staging-*"} }, "exact role name"},
+		"arn":      {func(c *backupstore.ProjectCluster) { c.ExtraArchiveRoleNames = []string{"arn:aws:iam::1:role/x"} }, "exact role name"},
+		"too long": {func(c *backupstore.ProjectCluster) { c.ExtraArchiveRoleNames = []string{strings.Repeat("r", 65)} }, "IAM allows 64"},
+		"the default": {func(c *backupstore.ProjectCluster) {
+			c.ExtraArchiveRoleNames = []string{"staging-pg-billing-infra-pg-archive"}
+		}, "repeats a role"},
+		"repeated": {func(c *backupstore.ProjectCluster) {
+			c.ExtraArchiveRoleNames = []string{"a.pg-archive", "a.pg-archive"}
+		}, "repeats a role"},
+		"archive+restore": {func(c *backupstore.ProjectCluster) {
+			c.ExtraArchiveRoleNames = []string{"a.pg"}
+			c.ExtraRestoreRoleNames = []string{"a.pg"}
+		}, "repeats a role"},
+	} {
+		a := bucketSetArgs()
+		tc.mutate(&a.Projects[0].Clusters[0])
+
+		if _, err := backupstore.BuildProjectBuckets(a); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: error %v, want one containing %q", name, err, tc.want)
+		}
+	}
+}

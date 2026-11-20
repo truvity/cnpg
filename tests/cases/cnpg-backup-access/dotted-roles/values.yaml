@@ -1,0 +1,19 @@
+# The overlap: each cluster also gets a Role under an explicit name (the
+# dotted shape) beside the default one. The associations stay on the default
+# Roles, so the explicit ones are admitted by the bucket but not yet used.
+# A cluster without roleNames renders as before.
+global:
+  accountID: "123456789012"
+  region: eu-west-1
+  eksClusterName: example-eks
+  rolePrefix: prod-pg
+bucket:
+  name: example-backup
+clusters:
+  - name: shop-pg
+    namespace: shop
+    roleNames:
+      archive: prod-acme-shop-eu.pg-archive
+      restore: prod-acme-shop-eu.pg-restore
+  - name: ledger-pg
+    namespace: ledger

@@ -1,0 +1,19 @@
+# The cutover: bindExplicit moves each ServiceAccount's association to the
+# explicit Role; the default Roles stay (no association) until they are
+# dropped. The restore ServiceAccount lives in a drill namespace.
+global:
+  accountID: "123456789012"
+  region: eu-west-1
+  eksClusterName: example-eks
+  rolePrefix: prod-pg
+bucket:
+  name: example-backup
+clusters:
+  - name: shop-pg
+    namespace: shop
+    restore:
+      namespace: shop-drill
+    roleNames:
+      archive: prod-acme-shop-eu.pg-archive
+      restore: prod-acme-shop-eu.pg-restore
+      bindExplicit: true

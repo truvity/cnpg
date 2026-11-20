@@ -86,3 +86,65 @@ func TestReplicaBucketName(t *testing.T) {
 		t.Error("an empty prefix was accepted")
 	}
 }
+
+func TestTenantRoleName(t *testing.T) {
+	arch, rest := backupnaming.RoleClassArchive, backupnaming.RoleClassRestore
+
+	for _, tc := range []struct {
+		env, vendor, project, customer, part string
+		class                                backupnaming.RoleClass
+		want                                 string
+		wantErr                              string
+	}{
+		{"prod", "acme", "shop", "eu", "", arch, "prod-acme-shop-eu.pg-archive", ""},
+		{"prod", "acme", "shop", "eu", "", rest, "prod-acme-shop-eu.pg-restore", ""},
+		{"prod", "acme", "shop", "eu", "orders", arch, "prod-acme-shop-eu-orders.pg-archive", ""},
+		{"", "acme", "shop", "eu", "", arch, "", "env is empty"},
+		{"prod", "", "shop", "eu", "", arch, "", "vendor is empty"},
+		{"prod", "acme", "", "eu", "", arch, "", "project is empty"},
+		{"prod", "acme", "shop", "", "", arch, "", "customer is empty"},
+		{"Prod", "acme", "shop", "eu", "", arch, "", "env \"Prod\" is not a DNS label"},
+		{"prod", "ac.me", "shop", "eu", "", arch, "", "vendor \"ac.me\" is not a DNS label"},
+		{"prod", "acme", "-shop", "eu", "", arch, "", "project \"-shop\" is not a DNS label"},
+		{"prod", "acme", "shop", "eu_1", "", arch, "", "customer \"eu_1\" is not a DNS label"},
+		{"prod", "acme", "shop", "eu", "or ders", arch, "", "part \"or ders\" is not a DNS label"},
+		{"prod", "acme", "shop", "eu", "", "pg-delete", "", "class"},
+		{"prod", "acme", "shop", "eu", "", "", "", "class"},
+		{"prod", "acme", strings.Repeat("p", 50), "eu", "", arch, "", "IAM allows 64"},
+		// Exactly 64 characters is allowed, 65 is not.
+		{"prod", "acme", strings.Repeat("p", 64-len("prod-acme--eu.pg-archive")), "eu", "", arch,
+			"prod-acme-" + strings.Repeat("p", 64-len("prod-acme--eu.pg-archive")) + "-eu.pg-archive", ""},
+		{"prod", "acme", strings.Repeat("p", 65-len("prod-acme--eu.pg-archive")), "eu", "", arch, "", "IAM allows 64"},
+	} {
+		got, err := backupnaming.TenantRoleName(tc.env, tc.vendor, tc.project, tc.customer, tc.part, tc.class)
+		if tc.wantErr != "" {
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("%+v: error %v, want one containing %q", tc, err, tc.wantErr)
+			}
+
+			continue
+		}
+
+		if err != nil || got != tc.want {
+			t.Errorf("%+v: got %q, %v; want %q", tc, got, err, tc.want)
+		}
+
+		if len(got) > backupnaming.RoleNameMaxLen {
+			t.Errorf("%+v: %q is over the IAM limit", tc, got)
+		}
+	}
+}
+
+// TestTenantRoleNameReportsEverySegment: all the mistakes come at once.
+func TestTenantRoleNameReportsEverySegment(t *testing.T) {
+	_, err := backupnaming.TenantRoleName("", "", "", "", "", backupnaming.RoleClassArchive)
+	if err == nil {
+		t.Fatal("want an error")
+	}
+
+	for _, s := range []string{"env is empty", "vendor is empty", "project is empty", "customer is empty"} {
+		if !strings.Contains(err.Error(), s) {
+			t.Errorf("error does not mention %q: %v", s, err)
+		}
+	}
+}

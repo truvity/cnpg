@@ -13,6 +13,7 @@ names the key. Every rule has a fixture under tests/invalid/cnpg-backup-access/.
 {{- $names := dict }}
 {{- $prefixes := dict }}
 {{- $sas := dict }}
+{{- $roleNames := dict }}
 {{- range $i, $c := .Values.clusters }}
 {{- if not $c.name }}{{ fail (printf "clusters[%d].name is required" $i) }}{{ end }}
 {{- if not $c.namespace }}{{ fail (printf "clusters[%d].namespace is required" $i) }}{{ end }}
@@ -32,7 +33,25 @@ names the key. Every rule has a fixture under tests/invalid/cnpg-backup-access/.
 {{- range $p := list "archive" "restore" }}
 {{- $rn := printf "%s-%s-%s" $g.rolePrefix $c.name $p }}
 {{- if gt (len $rn) 64 }}{{ fail (printf "clusters[%d] (%s): the IAM role name %q is %d characters, the limit is 64" $i $c.name $rn (len $rn)) }}{{ end }}
+{{- if hasKey $roleNames $rn }}{{ fail (printf "clusters[%d] (%s): the role name %q is already used by %s" $i $c.name $rn (get $roleNames $rn)) }}{{ end }}
+{{- $_ := set $roleNames $rn (printf "clusters[%d] (%s)" $i $c.name) }}
 {{- end }}
+{{- /* roleNames: additional roles under explicit names. Each must be new (not a
+default, not another cluster's), the restore one needs restore switched on, and
+bindExplicit needs at least one explicit name to move the association to. */}}
+{{- $rnm := $c.roleNames | default dict }}
+{{- $anyExplicit := false }}
+{{- range $p := list "archive" "restore" }}
+{{- $en := get $rnm $p | default "" }}
+{{- if $en }}
+{{- $anyExplicit = true }}
+{{- if and (eq $p "restore") (not (include "cnpg-backup-access.restoreOn" $c)) }}{{ fail (printf "clusters[%d] (%s): roleNames.restore is set but restore is disabled (restore.enabled: false)" $i $c.name) }}{{ end }}
+{{- if gt (len $en) 64 }}{{ fail (printf "clusters[%d] (%s): roleNames.%s %q is %d characters, the limit is 64" $i $c.name $p $en (len $en)) }}{{ end }}
+{{- if hasKey $roleNames $en }}{{ fail (printf "clusters[%d] (%s): roleNames.%s %q is already used by %s" $i $c.name $p $en (get $roleNames $en)) }}{{ end }}
+{{- $_ := set $roleNames $en (printf "clusters[%d] (%s) roleNames.%s" $i $c.name $p) }}
+{{- end }}
+{{- end }}
+{{- if and (get $rnm "bindExplicit") (not $anyExplicit) }}{{ fail (printf "clusters[%d] (%s): roleNames.bindExplicit is true but no explicit role name is set" $i $c.name) }}{{ end }}
 {{- /* One ServiceAccount binds to at most one role per (namespace, name). */}}
 {{- $asa := include "cnpg-backup-access.archiveSA" $c }}
 {{- $akey := printf "%s/%s" $c.namespace $asa }}

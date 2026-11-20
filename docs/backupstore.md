@@ -182,7 +182,9 @@ b, err := backupstore.New(ctx, "backup", &backupstore.Args{
 (`PurposeArchive` or `PurposeRestore`), `SessionTags` (optional),
 A role may be
 in several tenants (archive on its own prefix, restore on an old cluster's);
-two archive tenants on one prefix are refused.
+two archive tenants on one prefix are refused, unless both carry the same
+`SessionTags`: the same pod identity (one ServiceAccount, bound to one role at a
+time) under two role names, as in a rename.
 
 ### The authority chain
 
@@ -287,6 +289,16 @@ drill namespace). Role and bucket names come from `pkg/backupnaming`, the same
 rules the `cnpg-backup-access` chart's `global.rolePrefix` follows. `BuildProjectBuckets`
 returns the validated `Args` without registering anything.
 
+**Two role names during an overlap.** `ProjectCluster.ExtraArchiveRoleNames` and
+`ExtraRestoreRoleNames` (role names in `SourceAccountID`, empty by default) add
+tenants on the same prefix beside the defaults, so the bucket policy and, in KMS
+mode, the key policy admit both name shapes of one tenant: an extra archive role
+carries the same session tags as the default one, an extra restore role none.
+They are exact names (a glob, an ARN, an empty or repeated name or one over 64
+characters is refused) and come after both defaults of their cluster. Unset, the
+output is unchanged. The `cnpg-backup-access` chart's `clusters[].roleNames`
+creates the roles ([backup-access.md](backup-access.md)).
+
 **Pulumi identity.** By default each component is named after its bucket and
 registered under the options you pass, the identity of
 `New(ctx, bucketName, args, pulumi.Providers(p))` called once per bucket: a
@@ -302,6 +314,10 @@ the strings: `ProjectBucketName(prefix, project, env, region)` (the prefix is
 required; the result is checked by `ValidateBucketName`), `ClusterPrefix(namespace,
 cluster)` (`<namespace>/<cluster>/`), `RolePrefix(env)` (`<env>-pg`),
 `ArchiveRoleName` and `RestoreRoleName` (`<env>-pg-<cluster>-archive|restore`),
+`TenantRoleName(env, vendor, project, customer, part, class)` (the dotted shape
+`<env>-<vendor>-<project>-<customer>[-<part>].pg-archive|.pg-restore`, with
+`RoleClassArchive` or `RoleClassRestore`; every segment a DNS label, at most 64
+characters in all, `part` optional),
 `RestoreServiceAccount(cluster)` and `ServerName(project, generation)`
 (`<project>-pg-<generation>`).
 

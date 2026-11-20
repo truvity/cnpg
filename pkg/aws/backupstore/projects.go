@@ -3,6 +3,7 @@ package backupstore
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 
@@ -21,6 +22,18 @@ type ProjectCluster struct {
 	// the bucket pins as a session tag. Empty means Name: the operator names
 	// an instance's ServiceAccount after the cluster.
 	ServiceAccount string
+	// ExtraArchiveRoleNames and ExtraRestoreRoleNames are IAM role names in
+	// SourceAccountID that the bucket and, in KMS mode, the key admit besides
+	// the default archive and restore roles, on the same prefix and with the
+	// same conditions (an extra archive role carries the same session tags as
+	// the default one, since it is bound to the same ServiceAccount). They
+	// carry a second name shape through an overlap, such as
+	// backupnaming.TenantRoleName. Exact names: a glob, an empty name, a name
+	// over backupnaming.RoleNameMaxLen or a repeat (of the default or of
+	// another entry) is refused. Empty (the default) adds nothing: the output
+	// is exactly that of a caller that never had these fields.
+	ExtraArchiveRoleNames []string
+	ExtraRestoreRoleNames []string
 }
 
 // Project is one project and the clusters inside its bucket.
@@ -161,9 +174,47 @@ func (a *ProjectBucketsArgs) Validate() error {
 		if len(p.Clusters) == 0 {
 			errs = append(errs, fmt.Errorf("project buckets: project %q has no cluster", p.Name))
 		}
+
+		for _, cl := range p.Clusters {
+			errs = append(errs, a.validateExtraRoles(p, cl)...)
+		}
 	}
 
 	return errors.Join(errs...)
+}
+
+// validateExtraRoles checks the extra role names of one cluster.
+func (a *ProjectBucketsArgs) validateExtraRoles(p Project, cl ProjectCluster) []error {
+	var errs []error
+
+	seen := map[string]bool{
+		backupnaming.ArchiveRoleName(a.Env, cl.Name): true,
+		backupnaming.RestoreRoleName(a.Env, cl.Name): true,
+	}
+
+	for _, set := range []struct {
+		field string
+		names []string
+	}{{"ExtraArchiveRoleNames", cl.ExtraArchiveRoleNames}, {"ExtraRestoreRoleNames", cl.ExtraRestoreRoleNames}} {
+		for _, n := range set.names {
+			where := fmt.Sprintf("project buckets: project %q cluster %q %s", p.Name, cl.Name, set.field)
+
+			switch {
+			case n == "":
+				errs = append(errs, fmt.Errorf("%s has an empty name", where))
+			case strings.ContainsAny(n, "*?/:"):
+				errs = append(errs, fmt.Errorf("%s: %q must be an exact role name, not a glob, path or ARN", where, n))
+			case len(n) > backupnaming.RoleNameMaxLen:
+				errs = append(errs, fmt.Errorf("%s: %q is %d characters, IAM allows %d", where, n, len(n), backupnaming.RoleNameMaxLen))
+			case seen[n]:
+				errs = append(errs, fmt.Errorf("%s: %q repeats a role of this cluster", where, n))
+			}
+
+			seen[n] = true
+		}
+	}
+
+	return errs
 }
 
 // ProjectBucket is one project's bucket as built by BuildProjectBuckets.
@@ -223,16 +274,18 @@ func BuildProjectBuckets(a *ProjectBucketsArgs) ([]ProjectBucket, error) {
 				sa = cl.Name
 			}
 
+			archiveTags := &SessionTags{
+				ClusterName:    a.SessionClusterName,
+				Namespace:      cl.Namespace,
+				ServiceAccount: sa,
+			}
+
 			tenants = append(tenants,
 				Tenant{
-					RoleARN: rolePrefix + backupnaming.ArchiveRoleName(a.Env, cl.Name),
-					Prefix:  prefix,
-					Purpose: PurposeArchive,
-					SessionTags: &SessionTags{
-						ClusterName:    a.SessionClusterName,
-						Namespace:      cl.Namespace,
-						ServiceAccount: sa,
-					},
+					RoleARN:     rolePrefix + backupnaming.ArchiveRoleName(a.Env, cl.Name),
+					Prefix:      prefix,
+					Purpose:     PurposeArchive,
+					SessionTags: archiveTags,
 				},
 				Tenant{
 					RoleARN: rolePrefix + backupnaming.RestoreRoleName(a.Env, cl.Name),
@@ -240,6 +293,17 @@ func BuildProjectBuckets(a *ProjectBucketsArgs) ([]ProjectBucket, error) {
 					Purpose: PurposeRestore,
 				},
 			)
+
+			// The extra names come after both defaults of the cluster, so a
+			// cluster without any keeps every statement where it was.
+			for _, n := range cl.ExtraArchiveRoleNames {
+				tags := *archiveTags
+				tenants = append(tenants, Tenant{RoleARN: rolePrefix + n, Prefix: prefix, Purpose: PurposeArchive, SessionTags: &tags})
+			}
+
+			for _, n := range cl.ExtraRestoreRoleNames {
+				tenants = append(tenants, Tenant{RoleARN: rolePrefix + n, Prefix: prefix, Purpose: PurposeRestore})
+			}
 		}
 
 		lc := a.Lifecycle

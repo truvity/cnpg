@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/truvity/cnpg/v2/pkg/aws/backupstore"
+	"github.com/truvity/cnpg/v2/pkg/backupnaming"
 )
 
 const (
@@ -281,4 +282,132 @@ clusters:
 		assert.Equal(t, 2, roles)
 		assert.Equal(t, 2, assocs)
 	}
+}
+
+// TestRoleNamesAddRolesBesideTheDefaults: roleNames renders one more Role per
+// purpose under the explicit name, with the same trust and the library's
+// policy; the default Roles and their associations are exactly as before. The
+// names come from backupnaming.TenantRoleName, and the bucket-side library
+// (ProjectCluster.Extra*RoleNames) admits the same ARNs the chart creates.
+func TestRoleNamesAddRolesBesideTheDefaults(t *testing.T) {
+	archive, err := backupnaming.TenantRoleName("prod", "acme", "shop", "eu", "", backupnaming.RoleClassArchive)
+	require.NoError(t, err)
+
+	restore, err := backupnaming.TenantRoleName("prod", "acme", "shop", "eu", "", backupnaming.RoleClassRestore)
+	require.NoError(t, err)
+
+	objs := render(t, `
+global: {accountID: "`+account+`", eksClusterName: example-eks, region: eu-west-1, rolePrefix: prod-pg}
+bucket: {name: `+bucket+`}
+clusters:
+  - name: shop-pg
+    namespace: shop
+    roleNames: {archive: `+archive+`, restore: `+restore+`}
+`)
+
+	roles := map[string]map[string]any{}
+	assoc := map[string]string{}
+
+	for _, o := range objs {
+		switch o["kind"] {
+		case "Role":
+			roles[name(o)] = o
+		case "PodIdentityAssociation":
+			assoc[name(o)] = spec(o)["roleARN"].(string)
+		}
+	}
+
+	arn := func(r string) string { return "arn:aws:iam::" + account + ":role/" + r }
+
+	require.Len(t, roles, 4)
+
+	for _, r := range []string{"prod-pg-shop-pg-archive", "prod-pg-shop-pg-restore", archive, restore} {
+		require.Contains(t, roles, r)
+		assert.Equal(t, r, spec(roles[r])["name"])
+	}
+
+	// The associations stay on the default Roles.
+	assert.Equal(t, map[string]string{
+		"prod-pg-shop-pg-archive": arn("prod-pg-shop-pg-archive"),
+		"prod-pg-shop-pg-restore": arn("prod-pg-shop-pg-restore"),
+	}, assoc)
+
+	// Same trust and policy as the default Role of the purpose (the policy
+	// names the bucket and the prefix, not the role).
+	for _, pair := range [][2]string{{"prod-pg-shop-pg-archive", archive}, {"prod-pg-shop-pg-restore", restore}} {
+		def, ext := spec(roles[pair[0]]), spec(roles[pair[1]])
+		assert.Equal(t, def["assumeRolePolicyDocument"], ext["assumeRolePolicyDocument"])
+		assert.Equal(t, def["inlinePolicies"], ext["inlinePolicies"])
+	}
+
+	// The bucket side admits both names of each purpose, on the chart's prefix.
+	built, err := backupstore.BuildProjectBuckets(&backupstore.ProjectBucketsArgs{
+		BucketPrefix: "example", Env: "prod", Region: "eu-west-1", SessionClusterName: "example-eks",
+		SourceAccountID: account, BackupAccountID: "210987654321", Lifecycle: backupstore.Lifecycle{RetentionDays: 30},
+		Projects: []backupstore.Project{{Name: "shop", Clusters: []backupstore.ProjectCluster{{
+			Name: "shop-pg", Namespace: "shop", ExtraArchiveRoleNames: []string{archive}, ExtraRestoreRoleNames: []string{restore},
+		}}}},
+	})
+	require.NoError(t, err)
+
+	admitted := map[string]string{}
+	for _, tn := range built[0].Args.Tenants {
+		admitted[tn.RoleARN] = tn.Prefix
+	}
+
+	for r := range roles {
+		assert.Equal(t, "shop/shop-pg/", admitted[arn(r)], "the bucket does not admit %s", r)
+	}
+}
+
+// TestBindExplicitMovesTheAssociation: the ServiceAccount's association is
+// bound to the explicit Role of the purpose, and the default Role is rendered
+// without one (EKS allows one association per ServiceAccount).
+func TestBindExplicitMovesTheAssociation(t *testing.T) {
+	for _, tc := range []struct {
+		names string
+		want  map[string]string
+	}{
+		{"{archive: a.pg-archive, restore: a.pg-restore, bindExplicit: true}", map[string]string{"a.pg-archive": "app", "a.pg-restore": "app-restore"}},
+		// Only the purposes that have an explicit name move.
+		{"{archive: a.pg-archive, bindExplicit: true}", map[string]string{"a.pg-archive": "app", "example-app-restore": "app-restore"}},
+		{"{archive: a.pg-archive}", map[string]string{"example-app-archive": "app", "example-app-restore": "app-restore"}},
+	} {
+		objs := render(t, `
+global: {accountID: "`+account+`", eksClusterName: example-eks, region: eu-west-1, rolePrefix: example, useRoleRef: true}
+bucket: {name: `+bucket+`}
+clusters:
+  - {name: app, namespace: ns, roleNames: `+tc.names+`}
+`)
+
+		got := map[string]string{}
+
+		for _, o := range objs {
+			if o["kind"] == "PodIdentityAssociation" {
+				got[name(o)] = spec(o)["serviceAccount"].(string)
+
+				assert.Equal(t, name(o), spec(o)["roleRef"].(map[string]any)["from"].(map[string]any)["name"])
+			}
+		}
+
+		assert.Equal(t, tc.want, got, tc.names)
+	}
+}
+
+// TestNoRoleNamesRendersNoExtraRole: the default render has exactly the Roles
+// of the cluster list, none under an explicit name.
+func TestNoRoleNamesRendersNoExtraRole(t *testing.T) {
+	roles := 0
+
+	for _, o := range render(t, `
+global: {accountID: "`+account+`", eksClusterName: example-eks, region: eu-west-1, rolePrefix: example}
+bucket: {name: `+bucket+`}
+clusters: [{name: app, namespace: ns, roleNames: {}}]
+`) {
+		if o["kind"] == "Role" {
+			roles++
+		}
+	}
+
+	assert.Equal(t, 2, roles)
 }

@@ -104,7 +104,7 @@ func validateTenants(tenants []Tenant) []error {
 	var errs []error
 
 	seen := map[string]bool{}
-	archive := map[string]bool{}
+	archive := map[string]*SessionTags{}
 
 	for i, t := range tenants {
 		errs = append(errs, t.validate(i)...)
@@ -116,13 +116,18 @@ func validateTenants(tenants []Tenant) []error {
 
 		seen[key] = true
 
-		// Two archivers on one prefix would interleave one cluster's WAL.
+		// Two archivers on one prefix would interleave one cluster's WAL,
+		// unless both are the same pod identity: the same session tags, so one
+		// ServiceAccount, which EKS binds to one role at a time. That is the
+		// overlap of two names of one archive role during a rename.
 		if t.Purpose == PurposeArchive {
-			if archive[t.Prefix] {
+			if prev, ok := archive[t.Prefix]; ok && (prev == nil || t.SessionTags == nil || *prev != *t.SessionTags) {
 				errs = append(errs, fmt.Errorf("args: Tenants[%d] is a second archive tenant of prefix %q", i, t.Prefix))
 			}
 
-			archive[t.Prefix] = true
+			if _, ok := archive[t.Prefix]; !ok {
+				archive[t.Prefix] = t.SessionTags
+			}
 		}
 	}
 
