@@ -4,6 +4,10 @@ One heading per tag, newest first, prose written for a consumer deciding
 whether to move. See `docs/adoption.md` for the zero-diff gate every
 upgrade is expected to clear.
 
+## Unreleased
+
+- **Feature (chart `cnpg-backup-access`, Go packages `backupnaming` and `backupstore`): a second name shape for the backup tenant roles, `<env>-<vendor>-<project>-<customer>[-<part>].pg-archive` and `.pg-restore` (at most 64 characters), beside the default `<env>-pg-<cluster>-archive|restore`.** `backupnaming.TenantRoleName` builds and validates the dotted names (every segment a DNS label; `RoleClassArchive`, `RoleClassRestore`). `backupstore.ProjectCluster` gains `ExtraArchiveRoleNames` and `ExtraRestoreRoleNames`: the bucket policy and, in KMS mode, the key policy admit those roles on the cluster's prefix beside the defaults (an extra archive role with the same session tags). Two archive tenants of one prefix are now admitted when both carry the same `SessionTags` (one ServiceAccount under two role names); with different or no tags they are still refused. The chart gains `clusters[].roleNames.archive` and `.restore` (an additional Role per purpose under that name, same trust and policy) and `roleNames.bindExplicit` (moves the Pod Identity association to the explicit Role; default `false` keeps it on the default one). **No default change:** with none of these set, every render and every policy is byte for byte what it was.
+
 ## v2.40.1
 
 - Dependency updates.

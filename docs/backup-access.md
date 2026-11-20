@@ -40,6 +40,10 @@ clusters:
     archive:
       serviceAccount: <cluster>         # default: the cluster name
       association: true                 # false: the Role only, no PodIdentityAssociation (cutover period)
+    roleNames:                          # optional: ADDITIONAL roles under explicit names, beside the defaults
+      archive: <name>                   # e.g. prod-acme-shop-eu.pg-archive (lower case, digits, - and ., at most 64)
+      restore: <name>                   # needs restore on
+      bindExplicit: false               # true: the associations move to the explicit roles
     restore:
       enabled: true                     # default
       serviceAccount: <cluster>-restore # default
@@ -51,8 +55,34 @@ The render is refused (`templates/_validate.tpl`, fixtures in
 `tests/invalid/cnpg-backup-access/`) for: an empty bucket, source account, region, EKS
 cluster or role prefix; a cluster named twice; a prefix that does not end in
 `/`, starts with `/` or holds a glob; a prefix used by two clusters; a
-ServiceAccount bound to two roles; an IAM role name over 64 characters; an
-unknown key (schema).
+ServiceAccount bound to two roles; an IAM role name over 64 characters; a bad
+`roleNames` (below); an unknown key (schema).
+
+## Two name shapes during an overlap: `roleNames`
+
+The default Role names are `<rolePrefix>-<cluster>-archive|restore`. A tenant
+role can also carry a second shape, such as
+`<env>-<vendor>-<project>-<customer>[-<part>].pg-archive|.pg-restore`
+(`backupnaming.TenantRoleName`). `clusters[].roleNames.archive` and `.restore`
+render **one more Role** per purpose under that exact name, beside the default
+one: the same trust policy, the same inline policy and the same ServiceAccount
+binding, so an old and a new name of one tenant role coexist from one release.
+Without `roleNames` the render is exactly as before.
+
+EKS allows one Pod Identity association per (EKS cluster, namespace,
+ServiceAccount), so the associations stay on the default Roles until you set
+`roleNames.bindExplicit: true`: each ServiceAccount is then bound to the
+explicit Role of its purpose, and the default Role is rendered without an
+association (a purpose with no explicit name keeps its default association).
+Drop `roleNames` in a later release, once nothing uses the old names. The bucket
+(and, in KMS mode, the key) must admit both names meanwhile: give
+`backupstore.ProjectCluster` the same names in `ExtraArchiveRoleNames` and
+`ExtraRestoreRoleNames` ([backupstore.md](backupstore.md)).
+
+The render is refused for an explicit name that is over 64 characters, is not
+lower case letters, digits, `-` and `.`, repeats a default name or another
+cluster's, is set for restore while `restore.enabled: false`, or for
+`bindExplicit` without any explicit name.
 
 ## The trust policy
 

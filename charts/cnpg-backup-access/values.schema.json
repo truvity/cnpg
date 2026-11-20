@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "definitions": {
     "stringMap": { "type": "object", "additionalProperties": { "type": "string" } },
+    "roleName": { "type": "string", "maxLength": 64, "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$", "description": "An IAM role name that is also a Kubernetes object name: lower case letters, digits, - and ., at most 64 characters." },
     "k8sName": { "type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$" }
   },
   "properties": {
@@ -42,6 +43,16 @@
           "name": { "$ref": "#/definitions/k8sName" },
           "namespace": { "$ref": "#/definitions/k8sName" },
           "prefix": { "type": "string", "description": "Default <namespace>/<name>/. Must end in /." },
+          "roleNames": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Explicit names for ADDITIONAL roles of this cluster, rendered beside the default <rolePrefix>-<name>-archive|restore ones (same trust, policy and ServiceAccount binding), so two name shapes of one tenant role coexist from one release.",
+            "properties": {
+              "archive": { "$ref": "#/definitions/roleName" },
+              "restore": { "$ref": "#/definitions/roleName" },
+              "bindExplicit": { "type": "boolean", "description": "Default false: the PodIdentityAssociation of the ServiceAccount stays on the default role (EKS allows one per cluster, namespace and ServiceAccount). true moves it to the explicit role of the same purpose; the default role is then rendered without an association." }
+            }
+          },
           "archive": {
             "type": "object",
             "additionalProperties": false,

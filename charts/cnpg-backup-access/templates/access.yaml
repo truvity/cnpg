@@ -18,9 +18,26 @@ association holds the triple, which is the signal to remove that one first. */}}
 {{- $prefix := include "cnpg-backup-access.prefix" $c }}
 {{- range $p := list "archive" "restore" }}
 {{- if or (eq $p "archive") (include "cnpg-backup-access.restoreOn" $c) }}
-{{- $role := printf "%s-%s-%s" $g.rolePrefix $c.name $p }}
+{{- $default := printf "%s-%s-%s" $g.rolePrefix $c.name $p }}
+{{- /* roleNames.<archive|restore>: one more Role beside the default, same trust,
+policy and binding, under an explicit name, so an old and a new name of one
+tenant role coexist from one release. EKS allows ONE association per (cluster,
+namespace, ServiceAccount): the association stays on the default Role until
+roleNames.bindExplicit moves it to the explicit one. */}}
+{{- $explicit := "" }}
+{{- $bindExplicit := false }}
+{{- with $c.roleNames }}
+{{- $explicit = get . $p | default "" }}
+{{- $bindExplicit = and (ne $explicit "") (default false .bindExplicit) }}
+{{- end }}
+{{- $roles := list (dict "name" $default "bind" (not $bindExplicit)) }}
+{{- if $explicit }}
+{{- $roles = append $roles (dict "name" $explicit "bind" $bindExplicit) }}
+{{- end }}
 {{- $sa := ternary (include "cnpg-backup-access.archiveSA" $c) (include "cnpg-backup-access.restoreSA" $c) (eq $p "archive") }}
 {{- $ns := ternary $c.namespace (include "cnpg-backup-access.restoreNamespace" $c) (eq $p "archive") }}
+{{- range $r := $roles }}
+{{- $role := $r.name }}
 ---
 apiVersion: iam.services.k8s.aws/v1alpha1
 kind: Role
@@ -45,7 +62,7 @@ spec:
 {{- /* archive.association: false renders the Role alone, for the cutover period
 in which the ServiceAccount is still bound to another role: EKS allows ONE
 association per (cluster, namespace, ServiceAccount). */}}
-{{- if or (ne $p "archive") (not (and $c.archive (hasKey $c.archive "association") (not $c.archive.association))) }}
+{{- if and $r.bind (or (ne $p "archive") (not (and $c.archive (hasKey $c.archive "association") (not $c.archive.association)))) }}
 ---
 apiVersion: eks.services.k8s.aws/v1alpha1
 kind: PodIdentityAssociation
@@ -66,6 +83,7 @@ spec:
   tags:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

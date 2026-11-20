@@ -14,6 +14,8 @@ package backupnaming
 import (
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 )
 
 // BucketMaxLen and BucketMinLen are S3's bucket-name length limits.
@@ -113,6 +115,81 @@ func ArchiveRoleName(env, cluster string) string {
 // RestoreRoleName is the restore role of a cluster: <env>-pg-<cluster>-restore.
 func RestoreRoleName(env, cluster string) string {
 	return fmt.Sprintf("%s-%s-restore", RolePrefix(env), cluster)
+}
+
+// RoleNameMaxLen is IAM's role-name length limit.
+const RoleNameMaxLen = 64
+
+// RoleClass is the dotted suffix that says what a tenant role does.
+type RoleClass string
+
+const (
+	// RoleClassArchive is the suffix of an archive role: ".pg-archive".
+	RoleClassArchive RoleClass = "pg-archive"
+	// RoleClassRestore is the suffix of a restore role: ".pg-restore".
+	RoleClassRestore RoleClass = "pg-restore"
+)
+
+var dnsLabel = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+
+// TenantRoleName is the dotted name of a backup tenant role:
+// <env>-<vendor>-<project>-<customer>[-<part>].<class>, with class
+// RoleClassArchive ("pg-archive") or RoleClassRestore ("pg-restore"). It is
+// the second shape beside ArchiveRoleName and RestoreRoleName
+// (<env>-pg-<cluster>-archive|restore); during an overlap a tenant holds both
+// and the bucket must admit both. Part is optional (empty leaves it out).
+//
+// Every segment is a DNS label (lower case letters, digits and hyphens, not
+// starting or ending with a hyphen, at most 63 characters), so the name is
+// also a valid Kubernetes object name; the whole name is at most
+// RoleNameMaxLen (IAM's limit).
+func TenantRoleName(env, vendor, project, customer, part string, class RoleClass) (string, error) {
+	var errs []error
+
+	if class != RoleClassArchive && class != RoleClassRestore {
+		errs = append(errs, fmt.Errorf("tenant role name: class %q is not %q or %q", class, RoleClassArchive, RoleClassRestore))
+	}
+
+	segments := []string{env, vendor, project, customer}
+
+	for i, field := range []string{"env", "vendor", "project", "customer"} {
+		if err := validateSegment(field, segments[i], false); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if part != "" {
+		if err := validateSegment("part", part, true); err != nil {
+			errs = append(errs, err)
+		}
+
+		segments = append(segments, part)
+	}
+
+	if err := errors.Join(errs...); err != nil {
+		return "", err
+	}
+
+	name := strings.Join(segments, "-") + "." + string(class)
+
+	if len(name) > RoleNameMaxLen {
+		return "", fmt.Errorf("tenant role name %q is %d characters, IAM allows %d", name, len(name), RoleNameMaxLen)
+	}
+
+	return name, nil
+}
+
+func validateSegment(field, v string, optional bool) error {
+	switch {
+	case v == "" && optional:
+		return nil
+	case v == "":
+		return fmt.Errorf("tenant role name: %s is empty", field)
+	case len(v) > 63 || !dnsLabel.MatchString(v):
+		return fmt.Errorf("tenant role name: %s %q is not a DNS label (a-z, 0-9 and -, not starting or ending with -, at most 63 characters)", field, v)
+	}
+
+	return nil
 }
 
 // RestoreServiceAccount is the ServiceAccount the restore role is bound to:

@@ -697,10 +697,18 @@ func TestRefusesTenantAndLifecycleMistakes(t *testing.T) {
 		"prefix leading":     {func(a *backupstore.Args) { a.Tenants[0].Prefix = "/a/b/" }, "Tenants[0].Prefix"},
 		"purpose":            {func(a *backupstore.Args) { a.Tenants[0].Purpose = "delete" }, "Tenants[0].Purpose"},
 		"duplicate":          {func(a *backupstore.Args) { a.Tenants[1] = a.Tenants[0] }, "repeats"},
-		"two archivers": {
+		"two archivers, no tags": {
 			func(a *backupstore.Args) {
 				a.Tenants[1] = a.Tenants[0]
 				a.Tenants[1].RoleARN = role("other")
+				a.Tenants[1].SessionTags = nil
+			}, "second archive tenant",
+		},
+		"two archivers, other pod": {
+			func(a *backupstore.Args) {
+				a.Tenants[1] = a.Tenants[0]
+				a.Tenants[1].RoleARN = role("other")
+				a.Tenants[1].SessionTags = &backupstore.SessionTags{ClusterName: "<eks-cluster>", Namespace: "<namespace-a>", ServiceAccount: "<other>"}
 			}, "second archive tenant",
 		},
 		"no retention":         {func(a *backupstore.Args) { a.Lifecycle.RetentionDays = 0 }, "RetentionDays"},
@@ -757,5 +765,37 @@ func TestTenantRolePolicyRefuses(t *testing.T) {
 		if !strings.Contains(err.Error(), w) {
 			t.Errorf("error lacks %s: %v", w, err)
 		}
+	}
+}
+
+// Two archive tenants of one prefix are admitted when both are the same pod
+// identity (equal session tags): one ServiceAccount, one role at a time. It is
+// the overlap of two names of one role.
+func TestTwoNamesOfOneArchiveIdentityAreAdmitted(t *testing.T) {
+	a := tenantArgs()
+	second := archiveTenant()
+	second.RoleARN = role("pg-archive-new")
+	a.Tenants = append(a.Tenants, second)
+
+	regs, err := run(t, a)
+	if err != nil {
+		t.Fatalf("same session tags refused: %v", err)
+	}
+
+	raw, _ := policyOf(t, regs, bucketPolicyType, bucket+"-policy")
+	if !strings.Contains(raw, role("pg-archive")) || !strings.Contains(raw, role("pg-archive-new")) {
+		t.Error("the policy does not admit both names")
+	}
+
+	// Without session tags the identity is unknown, so it stays refused.
+	a = tenantArgs()
+	a.Tenants[0].SessionTags = nil
+	second = archiveTenant()
+	second.SessionTags = nil
+	second.RoleARN = role("pg-archive-new")
+	a.Tenants = append(a.Tenants, second)
+
+	if _, err := run(t, a); err == nil || !strings.Contains(err.Error(), "second archive tenant") {
+		t.Fatalf("untagged archivers: %v", err)
 	}
 }
